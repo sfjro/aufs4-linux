@@ -64,6 +64,31 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+int au_test_ro(struct super_block *sb, aufs_bindex_t bindex,
+	       struct inode *inode)
+{
+	int err;
+	struct inode *hi;
+
+	err = au_br_rdonly(au_sbr(sb, bindex));
+
+	/* pseudo-link after flushed may happen out of bounds */
+	if (!err
+	    && inode
+	    && au_ibstart(inode) <= bindex
+	    && bindex <= au_ibend(inode)) {
+		/*
+		 * permission check is unnecessary since vfsub routine
+		 * will be called later
+		 */
+		hi = au_h_iptr(inode, bindex);
+		if (hi)
+			err = IS_IMMUTABLE(hi) ? -EROFS : 0;
+	}
+
+	return err;
+}
+
 int au_test_h_perm(struct inode *h_inode, int mask)
 {
 	if (uid_eq(current_fsuid(), GLOBAL_ROOT_UID))

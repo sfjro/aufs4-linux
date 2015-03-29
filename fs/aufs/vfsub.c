@@ -21,6 +21,7 @@
 
 #include <linux/namei.h>
 #include <linux/security.h>
+#include <linux/uaccess.h>
 #include "aufs.h"
 
 struct file *vfsub_dentry_open(struct path *path, int flags)
@@ -189,6 +190,65 @@ out:
 }
 
 /* ---------------------------------------------------------------------- */
+
+/* todo: support mmap_sem? */
+ssize_t vfsub_read_u(struct file *file, char __user *ubuf, size_t count,
+		     loff_t *ppos)
+{
+	ssize_t err;
+
+	lockdep_off();
+	err = vfs_read(file, ubuf, count, ppos);
+	lockdep_on();
+	return err;
+}
+
+/* todo: kernel_read()? */
+ssize_t vfsub_read_k(struct file *file, void *kbuf, size_t count,
+		     loff_t *ppos)
+{
+	ssize_t err;
+	mm_segment_t oldfs;
+	union {
+		void *k;
+		char __user *u;
+	} buf;
+
+	buf.k = kbuf;
+	oldfs = get_fs();
+	set_fs(KERNEL_DS);
+	err = vfsub_read_u(file, buf.u, count, ppos);
+	set_fs(oldfs);
+	return err;
+}
+
+ssize_t vfsub_write_u(struct file *file, const char __user *ubuf, size_t count,
+		      loff_t *ppos)
+{
+	ssize_t err;
+
+	lockdep_off();
+	err = vfs_write(file, ubuf, count, ppos);
+	lockdep_on();
+	return err;
+}
+
+ssize_t vfsub_write_k(struct file *file, void *kbuf, size_t count, loff_t *ppos)
+{
+	ssize_t err;
+	mm_segment_t oldfs;
+	union {
+		void *k;
+		const char __user *u;
+	} buf;
+
+	buf.k = kbuf;
+	oldfs = get_fs();
+	set_fs(KERNEL_DS);
+	err = vfsub_write_u(file, buf.u, count, ppos);
+	set_fs(oldfs);
+	return err;
+}
 
 int vfsub_iterate_dir(struct file *file, struct dir_context *ctx)
 {

@@ -100,6 +100,14 @@ int vfsub_rmdir(struct inode *dir, struct path *path);
 
 /* ---------------------------------------------------------------------- */
 
+ssize_t vfsub_read_u(struct file *file, char __user *ubuf, size_t count,
+		     loff_t *ppos);
+ssize_t vfsub_read_k(struct file *file, void *kbuf, size_t count,
+			loff_t *ppos);
+ssize_t vfsub_write_u(struct file *file, const char __user *ubuf, size_t count,
+		      loff_t *ppos);
+ssize_t vfsub_write_k(struct file *file, void *kbuf, size_t count,
+		      loff_t *ppos);
 int vfsub_iterate_dir(struct file *file, struct dir_context *ctx);
 
 static inline loff_t vfsub_f_size_read(struct file *file)

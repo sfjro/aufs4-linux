@@ -96,6 +96,13 @@ static inline struct super_block *au_br_sb(struct au_branch *br)
 	return au_br_mnt(br)->mnt_sb;
 }
 
+static inline int au_br_rdonly(struct au_branch *br)
+{
+	return ((au_br_sb(br)->s_flags & MS_RDONLY)
+		|| !au_br_writable(br->br_perm))
+		? -EROFS : 0;
+}
+
 /* ---------------------------------------------------------------------- */
 
 /* branch.c */
