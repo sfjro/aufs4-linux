@@ -254,6 +254,66 @@ struct aufs_ibusy {
 
 /* ---------------------------------------------------------------------- */
 
+/* error code for move-down */
+/* the actual message strings are implemented in aufs-util.git */
+enum {
+	EAU_MVDOWN_OPAQUE = 1,
+	EAU_MVDOWN_WHITEOUT,
+	EAU_MVDOWN_UPPER,
+	EAU_MVDOWN_BOTTOM,
+	EAU_MVDOWN_NOUPPER,
+	EAU_MVDOWN_NOLOWERBR,
+	EAU_Last
+};
+
+/* flags for move-down */
+#define AUFS_MVDOWN_DMSG	1
+#define AUFS_MVDOWN_OWLOWER	(1 << 1)	/* overwrite lower */
+#define AUFS_MVDOWN_KUPPER	(1 << 2)	/* keep upper */
+#define AUFS_MVDOWN_ROLOWER	(1 << 3)	/* do even if lower is RO */
+#define AUFS_MVDOWN_ROLOWER_R	(1 << 4)	/* did on lower RO */
+#define AUFS_MVDOWN_ROUPPER	(1 << 5)	/* do even if upper is RO */
+#define AUFS_MVDOWN_ROUPPER_R	(1 << 6)	/* did on upper RO */
+#define AUFS_MVDOWN_BRID_UPPER	(1 << 7)	/* upper brid */
+#define AUFS_MVDOWN_BRID_LOWER	(1 << 8)	/* lower brid */
+#define AUFS_MVDOWN_FHSM_LOWER	(1 << 9)	/* find fhsm attr for lower */
+#define AUFS_MVDOWN_STFS	(1 << 10)	/* req. stfs */
+#define AUFS_MVDOWN_STFS_FAILED	(1 << 11)	/* output: stfs is unusable */
+#define AUFS_MVDOWN_BOTTOM	(1 << 12)	/* output: no more lowers */
+
+/* index for move-down */
+enum {
+	AUFS_MVDOWN_UPPER,
+	AUFS_MVDOWN_LOWER,
+	AUFS_MVDOWN_NARRAY
+};
+
+/*
+ * additional info of move-down
+ * number of free blocks and inodes.
+ * subset of struct kstatfs, but smaller and always 64bit.
+ */
+struct aufs_stfs {
+	uint64_t	f_blocks;
+	uint64_t	f_bavail;
+	uint64_t	f_files;
+	uint64_t	f_ffree;
+};
+
+struct aufs_stbr {
+	int16_t			brid;	/* optional input */
+	int16_t			bindex;	/* output */
+	struct aufs_stfs	stfs;	/* output when AUFS_MVDOWN_STFS set */
+} __aligned(8);
+
+struct aufs_mvdown {
+	uint32_t		flags;			/* input/output */
+	struct aufs_stbr	stbr[AUFS_MVDOWN_NARRAY]; /* input/output */
+	int8_t			au_errno;		/* output */
+} __aligned(8);
+
+/* ---------------------------------------------------------------------- */
+
 union aufs_brinfo {
 	/* PATH_MAX may differ between kernel-space and user-space */
 	char	_spacer[4096];

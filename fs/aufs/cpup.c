@@ -979,6 +979,12 @@ int au_sio_cpup_simple(struct au_cp_generic *cpg)
 	return au_do_sio_cpup_simple(cpg);
 }
 
+int au_sio_cpdown_simple(struct au_cp_generic *cpg)
+{
+	AuDebugOn(cpg->bdst <= cpg->bsrc);
+	return au_do_sio_cpup_simple(cpg);
+}
+
 /* ---------------------------------------------------------------------- */
 
 /*
