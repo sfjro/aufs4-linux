@@ -91,6 +91,8 @@ struct inode;
 void au_dpri_inode(struct inode *inode);
 void au_dpri_dalias(struct inode *inode);
 void au_dpri_dentry(struct dentry *dentry);
+struct super_block;
+void au_dpri_sb(struct super_block *sb);
 
 #define au_dbg_verify_dinode(d) __au_dbg_verify_dinode(d, __func__, __LINE__)
 void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line);
@@ -116,6 +118,13 @@ void au_dbg_verify_gen(struct dentry *parent, unsigned int sigen);
 	au_dpri_dentry(d); \
 	mutex_unlock(&au_dbg_mtx); \
 } while (0)
+
+#define AuDbgSb(sb) do { \
+	mutex_lock(&au_dbg_mtx); \
+	AuDbg(#sb "\n"); \
+	au_dpri_sb(sb); \
+	mutex_unlock(&au_dbg_mtx); \
+} while (0)
 #else
 AuStubVoid(au_dbg_verify_dinode, struct dentry *dentry)
 AuStubVoid(au_dbg_verify_gen, struct dentry *parent, unsigned int sigen)
@@ -123,6 +132,7 @@ AuStubVoid(au_dbg_verify_gen, struct dentry *parent, unsigned int sigen)
 #define AuDbgInode(i)		do {} while (0)
 #define AuDbgDAlias(i)		do {} while (0)
 #define AuDbgDentry(d)		do {} while (0)
+#define AuDbgSb(sb)		do {} while (0)
 #endif /* CONFIG_AUFS_DEBUG */
 
 #endif /* __KERNEL__ */
