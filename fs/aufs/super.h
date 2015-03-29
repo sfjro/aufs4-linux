@@ -24,6 +24,33 @@
 
 #ifdef __KERNEL__
 
+#include <linux/fs.h>
+#include <linux/kobject.h>
+#include "rwsem.h"
+
+struct au_branch;
+struct au_sbinfo {
+	/*
+	 * tried sb->s_umount, but failed due to the dependecy between i_mutex.
+	 * rwsem for au_sbinfo is necessary.
+	 */
+	struct au_rwsem		si_rwsem;
+
+	/* branch management */
+	aufs_bindex_t		si_bend;
+	struct au_branch	**si_branch;
+
+	/*
+	 * sysfs and lifetime management.
+	 * this is not a small structure and it may be a waste of memory in case
+	 * of sysfs is disabled, particulary when many aufs-es are mounted.
+	 * but using sysfs is majority.
+	 */
+	struct kobject		si_kobj;
+};
+
+/* ---------------------------------------------------------------------- */
+
 /* flags for si_read_lock()/aufs_read_lock()/di_read_lock() */
 #define AuLock_DW		1		/* write-lock dentry */
 #define AuLock_IR		(1 << 1)	/* read-lock inode */
@@ -37,8 +64,39 @@
 /* ---------------------------------------------------------------------- */
 
 /* super.c */
-struct super_block;
 struct inode *au_iget_locked(struct super_block *sb, ino_t ino);
+
+/* sbinfo.c */
+void au_si_free(struct kobject *kobj);
+int au_si_alloc(struct super_block *sb);
+
+/* ---------------------------------------------------------------------- */
+
+static inline struct au_sbinfo *au_sbi(struct super_block *sb)
+{
+	return sb->s_fs_info;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/* lock superblock. mainly for entry point functions */
+/*
+ * si_read_lock, si_write_lock,
+ * si_read_unlock, si_write_unlock, si_downgrade_lock
+ */
+AuSimpleRwsemFuncs(si, struct super_block *sb, &au_sbi(sb)->si_rwsem);
+
+#define SiMustNoWaiters(sb)	AuRwMustNoWaiters(&au_sbi(sb)->si_rwsem)
+#define SiMustAnyLock(sb)	AuRwMustAnyLock(&au_sbi(sb)->si_rwsem)
+#define SiMustWriteLock(sb)	AuRwMustWriteLock(&au_sbi(sb)->si_rwsem)
+
+/* ---------------------------------------------------------------------- */
+
+static inline aufs_bindex_t au_sbend(struct super_block *sb)
+{
+	SiMustAnyLock(sb);
+	return au_sbi(sb)->si_bend;
+}
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_SUPER_H__ */

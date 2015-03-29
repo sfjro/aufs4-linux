@@ -62,6 +62,15 @@ AuStubInt0(au_debug_test, void)
 	if (au_debug_test()) \
 		pr_debug("DEBUG: " fmt, ##__VA_ARGS__); \
 } while (0)
+#define AuTraceErr(e) do { \
+	if (unlikely((e) < 0)) \
+		AuDbg("err %d\n", (int)(e)); \
+} while (0)
+
+#define AuTraceErrPtr(p) do { \
+	if (IS_ERR(p)) \
+		AuDbg("err %ld\n", PTR_ERR(p)); \
+} while (0)
 
 /* ---------------------------------------------------------------------- */
 
