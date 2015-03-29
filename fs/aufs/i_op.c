@@ -692,6 +692,7 @@ struct inode_operations aufs_dir_iop = {
 	.unlink		= aufs_unlink,
 	.symlink	= aufs_symlink,
 	.mkdir		= aufs_mkdir,
+	.rmdir		= aufs_rmdir,
 	.mknod		= aufs_mknod,
 
 	.permission	= aufs_permission,

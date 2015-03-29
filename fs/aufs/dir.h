@@ -83,6 +83,8 @@ struct au_vdir {
 void au_add_nlink(struct inode *dir, struct inode *h_dir);
 void au_sub_nlink(struct inode *dir, struct inode *h_dir);
 loff_t au_dir_size(struct file *file, struct dentry *dentry);
+int au_test_empty_lower(struct dentry *dentry);
+int au_test_empty(struct dentry *dentry, struct au_nhash *whlist);
 
 /* vdir.c */
 unsigned int au_rdhash_est(loff_t sz);

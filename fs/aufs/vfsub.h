@@ -59,6 +59,13 @@ static inline void vfsub_drop_nlink(struct inode *inode)
 	drop_nlink(inode);
 }
 
+static inline void vfsub_dead_dir(struct inode *inode)
+{
+	AuDebugOn(!S_ISDIR(inode->i_mode));
+	inode->i_flags |= S_DEAD;
+	clear_nlink(inode);
+}
+
 /* ---------------------------------------------------------------------- */
 
 struct file *vfsub_dentry_open(struct path *path, int flags);

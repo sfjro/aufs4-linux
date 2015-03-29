@@ -201,6 +201,41 @@ out:
 }
 
 /*
+ * when removing a dir, rename it to a unique temporary whiteout-ed name first
+ * in order to be revertible and save time for removing many child whiteouts
+ * under the dir.
+ * returns 1 when there are too many child whiteout and caller should remove
+ * them asynchronously. returns 0 when the number of children is enough small to
+ * remove now or the branch fs is a remote fs.
+ * otherwise return an error.
+ */
+static int renwh_and_rmdir(struct dentry *dentry, aufs_bindex_t bindex,
+			   struct au_nhash *whlist, struct inode *dir)
+{
+	int err;
+	struct dentry *h_dentry;
+	struct super_block *sb;
+
+	sb = dentry->d_sb;
+	SiMustAnyLock(sb);
+	h_dentry = au_h_dptr(dentry, bindex);
+	err = au_whtmp_ren(h_dentry, au_sbr(sb, bindex));
+	if (unlikely(err))
+		goto out;
+
+	err = au_whtmp_rmdir(dir, bindex, h_dentry, whlist);
+	if (unlikely(err)) {
+		AuIOErr("rmdir %pd, b%d failed, %d. ignored\n",
+			h_dentry, bindex, err);
+		err = 0;
+	}
+
+out:
+	AuTraceErr(err);
+	return err;
+}
+
+/*
  * final procedure for deleting a entry.
  * maintain dentry and iattr.
  */
@@ -340,5 +375,113 @@ out_unlock:
 out_free:
 	kfree(a);
 out:
+	return err;
+}
+
+int aufs_rmdir(struct inode *dir, struct dentry *dentry)
+{
+	int err, rmdir_later;
+	aufs_bindex_t bwh, bindex, bstart;
+	struct inode *inode;
+	struct dentry *parent, *wh_dentry, *h_dentry;
+	struct au_whtmp_rmdir *args;
+	/* to reuduce stack size */
+	struct {
+		struct au_dtime dt;
+		struct au_pin pin;
+	} *a;
+
+	IMustLock(dir);
+
+	err = -ENOMEM;
+	a = kmalloc(sizeof(*a), GFP_NOFS);
+	if (unlikely(!a))
+		goto out;
+
+	err = aufs_read_lock(dentry, AuLock_DW | AuLock_FLUSH | AuLock_GEN);
+	if (unlikely(err))
+		goto out_free;
+	err = au_alive_dir(dentry);
+	if (unlikely(err))
+		goto out_unlock;
+	inode = dentry->d_inode;
+	IMustLock(inode);
+	err = -ENOTDIR;
+	if (unlikely(!d_is_dir(dentry)))
+		goto out_unlock; /* possible? */
+
+	err = -ENOMEM;
+	args = au_whtmp_rmdir_alloc(dir->i_sb, GFP_NOFS);
+	if (unlikely(!args))
+		goto out_unlock;
+
+	parent = dentry->d_parent; /* dir inode is locked */
+	di_write_lock_parent(parent);
+	err = au_test_empty(dentry, &args->whlist);
+	if (unlikely(err))
+		goto out_parent;
+
+	bstart = au_dbstart(dentry);
+	bwh = au_dbwh(dentry);
+	bindex = -1;
+	wh_dentry = lock_hdir_create_wh(dentry, /*isdir*/1, &bindex, &a->dt,
+					&a->pin);
+	err = PTR_ERR(wh_dentry);
+	if (IS_ERR(wh_dentry))
+		goto out_parent;
+
+	h_dentry = au_h_dptr(dentry, bstart);
+	dget(h_dentry);
+	rmdir_later = 0;
+	if (bindex == bstart) {
+		err = renwh_and_rmdir(dentry, bstart, &args->whlist, dir);
+		if (err > 0) {
+			rmdir_later = err;
+			err = 0;
+		}
+	} else {
+		/* dir inode is locked */
+		IMustLock(wh_dentry->d_parent->d_inode);
+		err = 0;
+	}
+
+	if (!err) {
+		vfsub_dead_dir(inode);
+		au_set_dbdiropq(dentry, -1);
+		epilog(dir, dentry, bindex);
+
+		if (rmdir_later) {
+			au_whtmp_kick_rmdir(dir, bstart, h_dentry, args);
+			args = NULL;
+		}
+
+		goto out_unpin; /* success */
+	}
+
+	/* revert */
+	AuLabel(revert);
+	if (wh_dentry) {
+		int rerr;
+
+		rerr = do_revert(err, dir, bindex, bwh, wh_dentry, dentry,
+				 &a->dt);
+		if (rerr)
+			err = rerr;
+	}
+
+out_unpin:
+	au_unpin(&a->pin);
+	dput(wh_dentry);
+	dput(h_dentry);
+out_parent:
+	di_write_unlock(parent);
+	if (args)
+		au_whtmp_rmdir_free(args);
+out_unlock:
+	aufs_read_unlock(dentry, AuLock_DW);
+out_free:
+	kfree(a);
+out:
+	AuTraceErr(err);
 	return err;
 }
