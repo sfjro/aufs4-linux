@@ -146,6 +146,8 @@ static inline loff_t vfsub_llseek(struct file *file, loff_t offset, int origin)
 
 /* ---------------------------------------------------------------------- */
 
+int vfsub_sio_mkdir(struct inode *dir, struct path *path, int mode);
+int vfsub_sio_rmdir(struct inode *dir, struct path *path);
 int vfsub_sio_notify_change(struct path *path, struct iattr *ia,
 			    struct inode **delegated_inode);
 int vfsub_notify_change(struct path *path, struct iattr *ia,

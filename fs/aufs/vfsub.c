@@ -338,6 +338,80 @@ int vfsub_iterate_dir(struct file *file, struct dir_context *ctx)
 
 /* ---------------------------------------------------------------------- */
 
+struct au_vfsub_mkdir_args {
+	int *errp;
+	struct inode *dir;
+	struct path *path;
+	int mode;
+};
+
+static void au_call_vfsub_mkdir(void *args)
+{
+	struct au_vfsub_mkdir_args *a = args;
+	*a->errp = vfsub_mkdir(a->dir, a->path, a->mode);
+}
+
+int vfsub_sio_mkdir(struct inode *dir, struct path *path, int mode)
+{
+	int err, do_sio, wkq_err;
+
+	do_sio = au_test_h_perm_sio(dir, MAY_EXEC | MAY_WRITE);
+	if (!do_sio) {
+		lockdep_off();
+		err = vfsub_mkdir(dir, path, mode);
+		lockdep_on();
+	} else {
+		struct au_vfsub_mkdir_args args = {
+			.errp	= &err,
+			.dir	= dir,
+			.path	= path,
+			.mode	= mode
+		};
+		wkq_err = au_wkq_wait(au_call_vfsub_mkdir, &args);
+		if (unlikely(wkq_err))
+			err = wkq_err;
+	}
+
+	return err;
+}
+
+struct au_vfsub_rmdir_args {
+	int *errp;
+	struct inode *dir;
+	struct path *path;
+};
+
+static void au_call_vfsub_rmdir(void *args)
+{
+	struct au_vfsub_rmdir_args *a = args;
+	*a->errp = vfsub_rmdir(a->dir, a->path);
+}
+
+int vfsub_sio_rmdir(struct inode *dir, struct path *path)
+{
+	int err, do_sio, wkq_err;
+
+	do_sio = au_test_h_perm_sio(dir, MAY_EXEC | MAY_WRITE);
+	if (!do_sio) {
+		lockdep_off();
+		err = vfsub_rmdir(dir, path);
+		lockdep_on();
+	} else {
+		struct au_vfsub_rmdir_args args = {
+			.errp	= &err,
+			.dir	= dir,
+			.path	= path
+		};
+		wkq_err = au_wkq_wait(au_call_vfsub_rmdir, &args);
+		if (unlikely(wkq_err))
+			err = wkq_err;
+	}
+
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
 struct notify_change_args {
 	int *errp;
 	struct path *path;

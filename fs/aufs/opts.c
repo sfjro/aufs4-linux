@@ -33,6 +33,7 @@ enum {
 	Opt_rdblk_def, Opt_rdhash_def,
 	Opt_xino, Opt_noxino,
 	Opt_plink, Opt_noplink, Opt_list_plink,
+	Opt_wbr_copyup, Opt_wbr_create,
 	Opt_tail, Opt_ignore, Opt_ignore_silent, Opt_err
 };
 
@@ -61,6 +62,12 @@ static match_table_t options = {
 	{Opt_rdhash, "rdhash=%d"},
 	{Opt_rdhash_def, "rdhash=def"},
 
+	{Opt_wbr_create, "create=%s"},
+	{Opt_wbr_create, "create_policy=%s"},
+	{Opt_wbr_copyup, "cpup=%s"},
+	{Opt_wbr_copyup, "copyup=%s"},
+	{Opt_wbr_copyup, "copyup_policy=%s"},
+
 	/* internal use for the scripts */
 	{Opt_ignore_silent, "si=%s"},
 
@@ -71,6 +78,20 @@ static match_table_t options = {
 };
 
 /* ---------------------------------------------------------------------- */
+
+static const char *au_parser_pattern(int val, match_table_t tbl)
+{
+	struct match_token *p;
+
+	p = tbl;
+	while (p->pattern) {
+		if (p->token == val)
+			return p->pattern;
+		p++;
+	}
+	BUG();
+	return "??";
+}
 
 static const char *au_optstr(int *val, match_table_t tbl)
 {
@@ -237,6 +258,50 @@ void au_optstr_br_perm(au_br_perm_str_t *str, int perm)
 
 /* ---------------------------------------------------------------------- */
 
+static match_table_t au_wbr_create_policy = {
+	{AuWbrCreate_TDP, "tdp"},
+	{AuWbrCreate_TDP, "top-down-parent"},
+
+	{-1, NULL}
+};
+
+static int noinline_for_stack
+au_wbr_create_val(char *str, struct au_opt_wbr_create *create)
+{
+	int err;
+	substring_t args[MAX_OPT_ARGS];
+
+	err = match_token(str, au_wbr_create_policy, args);
+	create->wbr_create = err;
+
+	return err;
+}
+
+const char *au_optstr_wbr_create(int wbr_create)
+{
+	return au_parser_pattern(wbr_create, au_wbr_create_policy);
+}
+
+static match_table_t au_wbr_copyup_policy = {
+	{AuWbrCopyup_TDP, "tdp"},
+	{AuWbrCopyup_TDP, "top-down-parent"},
+	{-1, NULL}
+};
+
+static int noinline_for_stack au_wbr_copyup_val(char *str)
+{
+	substring_t args[MAX_OPT_ARGS];
+
+	return match_token(str, au_wbr_copyup_policy, args);
+}
+
+const char *au_optstr_wbr_copyup(int wbr_copyup)
+{
+	return au_parser_pattern(wbr_copyup, au_wbr_copyup_policy);
+}
+
+/* ---------------------------------------------------------------------- */
+
 static const int lkup_dirflags = LOOKUP_FOLLOW | LOOKUP_DIRECTORY;
 
 static void dump_opts(struct au_opts *opts)
@@ -246,6 +311,7 @@ static void dump_opts(struct au_opts *opts)
 	union {
 		struct au_opt_add *add;
 		struct au_opt_xino *xino;
+		struct au_opt_wbr_create *create;
 	} u;
 	struct au_opt *opt;
 
@@ -288,6 +354,15 @@ static void dump_opts(struct au_opts *opts)
 			break;
 		case Opt_list_plink:
 			AuLabel(list_plink);
+			break;
+		case Opt_wbr_create:
+			u.create = &opt->wbr_create;
+			AuDbg("create %d, %s\n", u.create->wbr_create,
+				  au_optstr_wbr_create(u.create->wbr_create));
+			break;
+		case Opt_wbr_copyup:
+			AuDbg("copyup %d, %s\n", opt->wbr_copyup,
+				  au_optstr_wbr_copyup(opt->wbr_copyup));
 			break;
 		default:
 			BUG();
@@ -385,6 +460,10 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 	struct au_opt *opt, *opt_tail;
 	char *opt_str;
 	/* reduce the stack space */
+	union {
+		struct au_opt_wbr_create *create;
+		/* will be added more later */
+	} u;
 	struct {
 		substring_t args[MAX_OPT_ARGS];
 	} *a;
@@ -489,6 +568,25 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 			opt->type = token;
 			break;
 
+		case Opt_wbr_create:
+			u.create = &opt->wbr_create;
+			u.create->wbr_create
+				= au_wbr_create_val(a->args[0].from, u.create);
+			if (u.create->wbr_create >= 0) {
+				err = 0;
+				opt->type = token;
+			} else
+				pr_err("wrong value, %s\n", opt_str);
+			break;
+		case Opt_wbr_copyup:
+			opt->wbr_copyup = au_wbr_copyup_val(a->args[0].from);
+			if (opt->wbr_copyup >= 0) {
+				err = 0;
+				opt->type = token;
+			} else
+				pr_err("wrong value, %s\n", opt_str);
+			break;
+
 		case Opt_ignore:
 			pr_warn("ignored %s\n", opt_str);
 			/*FALLTHROUGH*/
@@ -521,6 +619,31 @@ out:
 	return err;
 }
 
+static int au_opt_wbr_create(struct super_block *sb,
+			     struct au_opt_wbr_create *create)
+{
+	int err;
+	struct au_sbinfo *sbinfo;
+
+	SiMustWriteLock(sb);
+
+	err = 1; /* handled */
+	sbinfo = au_sbi(sb);
+	if (sbinfo->si_wbr_create_ops->fin) {
+		err = sbinfo->si_wbr_create_ops->fin(sb);
+		if (!err)
+			err = 1;
+	}
+
+	sbinfo->si_wbr_create = create->wbr_create;
+	sbinfo->si_wbr_create_ops = au_wbr_create_ops + create->wbr_create;
+
+	if (sbinfo->si_wbr_create_ops->init)
+		sbinfo->si_wbr_create_ops->init(sb); /* ignore */
+
+	return err;
+}
+
 /*
  * returns,
  * plus: processed without an error
@@ -548,6 +671,14 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 	case Opt_list_plink:
 		if (au_opt_test(sbinfo->si_mntflags, PLINK))
 			au_plink_list(sb);
+		break;
+
+	case Opt_wbr_create:
+		err = au_opt_wbr_create(sb, &opt->wbr_create);
+		break;
+	case Opt_wbr_copyup:
+		sbinfo->si_wbr_copyup = opt->wbr_copyup;
+		sbinfo->si_wbr_copyup_ops = au_wbr_copyup_ops + opt->wbr_copyup;
 		break;
 
 	case Opt_rdcache:

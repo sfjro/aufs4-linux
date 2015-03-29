@@ -112,6 +112,23 @@ static int au_show_brs(struct seq_file *seq, struct super_block *sb)
 	return err;
 }
 
+static void au_show_wbr_create(struct seq_file *m, int v,
+			       struct au_sbinfo *sbinfo)
+{
+	const char *pat;
+
+	AuRwMustAnyLock(&sbinfo->si_rwsem);
+
+	seq_puts(m, ",create=");
+	pat = au_optstr_wbr_create(v);
+	switch (v) {
+	case AuWbrCreate_TDP:
+		seq_puts(m, pat);
+		break;
+		break;
+	}
+}
+
 static int au_show_xino(struct seq_file *seq, struct super_block *sb)
 {
 #ifdef CONFIG_SYSFS
@@ -345,6 +362,8 @@ static void aufs_kill_sb(struct super_block *sb)
 	if (sbinfo) {
 		au_sbilist_del(sb);
 		aufs_write_lock(sb->s_root);
+		if (sbinfo->si_wbr_create_ops->fin)
+			sbinfo->si_wbr_create_ops->fin(sb);
 		if (au_opt_test(sbinfo->si_mntflags, PLINK))
 			au_plink_put(sb, /*verbose*/1);
 		au_xino_clr(sb);
