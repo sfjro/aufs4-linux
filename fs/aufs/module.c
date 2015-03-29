@@ -71,6 +71,14 @@ static void au_cache_fin(void)
 
 /* ---------------------------------------------------------------------- */
 
+#ifdef CONFIG_AUFS_SBILIST
+/*
+ * iterate_supers_type() doesn't protect us from
+ * remounting (branch management)
+ */
+struct au_splhead au_sbilist;
+#endif
+
 /*
  * functions for module interface.
  */
@@ -109,6 +117,7 @@ static int __init aufs_init(void)
 	*p++ = '\x7f';
 	*p = 0;
 
+	au_sbilist_init();
 	sysaufs_brs_init();
 	err = sysaufs_init();
 	if (unlikely(err))

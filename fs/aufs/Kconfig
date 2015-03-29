@@ -43,6 +43,14 @@ config AUFS_BRANCH_MAX_32767
 	resources and has a minor impact to performance.
 endchoice
 
+config AUFS_SBILIST
+	bool
+	depends on PROC_FS
+	default y
+	help
+	Automatic configuration for internal use.
+	When aufs supports Magic SysRq or /proc, enabled automatically.
+
 config AUFS_DEBUG
 	bool "Debug aufs"
 	help

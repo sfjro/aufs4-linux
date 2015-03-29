@@ -27,6 +27,7 @@
 #include <linux/fs.h>
 #include <linux/kobject.h>
 #include "rwsem.h"
+#include "spl.h"
 #include "wkq.h"
 
 typedef ssize_t (*au_readf_t)(struct file *, char __user *, size_t, loff_t *);
@@ -78,6 +79,10 @@ struct au_sbinfo {
 	 */
 	struct kobject		si_kobj;
 
+#ifdef CONFIG_AUFS_SBILIST
+	struct list_head	si_list;
+#endif
+
 	/* dirty, necessary for unmounting, sysfs and sysrq */
 	struct super_block	*si_sb;
 };
@@ -117,6 +122,35 @@ static inline struct au_sbinfo *au_sbi(struct super_block *sb)
 {
 	return sb->s_fs_info;
 }
+
+/* ---------------------------------------------------------------------- */
+
+#ifdef CONFIG_AUFS_SBILIST
+/* module.c */
+extern struct au_splhead au_sbilist;
+
+static inline void au_sbilist_init(void)
+{
+	au_spl_init(&au_sbilist);
+}
+
+static inline void au_sbilist_add(struct super_block *sb)
+{
+	au_spl_add(&au_sbi(sb)->si_list, &au_sbilist);
+}
+
+static inline void au_sbilist_del(struct super_block *sb)
+{
+	au_spl_del(&au_sbi(sb)->si_list, &au_sbilist);
+}
+
+#define AuGFP_SBILIST	GFP_NOFS
+#else
+AuStubVoid(au_sbilist_init, void)
+AuStubVoid(au_sbilist_add, struct super_block *sb)
+AuStubVoid(au_sbilist_del, struct super_block *sb)
+#define AuGFP_SBILIST	GFP_NOFS
+#endif
 
 /* ---------------------------------------------------------------------- */
 
