@@ -19,6 +19,7 @@
  * mount options/flags
  */
 
+#include <linux/file.h>
 #include <linux/namei.h>
 #include <linux/types.h> /* a distribution requires */
 #include <linux/parser.h>
@@ -29,12 +30,16 @@
 enum {
 	Opt_br,
 	Opt_add,
+	Opt_xino, Opt_noxino,
 	Opt_tail, Opt_ignore, Opt_ignore_silent, Opt_err
 };
 
 static match_table_t options = {
 	{Opt_br, "br=%s"},
 	{Opt_br, "br:%s"},
+
+	{Opt_xino, "xino=%s"},
+	{Opt_noxino, "noxino"},
 
 	/* internal use for the scripts */
 	{Opt_ignore_silent, "si=%s"},
@@ -220,6 +225,7 @@ static void dump_opts(struct au_opts *opts)
 	/* reduce stack space */
 	union {
 		struct au_opt_add *add;
+		struct au_opt_xino *xino;
 	} u;
 	struct au_opt *opt;
 
@@ -231,6 +237,13 @@ static void dump_opts(struct au_opts *opts)
 			AuDbg("add {b%d, %s, 0x%x, %p}\n",
 				  u.add->bindex, u.add->pathname, u.add->perm,
 				  u.add->path.dentry);
+			break;
+		case Opt_xino:
+			u.xino = &opt->xino;
+			AuDbg("xino {%s %pD}\n", u.xino->path, u.xino->file);
+			break;
+		case Opt_noxino:
+			AuLabel(noxino);
 			break;
 		default:
 			BUG();
@@ -249,6 +262,9 @@ void au_opts_free(struct au_opts *opts)
 		switch (opt->type) {
 		case Opt_add:
 			path_put(&opt->add.path);
+			break;
+		case Opt_xino:
+			fput(opt->xino.file);
 			break;
 		}
 		opt++;
@@ -284,6 +300,32 @@ static int opt_add(struct au_opt *opt, char *opt_str, unsigned long sb_flags,
 	}
 	pr_err("lookup failed %s (%d)\n", add->pathname, err);
 	err = -EINVAL;
+
+out:
+	return err;
+}
+
+static int au_opts_parse_xino(struct super_block *sb, struct au_opt_xino *xino,
+			      substring_t args[])
+{
+	int err;
+	struct file *file;
+
+	file = au_xino_create(sb, args[0].from, /*silent*/0);
+	err = PTR_ERR(file);
+	if (IS_ERR(file))
+		goto out;
+
+	err = -EINVAL;
+	if (unlikely(file->f_path.dentry->d_sb == sb)) {
+		fput(file);
+		pr_err("%s must be outside\n", args[0].from);
+		goto out;
+	}
+
+	err = 0;
+	xino->file = file;
+	xino->path = args[0].from;
 
 out:
 	return err;
@@ -343,6 +385,16 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 				      bindex);
 			if (!err)
 				opt->type = token;
+			break;
+		case Opt_xino:
+			err = au_opts_parse_xino(sb, &opt->xino, a->args);
+			if (!err)
+				opt->type = token;
+			break;
+
+		case Opt_noxino:
+			err = 0;
+			opt->type = token;
 			break;
 
 		case Opt_ignore:
@@ -433,6 +485,47 @@ static int au_opt_br(struct super_block *sb, struct au_opt *opt,
 			err = 1;
 			/* au_fset_opts(opts->flags, REFRESH); re-commit later */
 		}
+		break;
+	}
+
+	return err;
+}
+
+static int au_opt_xino(struct super_block *sb, struct au_opt *opt,
+		       struct au_opt_xino **opt_xino,
+		       struct au_opts *opts)
+{
+	int err;
+	aufs_bindex_t bend, bindex;
+	struct dentry *root, *parent, *h_root;
+
+	err = 0;
+	switch (opt->type) {
+	case Opt_xino:
+		err = au_xino_set(sb, &opt->xino);
+		if (unlikely(err))
+			break;
+
+		*opt_xino = &opt->xino;
+		au_xino_brid_set(sb, -1);
+
+		/* safe d_parent access */
+		parent = opt->xino.file->f_path.dentry->d_parent;
+		root = sb->s_root;
+		bend = au_sbend(sb);
+		for (bindex = 0; bindex <= bend; bindex++) {
+			h_root = au_h_dptr(root, bindex);
+			if (h_root == parent) {
+				au_xino_brid_set(sb, au_sbr_id(sb, bindex));
+				break;
+			}
+		}
+		break;
+
+	case Opt_noxino:
+		au_xino_clr(sb);
+		au_xino_brid_set(sb, -1);
+		*opt_xino = (void *)-1;
 		break;
 	}
 
@@ -531,11 +624,13 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 	unsigned int tmp;
 	aufs_bindex_t bend;
 	struct au_opt *opt;
+	struct au_opt_xino *opt_xino, xino;
 	struct au_sbinfo *sbinfo;
 
 	SiMustWriteLock(sb);
 
 	err = 0;
+	opt_xino = NULL;
 	opt = opts->opt;
 	while (err >= 0 && opt->type != Opt_tail)
 		err = au_opt_simple(sb, opt++, opts);
@@ -544,8 +639,11 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 	else if (unlikely(err < 0))
 		goto out;
 
+	/* disable xino temporary */
 	sbinfo = au_sbi(sb);
 	tmp = sbinfo->si_mntflags;
+	au_opt_clr(sbinfo->si_mntflags, XINO);
+
 	opt = opts->opt;
 	while (err >= 0 && opt->type != Opt_tail)
 		err = au_opt_br(sb, opt++, opts);
@@ -561,9 +659,32 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 		goto out;
 	}
 
+	if (au_opt_test(tmp, XINO))
+		au_opt_set(sbinfo->si_mntflags, XINO);
+	opt = opts->opt;
+	while (!err && opt->type != Opt_tail)
+		err = au_opt_xino(sb, opt++, &opt_xino, opts);
+	if (unlikely(err))
+		goto out;
+
 	err = au_opts_verify(sb, sb->s_flags, tmp);
 	if (unlikely(err))
 		goto out;
+
+	/* restore xino */
+	if (au_opt_test(tmp, XINO) && !opt_xino) {
+		xino.file = au_xino_def(sb);
+		err = PTR_ERR(xino.file);
+		if (IS_ERR(xino.file))
+			goto out;
+
+		err = au_xino_set(sb, &xino);
+		fput(xino.file);
+		if (unlikely(err))
+			goto out;
+	}
+
+	bend = au_sbend(sb);
 
 out:
 	return err;

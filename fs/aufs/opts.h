@@ -73,6 +73,7 @@ struct au_opt_xino {
 struct au_opt {
 	int type;
 	union {
+		struct au_opt_xino	xino;
 		struct au_opt_add	add;
 	};
 };

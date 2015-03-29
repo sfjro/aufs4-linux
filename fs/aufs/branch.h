@@ -123,6 +123,9 @@ int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t hino,
 	       struct file *base_file, int do_test);
 
+struct au_opt_xino;
+int au_xino_set(struct super_block *sb, struct au_opt_xino *xino);
+void au_xino_clr(struct super_block *sb);
 struct file *au_xino_def(struct super_block *sb);
 int au_xino_path(struct seq_file *seq, struct file *file);
 
