@@ -370,6 +370,17 @@ new_ino:
 
 	AuDbg("%lx, new %d\n", inode->i_state, !!(inode->i_state & I_NEW));
 	if (inode->i_state & I_NEW) {
+		/* verbose coding for lock class name */
+		if (unlikely(d_is_symlink(h_dentry)))
+			au_rw_class(&au_ii(inode)->ii_rwsem,
+				    au_lc_key + AuLcSymlink_IIINFO);
+		else if (unlikely(d_is_dir(h_dentry)))
+			au_rw_class(&au_ii(inode)->ii_rwsem,
+				    au_lc_key + AuLcDir_IIINFO);
+		else /* likely */
+			au_rw_class(&au_ii(inode)->ii_rwsem,
+				    au_lc_key + AuLcNonDir_IIINFO);
+
 		ii_write_lock_new_child(inode);
 		err = set_inode(inode, dentry);
 		if (!err) {

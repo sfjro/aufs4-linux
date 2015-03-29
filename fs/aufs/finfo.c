@@ -138,6 +138,11 @@ int au_finfo_init(struct file *file, struct au_fidir *fidir)
 
 	err = 0;
 	au_nfiles_inc(dentry->d_sb);
+	/* verbose coding for lock class name */
+	if (!fidir)
+		au_rw_class(&finfo->fi_rwsem, au_lc_key + AuLcNonDir_FIINFO);
+	else
+		au_rw_class(&finfo->fi_rwsem, au_lc_key + AuLcDir_FIINFO);
 	au_rw_write_lock(&finfo->fi_rwsem);
 	finfo->fi_btop = -1;
 	finfo->fi_hdir = fidir;
