@@ -51,6 +51,10 @@ static int __init au_cache_init(void)
 		au_cachep[AuCache_FINFO] = AuCacheCtor(au_finfo,
 						       au_fi_init_once);
 	if (au_cachep[AuCache_FINFO])
+		au_cachep[AuCache_VDIR] = AuCache(au_vdir);
+	if (au_cachep[AuCache_VDIR])
+		au_cachep[AuCache_DEHSTR] = AuCache(au_vdir_dehstr);
+	if (au_cachep[AuCache_DEHSTR])
 		return 0;
 
 	return -ENOMEM;

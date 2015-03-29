@@ -133,6 +133,7 @@ int au_iinfo_init(struct inode *inode)
 		iinfo->ii_generation.ig_generation = au_sigen(sb);
 		iinfo->ii_bstart = -1;
 		iinfo->ii_bend = -1;
+		iinfo->ii_vdir = NULL;
 		return 0;
 	}
 	return -ENOMEM;
@@ -185,6 +186,9 @@ void au_iinfo_fin(struct inode *inode)
 		si_read_unlock(sb);
 		lockdep_on();
 	}
+
+	if (iinfo->ii_vdir)
+		au_vdir_free(iinfo->ii_vdir);
 
 	bindex = iinfo->ii_bstart;
 	if (bindex >= 0) {

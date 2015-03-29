@@ -141,6 +141,36 @@ As well as XINO files, aufs has a feature to truncate/refresh XIB to
 reduce the number of consumed disk blocks for these files.
 
 
+Virtual or Vertical Dir, and Readdir in Userspace
+----------------------------------------------------------------------
+In order to support multiple layers (branches), aufs readdir operation
+constructs a virtual dir block on memory. For readdir, aufs calls
+vfs_readdir() internally for each dir on branches, merges their entries
+with eliminating the whiteout-ed ones, and sets it to file (dir)
+object. So the file object has its entry list until it is closed. The
+entry list will be updated when the file position is zero and becomes
+obsoleted. This decision is made in aufs automatically.
+
+The dynamically allocated memory block for the name of entries has a
+unit of 512 bytes (by default) and stores the names contiguously (no
+padding). Another block for each entry is handled by kmem_cache too.
+During building dir blocks, aufs creates hash list and judging whether
+the entry is whiteouted by its upper branch or already listed.
+The merged result is cached in the corresponding inode object and
+maintained by a customizable life-time option.
+
+Some people may call it can be a security hole or invite DoS attack
+since the opened and once readdir-ed dir (file object) holds its entry
+list and becomes a pressure for system memory. But I'd say it is similar
+to files under /proc or /sys. The virtual files in them also holds a
+memory page (generally) while they are opened. When an idea to reduce
+memory for them is introduced, it will be applied to aufs too.
+For those who really hate this situation, I've developed readdir(3)
+library which operates this merging in userspace. You just need to set
+LD_PRELOAD environment variable, and aufs will not consume no memory in
+kernel space for readdir(3).
+
+
 Workqueue
 ----------------------------------------------------------------------
 Aufs sometimes requires privilege access to a branch. For instance,

@@ -75,6 +75,9 @@ struct au_opt {
 	union {
 		struct au_opt_xino	xino;
 		struct au_opt_add	add;
+		int			rdcache;
+		unsigned int		rdblk;
+		unsigned int		rdhash;
 	};
 };
 

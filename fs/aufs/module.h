@@ -53,6 +53,8 @@ enum {
 	AuCache_DINFO,
 	AuCache_ICNTNR,
 	AuCache_FINFO,
+	AuCache_VDIR,
+	AuCache_DEHSTR,
 	AuCache_Last
 };
 
@@ -73,6 +75,8 @@ static inline void au_cache_free_##name(struct au_##name *p) \
 AuCacheFuncs(dinfo, DINFO);
 AuCacheFuncs(icntnr, ICNTNR);
 AuCacheFuncs(finfo, FINFO);
+AuCacheFuncs(vdir, VDIR);
+AuCacheFuncs(vdir_dehstr, DEHSTR);
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_MODULE_H__ */

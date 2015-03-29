@@ -36,6 +36,7 @@ struct au_iigen {
 	__u32		ig_generation;
 };
 
+struct au_vdir;
 struct au_iinfo {
 	spinlock_t		ii_genspin;
 	struct au_iigen		ii_generation;
@@ -45,6 +46,7 @@ struct au_iinfo {
 	aufs_bindex_t		ii_bstart, ii_bend;
 	__u32			ii_higen;
 	struct au_hinode	*ii_hinode;
+	struct au_vdir		*ii_vdir;
 };
 
 struct au_icntnr {
@@ -68,6 +70,8 @@ static inline struct au_iinfo *au_ii(struct inode *inode)
 
 /* inode.c */
 struct inode *au_igrab(struct inode *inode);
+int au_ino(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
+	   unsigned int d_type, ino_t *ino);
 int au_test_h_perm(struct inode *h_inode, int mask);
 int au_test_h_perm_sio(struct inode *h_inode, int mask);
 
@@ -262,6 +266,12 @@ static inline aufs_bindex_t au_ibend(struct inode *inode)
 	return au_ii(inode)->ii_bend;
 }
 
+static inline struct au_vdir *au_ivdir(struct inode *inode)
+{
+	IiMustAnyLock(inode);
+	return au_ii(inode)->ii_vdir;
+}
+
 static inline void au_set_ibstart(struct inode *inode, aufs_bindex_t bindex)
 {
 	IiMustWriteLock(inode);
@@ -272,6 +282,12 @@ static inline void au_set_ibend(struct inode *inode, aufs_bindex_t bindex)
 {
 	IiMustWriteLock(inode);
 	au_ii(inode)->ii_bend = bindex;
+}
+
+static inline void au_set_ivdir(struct inode *inode, struct au_vdir *vdir)
+{
+	IiMustWriteLock(inode);
+	au_ii(inode)->ii_vdir = vdir;
 }
 
 static inline struct au_hinode *au_hi(struct inode *inode, aufs_bindex_t bindex)

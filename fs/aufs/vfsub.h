@@ -91,6 +91,8 @@ int vfsub_rmdir(struct inode *dir, struct path *path);
 
 /* ---------------------------------------------------------------------- */
 
+int vfsub_iterate_dir(struct file *file, struct dir_context *ctx);
+
 static inline loff_t vfsub_f_size_read(struct file *file)
 {
 	return i_size_read(file_inode(file));
@@ -105,6 +107,18 @@ static inline unsigned int vfsub_file_flags(struct file *file)
 	spin_unlock(&file->f_lock);
 
 	return flags;
+}
+
+/* ---------------------------------------------------------------------- */
+
+static inline loff_t vfsub_llseek(struct file *file, loff_t offset, int origin)
+{
+	loff_t err;
+
+	lockdep_off();
+	err = vfs_llseek(file, offset, origin);
+	lockdep_on();
+	return err;
 }
 
 /* ---------------------------------------------------------------------- */

@@ -92,6 +92,10 @@ struct dentry;
 #ifdef CONFIG_AUFS_DEBUG
 extern struct mutex au_dbg_mtx;
 extern char *au_plevel;
+struct au_nhash;
+void au_dpri_whlist(struct au_nhash *whlist);
+struct au_vdir;
+void au_dpri_vdir(struct au_vdir *vdir);
 struct inode;
 void au_dpri_inode(struct inode *inode);
 void au_dpri_dalias(struct inode *inode);
@@ -105,6 +109,20 @@ void au_dpri_sb(struct super_block *sb);
 void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line);
 void au_dbg_verify_gen(struct dentry *parent, unsigned int sigen);
 void au_dbg_verify_kthread(void);
+
+#define AuDbgWhlist(w) do { \
+	mutex_lock(&au_dbg_mtx); \
+	AuDbg(#w "\n"); \
+	au_dpri_whlist(w); \
+	mutex_unlock(&au_dbg_mtx); \
+} while (0)
+
+#define AuDbgVdir(v) do { \
+	mutex_lock(&au_dbg_mtx); \
+	AuDbg(#v "\n"); \
+	au_dpri_vdir(v); \
+	mutex_unlock(&au_dbg_mtx); \
+} while (0)
 
 #define AuDbgInode(i) do { \
 	mutex_lock(&au_dbg_mtx); \
@@ -145,6 +163,8 @@ AuStubVoid(au_dbg_verify_dinode, struct dentry *dentry)
 AuStubVoid(au_dbg_verify_gen, struct dentry *parent, unsigned int sigen)
 AuStubVoid(au_dbg_verify_kthread, void)
 
+#define AuDbgWhlist(w)		do {} while (0)
+#define AuDbgVdir(v)		do {} while (0)
 #define AuDbgInode(i)		do {} while (0)
 #define AuDbgDAlias(i)		do {} while (0)
 #define AuDbgDentry(d)		do {} while (0)

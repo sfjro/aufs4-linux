@@ -66,6 +66,45 @@ char *au_plevel = KERN_DEBUG;
 
 /* ---------------------------------------------------------------------- */
 
+void au_dpri_whlist(struct au_nhash *whlist)
+{
+	unsigned long ul, n;
+	struct hlist_head *head;
+	struct au_vdir_wh *pos;
+
+	n = whlist->nh_num;
+	head = whlist->nh_head;
+	for (ul = 0; ul < n; ul++) {
+		hlist_for_each_entry(pos, head, wh_hash)
+			dpri("b%d, %.*s, %d\n",
+			     pos->wh_bindex,
+			     pos->wh_str.len, pos->wh_str.name,
+			     pos->wh_str.len);
+		head++;
+	}
+}
+
+void au_dpri_vdir(struct au_vdir *vdir)
+{
+	unsigned long ul;
+	union au_vdir_deblk_p p;
+	unsigned char *o;
+
+	if (!vdir || IS_ERR(vdir)) {
+		dpri("err %ld\n", PTR_ERR(vdir));
+		return;
+	}
+
+	dpri("deblk %u, nblk %lu, deblk %p, last{%lu, %p}, ver %lu\n",
+	     vdir->vd_deblk_sz, vdir->vd_nblk, vdir->vd_deblk,
+	     vdir->vd_last.ul, vdir->vd_last.p.deblk, vdir->vd_version);
+	for (ul = 0; ul < vdir->vd_nblk; ul++) {
+		p.deblk = vdir->vd_deblk[ul];
+		o = p.deblk;
+		dpri("[%lu]: %p\n", ul, o);
+	}
+}
+
 static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode)
 {
 	if (!inode || IS_ERR(inode)) {
@@ -188,6 +227,9 @@ static int do_pri_file(aufs_bindex_t bindex, struct file *file)
 void au_dpri_file(struct file *file)
 {
 	struct au_finfo *finfo;
+	struct au_fidir *fidir;
+	struct au_hfile *hfile;
+	aufs_bindex_t bindex;
 	int err;
 
 	err = do_pri_file(-1, file);
@@ -201,7 +243,16 @@ void au_dpri_file(struct file *file)
 		return;
 	if (finfo->fi_btop < 0)
 		return;
-	do_pri_file(finfo->fi_btop, finfo->fi_htop.hf_file);
+	fidir = finfo->fi_hdir;
+	if (!fidir)
+		do_pri_file(finfo->fi_btop, finfo->fi_htop.hf_file);
+	else
+		for (bindex = finfo->fi_btop;
+		     bindex >= 0 && bindex <= fidir->fd_bbot;
+		     bindex++) {
+			hfile = fidir->fd_hfile + bindex;
+			do_pri_file(bindex, hfile ? hfile->hf_file : NULL);
+		}
 }
 
 static int do_pri_br(aufs_bindex_t bindex, struct au_branch *br)

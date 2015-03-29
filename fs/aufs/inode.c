@@ -30,6 +30,40 @@ struct inode *au_igrab(struct inode *inode)
 	return inode;
 }
 
+int au_ino(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
+	   unsigned int d_type, ino_t *ino)
+{
+	int err;
+	struct mutex *mtx;
+
+	/* prevent hardlinked inode number from race condition */
+	mtx = NULL;
+	if (d_type != DT_DIR) {
+		mtx = &au_sbr(sb, bindex)->br_xino.xi_nondir_mtx;
+		mutex_lock(mtx);
+	}
+	err = au_xino_read(sb, bindex, h_ino, ino);
+	if (unlikely(err))
+		goto out;
+
+	if (!*ino) {
+		err = -EIO;
+		*ino = au_xino_new_ino(sb);
+		if (unlikely(!*ino))
+			goto out;
+		err = au_xino_write(sb, bindex, h_ino, *ino);
+		if (unlikely(err))
+			goto out;
+	}
+
+out:
+	if (mtx)
+		mutex_unlock(mtx);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
 int au_test_h_perm(struct inode *h_inode, int mask)
 {
 	if (uid_eq(current_fsuid(), GLOBAL_ROOT_UID))

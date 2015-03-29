@@ -92,6 +92,11 @@ struct au_sbinfo {
 	/* reserved for future use */
 	/* unsigned long long	si_xib_limit; */	/* Max xib file size */
 
+	/* vdir parameters */
+	unsigned long		si_rdcache;	/* max cache time in jiffies */
+	unsigned int		si_rdblk;	/* deblk size */
+	unsigned int		si_rdhash;	/* hash size */
+
 	/* pseudo_link list */
 	struct au_sphlhead	si_plink[AuPlink_NHASH];
 	wait_queue_head_t	si_plink_wq;

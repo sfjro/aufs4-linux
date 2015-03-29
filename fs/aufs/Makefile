@@ -13,6 +13,7 @@ aufs-y := module.o sbinfo.o super.o branch.o xino.o sysaufs.o opts.o \
 	cpup.o whout.o \
 	dinfo.o \
 	finfo.o \
+	dir.o vdir.o \
 	iinfo.o inode.o
 
 # all are boolean

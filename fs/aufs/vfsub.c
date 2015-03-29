@@ -184,6 +184,20 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+int vfsub_iterate_dir(struct file *file, struct dir_context *ctx)
+{
+	int err;
+
+	AuDbg("%pD, ctx{%pf, %llu}\n", file, ctx->actor, ctx->pos);
+
+	lockdep_off();
+	err = iterate_dir(file, ctx);
+	lockdep_on();
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
 struct unlink_args {
 	int *errp;
 	struct inode *dir;
