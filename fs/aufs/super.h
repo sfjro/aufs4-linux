@@ -59,6 +59,13 @@ struct au_sbinfo {
 	 */
 	struct au_rwsem		si_rwsem;
 
+	/* prevent recursive locking in deleting inode */
+	struct {
+		unsigned long		*bitmap;
+		spinlock_t		tree_lock;
+		struct radix_tree_root	tree;
+	} au_si_pid;
+
 	/* branch management */
 	unsigned int		si_generation;
 
@@ -138,6 +145,10 @@ aufs_bindex_t au_new_br_id(struct super_block *sb);
 int si_read_lock(struct super_block *sb, int flags);
 int si_write_lock(struct super_block *sb, int flags);
 
+int si_pid_test_slow(struct super_block *sb);
+void si_pid_set_slow(struct super_block *sb);
+void si_pid_clr_slow(struct super_block *sb);
+
 /* ---------------------------------------------------------------------- */
 
 static inline struct au_sbinfo *au_sbi(struct super_block *sb)
@@ -176,6 +187,50 @@ AuStubVoid(au_sbilist_del, struct super_block *sb)
 
 /* ---------------------------------------------------------------------- */
 
+static inline pid_t si_pid_bit(void)
+{
+	/* the origin of pid is 1, but the bitmap's is 0 */
+	return current->pid - 1;
+}
+
+static inline int si_pid_test(struct super_block *sb)
+{
+	pid_t bit;
+
+	bit = si_pid_bit();
+	if (bit < PID_MAX_DEFAULT)
+		return test_bit(bit, au_sbi(sb)->au_si_pid.bitmap);
+	return si_pid_test_slow(sb);
+}
+
+static inline void si_pid_set(struct super_block *sb)
+{
+	pid_t bit;
+
+	bit = si_pid_bit();
+	if (bit < PID_MAX_DEFAULT) {
+		AuDebugOn(test_bit(bit, au_sbi(sb)->au_si_pid.bitmap));
+		set_bit(bit, au_sbi(sb)->au_si_pid.bitmap);
+		/* smp_mb(); */
+	} else
+		si_pid_set_slow(sb);
+}
+
+static inline void si_pid_clr(struct super_block *sb)
+{
+	pid_t bit;
+
+	bit = si_pid_bit();
+	if (bit < PID_MAX_DEFAULT) {
+		AuDebugOn(!test_bit(bit, au_sbi(sb)->au_si_pid.bitmap));
+		clear_bit(bit, au_sbi(sb)->au_si_pid.bitmap);
+		/* smp_mb(); */
+	} else
+		si_pid_clr_slow(sb);
+}
+
+/* ---------------------------------------------------------------------- */
+
 /* lock superblock. mainly for entry point functions */
 /*
  * __si_read_lock, __si_write_lock,
@@ -190,21 +245,33 @@ AuSimpleRwsemFuncs(__si, struct super_block *sb, &au_sbi(sb)->si_rwsem);
 static inline void si_noflush_read_lock(struct super_block *sb)
 {
 	__si_read_lock(sb);
+	si_pid_set(sb);
 }
 
 static inline int si_noflush_read_trylock(struct super_block *sb)
 {
-	return __si_read_trylock(sb);
+	int locked;
+
+	locked = __si_read_trylock(sb);
+	if (locked)
+		si_pid_set(sb);
+	return locked;
 }
 
 static inline void si_noflush_write_lock(struct super_block *sb)
 {
 	__si_write_lock(sb);
+	si_pid_set(sb);
 }
 
 static inline int si_noflush_write_trylock(struct super_block *sb)
 {
-	return __si_write_trylock(sb);
+	int locked;
+
+	locked = __si_write_trylock(sb);
+	if (locked)
+		si_pid_set(sb);
+	return locked;
 }
 
 #if 0 /* reserved */
@@ -218,6 +285,7 @@ static inline int si_read_trylock(struct super_block *sb, int flags)
 
 static inline void si_read_unlock(struct super_block *sb)
 {
+	si_pid_clr(sb);
 	__si_read_unlock(sb);
 }
 
@@ -232,6 +300,7 @@ static inline int si_write_trylock(struct super_block *sb, int flags)
 
 static inline void si_write_unlock(struct super_block *sb)
 {
+	si_pid_clr(sb);
 	__si_write_unlock(sb);
 }
 

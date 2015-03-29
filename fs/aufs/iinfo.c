@@ -162,6 +162,7 @@ void au_iinfo_fin(struct inode *inode)
 {
 	struct au_iinfo *iinfo;
 	struct au_hinode *hi;
+	struct super_block *sb;
 	aufs_bindex_t bindex, bend;
 	const unsigned char unlinked = !inode->i_nlink;
 
@@ -170,7 +171,20 @@ void au_iinfo_fin(struct inode *inode)
 	if (!iinfo)
 		return;
 
-	au_xino_delete_inode(inode, unlinked);
+	sb = inode->i_sb;
+	if (si_pid_test(sb))
+		au_xino_delete_inode(inode, unlinked);
+	else {
+		/*
+		 * it is safe to hide the dependency between sbinfo and
+		 * sb->s_umount.
+		 */
+		lockdep_off();
+		si_noflush_read_lock(sb);
+		au_xino_delete_inode(inode, unlinked);
+		si_read_unlock(sb);
+		lockdep_on();
+	}
 
 	bindex = iinfo->ii_bstart;
 	if (bindex >= 0) {
