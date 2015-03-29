@@ -42,6 +42,11 @@ struct au_dinfo {
 
 /* ---------------------------------------------------------------------- */
 
+/* dentry.c */
+struct au_branch;
+int au_h_verify(struct dentry *h_dentry, unsigned int udba, struct inode *h_dir,
+		struct dentry *h_parent, struct au_branch *br);
+
 /* dinfo.c */
 void au_di_init_once(void *_di);
 struct au_dinfo *au_di_alloc(struct super_block *sb, unsigned int lsc);

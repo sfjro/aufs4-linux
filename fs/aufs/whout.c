@@ -443,12 +443,8 @@ static void reinit_br_wh(void *arg)
 
 	mutex_lock_nested(&hdir->hi_inode->i_mutex, AuLsc_I_PARENT);
 	wbr_wh_write_lock(wbr);
-#if 0 /* re-commit later */
 	err = au_h_verify(wbr->wbr_whbase, /*udba dummy*/0, hdir->hi_inode,
 			  h_root, a->br);
-#else
-	err = 0;
-#endif
 	if (!err) {
 		h_path.dentry = wbr->wbr_whbase;
 		h_path.mnt = au_br_mnt(a->br);
