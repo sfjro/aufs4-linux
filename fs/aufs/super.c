@@ -459,6 +459,8 @@ static int au_do_refresh(struct dentry *dentry, unsigned int dir_flags,
 	di_write_lock_child(dentry);
 	di_read_lock_parent(parent, AuLock_IR);
 	err = au_refresh_dentry(dentry, parent);
+	if (!err && dir_flags)
+		au_hn_reset(dentry->d_inode, dir_flags);
 	di_read_unlock(parent, AuLock_IR);
 	di_write_unlock(dentry);
 
@@ -576,9 +578,10 @@ static void au_remount_refresh(struct super_block *sb)
 {
 	int err, e;
 	unsigned int udba;
-	aufs_bindex_t bend;
+	aufs_bindex_t bindex, bend;
 	struct dentry *root;
 	struct inode *inode;
+	struct au_branch *br;
 
 	au_sigen_inc(sb);
 	au_fclr_si(au_sbi(sb), FAILED_REFRESH_DIR);
@@ -590,6 +593,16 @@ static void au_remount_refresh(struct super_block *sb)
 
 	udba = au_opt_udba(sb);
 	bend = au_sbend(sb);
+	for (bindex = 0; bindex <= bend; bindex++) {
+		br = au_sbr(sb, bindex);
+		err = au_hnotify_reset_br(udba, br, br->br_perm);
+		if (unlikely(err))
+			AuIOErr("hnotify failed on br %d, %d, ignored\n",
+				bindex, err);
+		/* go on even if err */
+	}
+	au_hn_reset(inode, au_hi_flags(inode, /*isdir*/1));
+
 	di_write_unlock(root);
 	err = au_refresh_d(sb);
 	e = au_refresh_i(sb);
@@ -853,6 +866,10 @@ static void aufs_kill_sb(struct super_block *sb)
 		aufs_write_lock(sb->s_root);
 		if (sbinfo->si_wbr_create_ops->fin)
 			sbinfo->si_wbr_create_ops->fin(sb);
+		if (au_opt_test(sbinfo->si_mntflags, UDBA_HNOTIFY)) {
+			au_opt_set_udba(sbinfo->si_mntflags, UDBA_NONE);
+			au_remount_refresh(sb);
+		}
 		if (au_opt_test(sbinfo->si_mntflags, PLINK))
 			au_plink_put(sb, /*verbose*/1);
 		au_xino_clr(sb);

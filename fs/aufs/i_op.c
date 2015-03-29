@@ -385,7 +385,7 @@ out:
 void au_pin_hdir_unlock(struct au_pin *p)
 {
 	if (p->hdir)
-		mutex_unlock(&p->hdir->hi_inode->i_mutex);
+		au_hn_imtx_unlock(p->hdir);
 }
 
 int au_pin_hdir_lock(struct au_pin *p)
@@ -397,7 +397,7 @@ int au_pin_hdir_lock(struct au_pin *p)
 		goto out;
 
 	/* even if an error happens later, keep this lock */
-	mutex_lock_nested(&p->hdir->hi_inode->i_mutex, p->lsc_hi);
+	au_hn_imtx_lock_nested(p->hdir, p->lsc_hi);
 
 	err = -EBUSY;
 	if (unlikely(p->hdir->hi_inode != p->h_parent->d_inode))

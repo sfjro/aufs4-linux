@@ -306,6 +306,12 @@ void au_optstr_br_perm(au_br_perm_str_t *str, int perm)
 static match_table_t udbalevel = {
 	{AuOpt_UDBA_REVAL, "reval"},
 	{AuOpt_UDBA_NONE, "none"},
+#ifdef CONFIG_AUFS_HNOTIFY
+	{AuOpt_UDBA_HNOTIFY, "notify"}, /* abstraction */
+#ifdef CONFIG_AUFS_HFSNOTIFY
+	{AuOpt_UDBA_HNOTIFY, "fsnotify"},
+#endif
+#endif
 	{-1, NULL}
 };
 
@@ -1362,6 +1368,10 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 			pr_warn("first branch should be rw\n");
 	}
 
+	if (au_opt_test((sbinfo->si_mntflags | pending), UDBA_HNOTIFY)
+	    && !au_opt_test(sbinfo->si_mntflags, XINO))
+		pr_warn("udba=*notify requires xino\n");
+
 	err = 0;
 	root = sb->s_root;
 	dir = root->d_inode;
@@ -1409,13 +1419,13 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 			continue;
 
 		hdir = au_hi(dir, bindex);
-		mutex_lock_nested(&hdir->hi_inode->i_mutex, AuLsc_I_PARENT);
+		au_hn_imtx_lock_nested(hdir, AuLsc_I_PARENT);
 		if (wbr)
 			wbr_wh_write_lock(wbr);
 		err = au_wh_init(br, sb);
 		if (wbr)
 			wbr_wh_write_unlock(wbr);
-		mutex_unlock(&hdir->hi_inode->i_mutex);
+		au_hn_imtx_unlock(hdir);
 
 		if (!err && do_free) {
 			kfree(wbr);
@@ -1430,10 +1440,12 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 {
 	int err;
 	unsigned int tmp;
-	aufs_bindex_t bend;
+	aufs_bindex_t bindex, bend;
 	struct au_opt *opt;
 	struct au_opt_xino *opt_xino, xino;
 	struct au_sbinfo *sbinfo;
+	struct au_branch *br;
+	struct inode *dir;
 
 	SiMustWriteLock(sb);
 
@@ -1498,6 +1510,18 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 	sbinfo->si_mntflags &= ~AuOptMask_UDBA;
 	sbinfo->si_mntflags |= tmp;
 	bend = au_sbend(sb);
+	for (bindex = 0; bindex <= bend; bindex++) {
+		br = au_sbr(sb, bindex);
+		err = au_hnotify_reset_br(tmp, br, br->br_perm);
+		if (unlikely(err))
+			AuIOErr("hnotify failed on br %d, %d, ignored\n",
+				bindex, err);
+		/* go on even if err */
+	}
+	if (au_opt_test(tmp, UDBA_HNOTIFY)) {
+		dir = sb->s_root->d_inode;
+		au_hn_reset(dir, au_hi_flags(dir, /*isdir*/1) & ~AuHi_XINO);
+	}
 
 out:
 	return err;

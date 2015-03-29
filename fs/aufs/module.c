@@ -69,7 +69,10 @@ static void au_cache_fin(void)
 	 * destroy cache.
 	 */
 	rcu_barrier();
-	for (i = 0; i < AuCache_Last; i++)
+
+	/* excluding AuCache_HNOTIFY */
+	BUILD_BUG_ON(AuCache_HNOTIFY + 1 != AuCache_Last);
+	for (i = 0; i < AuCache_HNOTIFY; i++)
 		if (au_cachep[i]) {
 			kmem_cache_destroy(au_cachep[i]);
 			au_cachep[i] = NULL;
@@ -143,9 +146,12 @@ static int __init aufs_init(void)
 	err = au_wkq_init();
 	if (unlikely(err))
 		goto out_procfs;
-	err = au_cache_init();
+	err = au_hnotify_init();
 	if (unlikely(err))
 		goto out_wkq;
+	err = au_cache_init();
+	if (unlikely(err))
+		goto out_hin;
 
 	err = register_filesystem(&aufs_fs_type);
 	if (unlikely(err))
@@ -157,6 +163,8 @@ static int __init aufs_init(void)
 
 out_cache:
 	au_cache_fin();
+out_hin:
+	au_hnotify_fin();
 out_wkq:
 	au_wkq_fin();
 out_procfs:
@@ -172,6 +180,7 @@ static void __exit aufs_exit(void)
 {
 	unregister_filesystem(&aufs_fs_type);
 	au_cache_fin();
+	au_hnotify_fin();
 	au_wkq_fin();
 	au_procfs_fin();
 	sysaufs_fin();

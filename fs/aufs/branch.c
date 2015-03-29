@@ -31,6 +31,8 @@ static void au_br_do_free(struct au_branch *br)
 	struct au_wbr *wbr;
 	struct au_dykey **key;
 
+	au_hnotify_fin_br(br);
+
 	if (br->br_xino.xi_file)
 		fput(br->br_xino.xi_file);
 	mutex_destroy(&br->br_xino.xi_nondir_mtx);
@@ -124,13 +126,17 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 	if (unlikely(!add_branch))
 		goto out;
 
+	err = au_hnotify_init_br(add_branch, perm);
+	if (unlikely(err))
+		goto out_br;
+
 	add_branch->br_wbr = NULL;
 	if (au_br_writable(perm)) {
 		/* may be freed separately at changing the branch permission */
 		add_branch->br_wbr = kmalloc(sizeof(*add_branch->br_wbr),
 					     GFP_NOFS);
 		if (unlikely(!add_branch->br_wbr))
-			goto out_br;
+			goto out_hnotify;
 	}
 
 	err = au_sbr_realloc(au_sbi(sb), new_nbranch);
@@ -142,6 +148,8 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 		return add_branch; /* success */
 
 	kfree(add_branch->br_wbr);
+out_hnotify:
+	au_hnotify_fin_br(add_branch);
 out_br:
 	kfree(add_branch);
 out:
@@ -274,7 +282,7 @@ static int au_br_init_wh(struct super_block *sb, struct au_branch *br,
 	bindex = au_br_index(sb, br->br_id);
 	if (0 <= bindex) {
 		hdir = au_hi(sb->s_root->d_inode, bindex);
-		mutex_lock_nested(&hdir->hi_inode->i_mutex, AuLsc_I_PARENT);
+		au_hn_imtx_lock_nested(hdir, AuLsc_I_PARENT);
 	} else {
 		h_mtx = &au_br_dentry(br)->d_inode->i_mutex;
 		mutex_lock_nested(h_mtx, AuLsc_I_PARENT);
@@ -287,7 +295,7 @@ static int au_br_init_wh(struct super_block *sb, struct au_branch *br,
 		wbr_wh_write_unlock(wbr);
 	}
 	if (hdir)
-		mutex_unlock(&hdir->hi_inode->i_mutex);
+		au_hn_imtx_unlock(hdir);
 	else
 		mutex_unlock(h_mtx);
 	vfsub_mnt_drop_write(au_br_mnt(br));
@@ -418,6 +426,7 @@ static void au_br_do_add_hip(struct au_iinfo *iinfo, aufs_bindex_t bindex,
 	hip = iinfo->ii_hinode + bindex;
 	memmove(hip + 1, hip, sizeof(*hip) * amount);
 	hip->hi_inode = NULL;
+	au_hn_init(hip);
 	iinfo->ii_bend++;
 	if (unlikely(bend < 0))
 		iinfo->ii_bstart = 0;
@@ -898,6 +907,7 @@ static void au_br_do_del_hip(struct au_iinfo *iinfo, const aufs_bindex_t bindex,
 	if (bindex < bend)
 		memmove(hip, hip + 1, sizeof(*hip) * (bend - bindex));
 	iinfo->ii_hinode[0 + bend].hi_inode = NULL;
+	au_hn_init(iinfo->ii_hinode + bend);
 	iinfo->ii_bend--;
 
 	p = krealloc(iinfo->ii_hinode, sizeof(*p) * bend, AuGFP_SBILIST);

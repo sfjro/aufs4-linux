@@ -223,6 +223,9 @@ static int renwh_and_rmdir(struct dentry *dentry, aufs_bindex_t bindex,
 	if (unlikely(err))
 		goto out;
 
+	/* stop monitoring */
+	au_hn_free(au_hi(dentry->d_inode, bindex));
+
 	err = au_whtmp_rmdir(dir, bindex, h_dentry, whlist);
 	if (unlikely(err)) {
 		AuIOErr("rmdir %pd, b%d failed, %d. ignored\n",
@@ -440,6 +443,9 @@ int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 			err = 0;
 		}
 	} else {
+		/* stop monitoring */
+		au_hn_free(au_hi(inode, bstart));
+
 		/* dir inode is locked */
 		IMustLock(wh_dentry->d_parent->d_inode);
 		err = 0;
