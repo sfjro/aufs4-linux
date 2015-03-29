@@ -28,7 +28,7 @@
 
 enum {
 	Opt_br,
-	Opt_add,
+	Opt_add, Opt_append, Opt_prepend,
 	Opt_rdcache, Opt_rdblk, Opt_rdhash,
 	Opt_rdblk_def, Opt_rdhash_def,
 	Opt_xino, Opt_noxino,
@@ -45,6 +45,15 @@ enum {
 static match_table_t options = {
 	{Opt_br, "br=%s"},
 	{Opt_br, "br:%s"},
+
+	{Opt_add, "add=%d:%s"},
+	{Opt_add, "add:%d:%s"},
+	{Opt_add, "ins=%d:%s"},
+	{Opt_add, "ins:%d:%s"},
+	{Opt_append, "append=%s"},
+	{Opt_append, "append:%s"},
+	{Opt_prepend, "prepend=%s"},
+	{Opt_prepend, "prepend:%s"},
 
 	{Opt_xino, "xino=%s"},
 	{Opt_noxino, "noxino"},
@@ -465,6 +474,18 @@ static void dump_opts(struct au_opts *opts)
 				  u.add->bindex, u.add->pathname, u.add->perm,
 				  u.add->path.dentry);
 			break;
+		case Opt_append:
+			u.add = &opt->add;
+			AuDbg("append {b%d, %s, 0x%x, %p}\n",
+				  u.add->bindex, u.add->pathname, u.add->perm,
+				  u.add->path.dentry);
+			break;
+		case Opt_prepend:
+			u.add = &opt->add;
+			AuDbg("prepend {b%d, %s, 0x%x, %p}\n",
+				  u.add->bindex, u.add->pathname, u.add->perm,
+				  u.add->path.dentry);
+			break;
 		case Opt_rdcache:
 			AuDbg("rdcache %d\n", opt->rdcache);
 			break;
@@ -564,6 +585,8 @@ void au_opts_free(struct au_opts *opts)
 	while (opt->type != Opt_tail) {
 		switch (opt->type) {
 		case Opt_add:
+		case Opt_append:
+		case Opt_prepend:
 			path_put(&opt->add.path);
 			break;
 		case Opt_xino:
@@ -730,6 +753,18 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 			bindex = n;
 			err = opt_add(opt, a->args[1].from, opts->sb_flags,
 				      bindex);
+			if (!err)
+				opt->type = token;
+			break;
+		case Opt_append:
+			err = opt_add(opt, a->args[0].from, opts->sb_flags,
+				      /*dummy bindex*/1);
+			if (!err)
+				opt->type = token;
+			break;
+		case Opt_prepend:
+			err = opt_add(opt, a->args[0].from, opts->sb_flags,
+				      /*bindex*/0);
 			if (!err)
 				opt->type = token;
 			break;
@@ -1034,6 +1069,14 @@ static int au_opt_br(struct super_block *sb, struct au_opt *opt,
 
 	err = 0;
 	switch (opt->type) {
+	case Opt_append:
+		opt->add.bindex = au_sbend(sb) + 1;
+		if (opt->add.bindex < 0)
+			opt->add.bindex = 0;
+		goto add;
+	case Opt_prepend:
+		opt->add.bindex = 0;
+	add: /* indented label */
 	case Opt_add:
 		err = au_br_add(sb, &opt->add,
 				au_ftest_opts(opts->flags, REMOUNT));
