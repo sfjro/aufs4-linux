@@ -156,7 +156,8 @@ static inline int au_br_wh_linkable(int brperm)
 
 /* ioctl */
 enum {
-	AuCtl_WBR_FD	/* pathconf wrapper */
+	AuCtl_WBR_FD,	/* pathconf wrapper */
+	AuCtl_BR	/* info about branches */
 };
 
 /* borrowed from linux/include/linux/kernel.h */
@@ -185,8 +186,21 @@ struct aufs_wbr_fd {
 
 /* ---------------------------------------------------------------------- */
 
+union aufs_brinfo {
+	/* PATH_MAX may differ between kernel-space and user-space */
+	char	_spacer[4096];
+	struct {
+		int16_t	id;
+		int	perm;
+		char	path[0];
+	};
+} __aligned(8);
+
+/* ---------------------------------------------------------------------- */
+
 #define AuCtlType		'A'
 #define AUFS_CTL_WBR_FD		_IOW(AuCtlType, AuCtl_WBR_FD, \
 				     struct aufs_wbr_fd)
+#define AUFS_CTL_BRINFO		_IOW(AuCtlType, AuCtl_BR, union aufs_brinfo)
 
 #endif /* __AUFS_TYPE_H__ */

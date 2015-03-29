@@ -128,6 +128,10 @@ long aufs_ioctl_dir(struct file *file, unsigned int cmd, unsigned long arg)
 		err = au_wbr_fd(&file->f_path, (void __user *)arg);
 		break;
 
+	case AUFS_CTL_BRINFO:
+		err = au_brinfo_ioctl(file, arg);
+		break;
+
 	default:
 		/* do not call the lower */
 		AuDbg("0x%x\n", cmd);
@@ -163,7 +167,14 @@ long aufs_compat_ioctl_dir(struct file *file, unsigned int cmd,
 {
 	long err;
 
-	err = aufs_ioctl_dir(file, cmd, arg);
+	switch (cmd) {
+	case AUFS_CTL_BRINFO:
+		err = au_brinfo_compat_ioctl(file, arg);
+		break;
+
+	default:
+		err = aufs_ioctl_dir(file, cmd, arg);
+	}
 
 	AuTraceErr(err);
 	return err;
