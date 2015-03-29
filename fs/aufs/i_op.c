@@ -8,6 +8,7 @@
 
 #include <linux/device_cgroup.h>
 #include <linux/fs_stack.h>
+#include <linux/mm.h>
 #include <linux/namei.h>
 #include <linux/security.h>
 #include <linux/uaccess.h>
@@ -440,8 +441,108 @@ int au_pin(struct au_pin *pin, struct dentry *dentry, aufs_bindex_t bindex,
 
 /* ---------------------------------------------------------------------- */
 
+static int h_readlink(struct dentry *dentry, int bindex, char __user *buf,
+		      int bufsiz)
+{
+	int err;
+	struct super_block *sb;
+	struct dentry *h_dentry;
+
+	err = -EINVAL;
+	h_dentry = au_h_dptr(dentry, bindex);
+	if (unlikely(!h_dentry->d_inode->i_op->readlink))
+		goto out;
+
+	err = security_inode_readlink(h_dentry);
+	if (unlikely(err))
+		goto out;
+
+	sb = dentry->d_sb;
+	if (!au_test_ro(sb, bindex, dentry->d_inode)) {
+		vfsub_touch_atime(au_sbr_mnt(sb, bindex), h_dentry);
+		fsstack_copy_attr_atime(dentry->d_inode, h_dentry->d_inode);
+	}
+	err = h_dentry->d_inode->i_op->readlink(h_dentry, buf, bufsiz);
+
+out:
+	return err;
+}
+
+static int aufs_readlink(struct dentry *dentry, char __user *buf, int bufsiz)
+{
+	int err;
+
+	err = aufs_read_lock(dentry, AuLock_IR | AuLock_GEN);
+	if (unlikely(err))
+		goto out;
+	err = au_d_hashed_positive(dentry);
+	if (!err)
+		err = h_readlink(dentry, au_dbstart(dentry), buf, bufsiz);
+	aufs_read_unlock(dentry, AuLock_IR);
+
+out:
+	return err;
+}
+
+static void *aufs_follow_link(struct dentry *dentry, struct nameidata *nd)
+{
+	int err;
+	mm_segment_t old_fs;
+	union {
+		char *k;
+		char __user *u;
+	} buf;
+
+	err = -ENOMEM;
+	buf.k = (void *)__get_free_page(GFP_NOFS);
+	if (unlikely(!buf.k))
+		goto out;
+
+	err = aufs_read_lock(dentry, AuLock_IR | AuLock_GEN);
+	if (unlikely(err))
+		goto out_name;
+
+	err = au_d_hashed_positive(dentry);
+	if (!err) {
+		old_fs = get_fs();
+		set_fs(KERNEL_DS);
+		err = h_readlink(dentry, au_dbstart(dentry), buf.u, PATH_MAX);
+		set_fs(old_fs);
+	}
+	aufs_read_unlock(dentry, AuLock_IR);
+
+	if (err >= 0) {
+		buf.k[err] = 0;
+		/* will be freed by put_link */
+		nd_set_link(nd, buf.k);
+		return NULL; /* success */
+	}
+
+out_name:
+	free_page((unsigned long)buf.k);
+out:
+	AuTraceErr(err);
+	return ERR_PTR(err);
+}
+
+static void aufs_put_link(struct dentry *dentry __maybe_unused,
+			  struct nameidata *nd, void *cookie __maybe_unused)
+{
+	char *p;
+
+	p = nd_get_link(nd);
+	if (!IS_ERR_OR_NULL(p))
+		free_page((unsigned long)p);
+}
+
+/* ---------------------------------------------------------------------- */
+
 struct inode_operations aufs_symlink_iop = {
-	.permission	= aufs_permission
+	.permission	= aufs_permission,
+
+	.readlink	= aufs_readlink,
+	.follow_link	= aufs_follow_link,
+	.put_link	= aufs_put_link,
 };
 
 struct inode_operations aufs_dir_iop = {

@@ -136,6 +136,16 @@ static inline unsigned int vfsub_file_flags(struct file *file)
 	return flags;
 }
 
+static inline void vfsub_touch_atime(struct vfsmount *h_mnt,
+				     struct dentry *h_dentry)
+{
+	struct path h_path = {
+		.dentry	= h_dentry,
+		.mnt	= h_mnt
+	};
+	touch_atime(&h_path);
+}
+
 /* ---------------------------------------------------------------------- */
 
 static inline loff_t vfsub_llseek(struct file *file, loff_t offset, int origin)
