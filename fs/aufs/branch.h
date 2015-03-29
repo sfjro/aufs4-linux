@@ -149,6 +149,10 @@ struct au_opt_add;
 int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount);
 struct au_opt_del;
 int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount);
+long au_ibusy_ioctl(struct file *file, unsigned long arg);
+#ifdef CONFIG_COMPAT
+long au_ibusy_compat_ioctl(struct file *file, unsigned long arg);
+#endif
 struct au_opt_mod;
 int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
 	      int *do_refresh);

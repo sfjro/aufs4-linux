@@ -133,6 +133,10 @@ long aufs_ioctl_dir(struct file *file, unsigned int cmd, unsigned long arg)
 		err = au_wbr_fd(&file->f_path, (void __user *)arg);
 		break;
 
+	case AUFS_CTL_IBUSY:
+		err = au_ibusy_ioctl(file, arg);
+		break;
+
 	case AUFS_CTL_BRINFO:
 		err = au_brinfo_ioctl(file, arg);
 		break;
@@ -176,6 +180,10 @@ long aufs_compat_ioctl_dir(struct file *file, unsigned int cmd,
 	case AUFS_CTL_RDU:
 	case AUFS_CTL_RDU_INO:
 		err = au_rdu_compat_ioctl(file, cmd, arg);
+		break;
+
+	case AUFS_CTL_IBUSY:
+		err = au_ibusy_compat_ioctl(file, arg);
 		break;
 
 	case AUFS_CTL_BRINFO:

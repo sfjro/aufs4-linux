@@ -19,7 +19,9 @@
  * branch management
  */
 
+#include <linux/compat.h>
 #include <linux/statfs.h>
+#include <linux/uaccess.h>
 #include "aufs.h"
 
 /*
@@ -1064,6 +1066,77 @@ out:
 		au_farray_free(to_free, opened);
 	return err;
 }
+
+/* ---------------------------------------------------------------------- */
+
+static int au_ibusy(struct super_block *sb, struct aufs_ibusy __user *arg)
+{
+	int err;
+	aufs_bindex_t bstart, bend;
+	struct aufs_ibusy ibusy;
+	struct inode *inode, *h_inode;
+
+	err = -EPERM;
+	if (unlikely(!capable(CAP_SYS_ADMIN)))
+		goto out;
+
+	err = copy_from_user(&ibusy, arg, sizeof(ibusy));
+	if (!err)
+		err = !access_ok(VERIFY_WRITE, &arg->h_ino, sizeof(arg->h_ino));
+	if (unlikely(err)) {
+		err = -EFAULT;
+		AuTraceErr(err);
+		goto out;
+	}
+
+	err = -EINVAL;
+	si_read_lock(sb, AuLock_FLUSH);
+	if (unlikely(ibusy.bindex < 0 || ibusy.bindex > au_sbend(sb)))
+		goto out_unlock;
+
+	err = 0;
+	ibusy.h_ino = 0; /* invalid */
+	inode = ilookup(sb, ibusy.ino);
+	if (!inode
+	    || inode->i_ino == AUFS_ROOT_INO
+	    || is_bad_inode(inode))
+		goto out_unlock;
+
+	ii_read_lock_child(inode);
+	bstart = au_ibstart(inode);
+	bend = au_ibend(inode);
+	if (bstart <= ibusy.bindex && ibusy.bindex <= bend) {
+		h_inode = au_h_iptr(inode, ibusy.bindex);
+		if (h_inode && au_test_ibusy(inode, bstart, bend))
+			ibusy.h_ino = h_inode->i_ino;
+	}
+	ii_read_unlock(inode);
+	iput(inode);
+
+out_unlock:
+	si_read_unlock(sb);
+	if (!err) {
+		err = __put_user(ibusy.h_ino, &arg->h_ino);
+		if (unlikely(err)) {
+			err = -EFAULT;
+			AuTraceErr(err);
+		}
+	}
+out:
+	return err;
+}
+
+long au_ibusy_ioctl(struct file *file, unsigned long arg)
+{
+	return au_ibusy(file->f_path.dentry->d_sb, (void __user *)arg);
+}
+
+#ifdef CONFIG_COMPAT
+long au_ibusy_compat_ioctl(struct file *file, unsigned long arg)
+{
+	return au_ibusy(file->f_path.dentry->d_sb, compat_ptr(arg));
+}
+#endif
 
 /* ---------------------------------------------------------------------- */
 

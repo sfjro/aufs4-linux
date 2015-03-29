@@ -162,6 +162,7 @@ enum {
 	AuCtl_RDU_INO,
 
 	AuCtl_WBR_FD,	/* pathconf wrapper */
+	AuCtl_IBUSY,	/* busy inode */
 	AuCtl_BR	/* info about branches */
 };
 
@@ -246,6 +247,13 @@ struct aufs_wbr_fd {
 
 /* ---------------------------------------------------------------------- */
 
+struct aufs_ibusy {
+	uint64_t	ino, h_ino;
+	int16_t		bindex;
+} __aligned(8);
+
+/* ---------------------------------------------------------------------- */
+
 union aufs_brinfo {
 	/* PATH_MAX may differ between kernel-space and user-space */
 	char	_spacer[4096];
@@ -263,6 +271,7 @@ union aufs_brinfo {
 #define AUFS_CTL_RDU_INO	_IOWR(AuCtlType, AuCtl_RDU_INO, struct aufs_rdu)
 #define AUFS_CTL_WBR_FD		_IOW(AuCtlType, AuCtl_WBR_FD, \
 				     struct aufs_wbr_fd)
+#define AUFS_CTL_IBUSY		_IOWR(AuCtlType, AuCtl_IBUSY, struct aufs_ibusy)
 #define AUFS_CTL_BRINFO		_IOW(AuCtlType, AuCtl_BR, union aufs_brinfo)
 
 #endif /* __AUFS_TYPE_H__ */
