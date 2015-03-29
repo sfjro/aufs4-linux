@@ -37,6 +37,7 @@ struct au_dinfo {
 
 	struct au_rwsem		di_rwsem;
 	aufs_bindex_t		di_bstart, di_bend, di_bwh, di_bdiropq;
+	unsigned char		di_tmpfile; /* to allow the different name */
 	struct au_hdentry	*di_hdentry;
 } ____cacheline_aligned_in_smp;
 
@@ -79,6 +80,7 @@ void au_set_h_dptr(struct dentry *dentry, aufs_bindex_t bindex,
 int au_digen_test(struct dentry *dentry, unsigned int sigen);
 int au_dbrange_test(struct dentry *dentry);
 void au_update_digen(struct dentry *dentry);
+void au_update_dbrange(struct dentry *dentry, int do_put_zero);
 void au_update_dbstart(struct dentry *dentry);
 void au_update_dbend(struct dentry *dentry);
 int au_find_dbindex(struct dentry *dentry, struct dentry *h_dentry);

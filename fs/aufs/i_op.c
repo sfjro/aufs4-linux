@@ -1,5 +1,18 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
+ *
+ * This program, aufs is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -225,6 +238,134 @@ out_si:
 	si_read_unlock(sb);
 out:
 	return ret;
+}
+
+/* ---------------------------------------------------------------------- */
+
+static int au_wr_dir_cpup(struct dentry *dentry, struct dentry *parent,
+			  const unsigned char add_entry, aufs_bindex_t bcpup,
+			  aufs_bindex_t bstart)
+{
+	int err;
+	struct dentry *h_parent;
+	struct inode *h_dir;
+
+	if (add_entry)
+		IMustLock(parent->d_inode);
+	else
+		di_write_lock_parent(parent);
+
+	err = 0;
+	if (!au_h_dptr(parent, bcpup)) {
+		if (bstart > bcpup)
+			err = au_cpup_dirs(dentry, bcpup);
+		else if (bstart < bcpup)
+			err = au_cpdown_dirs(dentry, bcpup);
+		else
+			BUG();
+	}
+	if (!err && add_entry && !au_ftest_wrdir(add_entry, TMPFILE)) {
+		h_parent = au_h_dptr(parent, bcpup);
+		h_dir = h_parent->d_inode;
+		mutex_lock_nested(&h_dir->i_mutex, AuLsc_I_PARENT);
+		err = au_lkup_neg(dentry, bcpup, /*wh*/0);
+		/* todo: no unlock here */
+		mutex_unlock(&h_dir->i_mutex);
+
+		AuDbg("bcpup %d\n", bcpup);
+		if (!err) {
+			if (!dentry->d_inode)
+				au_set_h_dptr(dentry, bstart, NULL);
+			au_update_dbrange(dentry, /*do_put_zero*/0);
+		}
+	}
+
+	if (!add_entry)
+		di_write_unlock(parent);
+	if (!err)
+		err = bcpup; /* success */
+
+	AuTraceErr(err);
+	return err;
+}
+
+/*
+ * decide the branch and the parent dir where we will create a new entry.
+ * returns new bindex or an error.
+ * copyup the parent dir if needed.
+ */
+int au_wr_dir(struct dentry *dentry, struct dentry *src_dentry,
+	      struct au_wr_dir_args *args)
+{
+	int err;
+	unsigned int flags;
+	aufs_bindex_t bcpup, bstart, src_bstart;
+	const unsigned char add_entry
+		= au_ftest_wrdir(args->flags, ADD_ENTRY)
+		| au_ftest_wrdir(args->flags, TMPFILE);
+	struct super_block *sb;
+	struct dentry *parent;
+	struct au_sbinfo *sbinfo;
+
+	sb = dentry->d_sb;
+	sbinfo = au_sbi(sb);
+	parent = dget_parent(dentry);
+	bstart = au_dbstart(dentry);
+	bcpup = bstart;
+	if (args->force_btgt < 0) {
+		if (src_dentry) {
+			src_bstart = au_dbstart(src_dentry);
+			if (src_bstart < bstart)
+				bcpup = src_bstart;
+		} else if (add_entry) {
+			flags = 0;
+			if (au_ftest_wrdir(args->flags, ISDIR))
+				au_fset_wbr(flags, DIR);
+			err = AuWbrCreate(sbinfo, dentry, flags);
+			bcpup = err;
+		}
+
+		if (bcpup < 0 || au_test_ro(sb, bcpup, dentry->d_inode)) {
+			if (add_entry)
+				err = AuWbrCopyup(sbinfo, dentry);
+			else {
+				if (!IS_ROOT(dentry)) {
+					di_read_lock_parent(parent, !AuLock_IR);
+					err = AuWbrCopyup(sbinfo, dentry);
+					di_read_unlock(parent, !AuLock_IR);
+				} else
+					err = AuWbrCopyup(sbinfo, dentry);
+			}
+			bcpup = err;
+			if (unlikely(err < 0))
+				goto out;
+		}
+	} else {
+		bcpup = args->force_btgt;
+		AuDebugOn(au_test_ro(sb, bcpup, dentry->d_inode));
+	}
+
+	AuDbg("bstart %d, bcpup %d\n", bstart, bcpup);
+	err = bcpup;
+	if (bcpup == bstart)
+		goto out; /* success */
+
+	/* copyup the new parent into the branch we process */
+	err = au_wr_dir_cpup(dentry, parent, add_entry, bcpup, bstart);
+	if (err >= 0) {
+		if (!dentry->d_inode) {
+			au_set_h_dptr(dentry, bstart, NULL);
+			au_set_dbstart(dentry, bcpup);
+			au_set_dbend(dentry, bcpup);
+		}
+		AuDebugOn(add_entry
+			  && !au_ftest_wrdir(args->flags, TMPFILE)
+			  && !au_h_dptr(dentry, bcpup));
+	}
+
+out:
+	dput(parent);
+	return err;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -546,9 +687,15 @@ struct inode_operations aufs_symlink_iop = {
 };
 
 struct inode_operations aufs_dir_iop = {
+	.create		= aufs_create,
 	.lookup		= aufs_lookup,
+	.symlink	= aufs_symlink,
+	.mkdir		= aufs_mkdir,
+	.mknod		= aufs_mknod,
 
-	.permission	= aufs_permission
+	.permission	= aufs_permission,
+
+	.tmpfile	= aufs_tmpfile
 };
 
 struct inode_operations aufs_iop = {

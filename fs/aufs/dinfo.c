@@ -49,6 +49,7 @@ struct au_dinfo *au_di_alloc(struct super_block *sb, unsigned int lsc)
 		dinfo->di_bend = -1;
 		dinfo->di_bwh = -1;
 		dinfo->di_bdiropq = -1;
+		dinfo->di_tmpfile = 0;
 		for (i = 0; i < nbr; i++)
 			dinfo->di_hdentry[i].hd_id = -1;
 		goto out;
@@ -360,6 +361,47 @@ void au_update_digen(struct dentry *dentry)
 {
 	atomic_set(&au_di(dentry)->di_generation, au_sigen(dentry->d_sb));
 	/* smp_mb(); */ /* atomic_set */
+}
+
+void au_update_dbrange(struct dentry *dentry, int do_put_zero)
+{
+	struct au_dinfo *dinfo;
+	struct dentry *h_d;
+	struct au_hdentry *hdp;
+
+	DiMustWriteLock(dentry);
+
+	dinfo = au_di(dentry);
+	if (!dinfo || dinfo->di_bstart < 0)
+		return;
+
+	hdp = dinfo->di_hdentry;
+	if (do_put_zero) {
+		aufs_bindex_t bindex, bend;
+
+		bend = dinfo->di_bend;
+		for (bindex = dinfo->di_bstart; bindex <= bend; bindex++) {
+			h_d = hdp[0 + bindex].hd_dentry;
+			if (h_d && !h_d->d_inode)
+				au_set_h_dptr(dentry, bindex, NULL);
+		}
+	}
+
+	dinfo->di_bstart = -1;
+	while (++dinfo->di_bstart <= dinfo->di_bend)
+		if (hdp[0 + dinfo->di_bstart].hd_dentry)
+			break;
+	if (dinfo->di_bstart > dinfo->di_bend) {
+		dinfo->di_bstart = -1;
+		dinfo->di_bend = -1;
+		return;
+	}
+
+	dinfo->di_bend++;
+	while (0 <= --dinfo->di_bend)
+		if (hdp[0 + dinfo->di_bend].hd_dentry)
+			break;
+	AuDebugOn(dinfo->di_bstart > dinfo->di_bend || dinfo->di_bend < 0);
 }
 
 void au_update_dbstart(struct dentry *dentry)

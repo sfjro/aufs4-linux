@@ -15,7 +15,7 @@ aufs-y := module.o sbinfo.o super.o branch.o xino.o sysaufs.o opts.o \
 	dynop.o \
 	finfo.o file.o \
 	dir.o vdir.o \
-	iinfo.o inode.o i_op.o
+	iinfo.o inode.o i_op.o i_op_add.o
 
 # all are boolean
 aufs-$(CONFIG_PROC_FS) += procfs.o plink.o
