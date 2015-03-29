@@ -204,6 +204,54 @@ int si_write_lock(struct super_block *sb, int flags)
 	return err;
 }
 
+/* dentry and super_block lock. call at entry point */
+int aufs_read_lock(struct dentry *dentry, int flags)
+{
+	int err;
+	struct super_block *sb;
+
+	sb = dentry->d_sb;
+	err = si_read_lock(sb, flags);
+	if (unlikely(err))
+		goto out;
+
+	if (au_ftest_lock(flags, DW))
+		di_write_lock_child(dentry);
+	else
+		di_read_lock_child(dentry, flags);
+
+	if (au_ftest_lock(flags, GEN)) {
+		err = au_digen_test(dentry, au_sigen(sb));
+		AuDebugOn(!err && au_dbrange_test(dentry));
+		if (unlikely(err))
+			aufs_read_unlock(dentry, flags);
+	}
+
+out:
+	return err;
+}
+
+void aufs_read_unlock(struct dentry *dentry, int flags)
+{
+	if (au_ftest_lock(flags, DW))
+		di_write_unlock(dentry);
+	else
+		di_read_unlock(dentry, flags);
+	si_read_unlock(dentry->d_sb);
+}
+
+void aufs_write_lock(struct dentry *dentry)
+{
+	si_write_lock(dentry->d_sb, AuLock_FLUSH | AuLock_NOPLMW);
+	di_write_lock_child(dentry);
+}
+
+void aufs_write_unlock(struct dentry *dentry)
+{
+	di_write_unlock(dentry);
+	si_write_unlock(dentry->d_sb);
+}
+
 /* ---------------------------------------------------------------------- */
 
 int si_pid_test_slow(struct super_block *sb)

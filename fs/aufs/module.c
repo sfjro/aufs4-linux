@@ -132,10 +132,15 @@ static int __init aufs_init(void)
 	if (unlikely(err))
 		goto out_wkq;
 
+	err = register_filesystem(&aufs_fs_type);
+	if (unlikely(err))
+		goto out_cache;
+
 	/* since we define pr_fmt, call printk directly */
 	printk(KERN_INFO AUFS_NAME " " AUFS_VERSION "\n");
 	goto out; /* success */
 
+out_cache:
 	au_cache_fin();
 out_wkq:
 	au_wkq_fin();
@@ -149,6 +154,7 @@ out:
 
 static void __exit aufs_exit(void)
 {
+	unregister_filesystem(&aufs_fs_type);
 	au_cache_fin();
 	au_wkq_fin();
 	au_procfs_fin();

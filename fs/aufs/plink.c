@@ -428,8 +428,11 @@ void au_plink_put(struct super_block *sb, int verbose)
 
 void au_plink_clean(struct super_block *sb, int verbose)
 {
-	si_write_lock(sb, AuLock_FLUSH | AuLock_NOPLMW); /* replaced later */
+	struct dentry *root;
+
+	root = sb->s_root;
+	aufs_write_lock(root);
 	if (au_opt_test(au_mntflags(sb), PLINK))
 		au_plink_put(sb, verbose);
-	si_write_unlock(sb);
+	aufs_write_unlock(root);
 }

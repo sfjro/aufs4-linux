@@ -172,10 +172,193 @@ static void aufs_put_super(struct super_block *sb)
 
 /* ---------------------------------------------------------------------- */
 
+/* stop extra interpretation of errno in mount(8), and strange error messages */
+static int cvt_err(int err)
+{
+	AuTraceErr(err);
+
+	switch (err) {
+	case -ENOENT:
+	case -ENOTDIR:
+	case -EEXIST:
+	case -EIO:
+		err = -EINVAL;
+	}
+	return err;
+}
+
 static const struct super_operations aufs_sop = {
 	.alloc_inode	= aufs_alloc_inode,
 	.destroy_inode	= aufs_destroy_inode,
 	/* always deleting, no clearing */
 	.drop_inode	= generic_delete_inode,
 	.put_super	= aufs_put_super
+};
+
+/* ---------------------------------------------------------------------- */
+
+static int alloc_root(struct super_block *sb)
+{
+	int err;
+	struct inode *inode;
+	struct dentry *root;
+
+	err = -ENOMEM;
+	inode = au_iget_locked(sb, AUFS_ROOT_INO);
+	err = PTR_ERR(inode);
+	if (IS_ERR(inode))
+		goto out;
+
+	inode->i_op = &simple_dir_inode_operations; /* replace later */
+	inode->i_fop = &simple_dir_operations; /* replace later */
+	inode->i_mode = S_IFDIR;
+	set_nlink(inode, 2);
+	unlock_new_inode(inode);
+
+	root = d_make_root(inode);
+	if (unlikely(!root))
+		goto out;
+	err = PTR_ERR(root);
+	if (IS_ERR(root))
+		goto out;
+
+	err = au_di_init(root);
+	if (!err) {
+		sb->s_root = root;
+		return 0; /* success */
+	}
+	dput(root);
+
+out:
+	return err;
+}
+
+static int aufs_fill_super(struct super_block *sb, void *raw_data,
+			   int silent __maybe_unused)
+{
+	int err;
+	struct au_opts opts;
+	struct dentry *root;
+	struct inode *inode;
+	char *arg = raw_data;
+
+	if (unlikely(!arg || !*arg)) {
+		err = -EINVAL;
+		pr_err("no arg\n");
+		goto out;
+	}
+
+	err = -ENOMEM;
+	memset(&opts, 0, sizeof(opts));
+	opts.opt = (void *)__get_free_page(GFP_NOFS);
+	if (unlikely(!opts.opt))
+		goto out;
+	opts.max_opt = PAGE_SIZE / sizeof(*opts.opt);
+	opts.sb_flags = sb->s_flags;
+
+	err = au_si_alloc(sb);
+	if (unlikely(err))
+		goto out_opts;
+
+	/* all timestamps always follow the ones on the branch */
+	sb->s_flags |= MS_NOATIME | MS_NODIRATIME;
+	sb->s_op = &aufs_sop;
+	sb->s_d_op = &simple_dentry_operations;  /* replace later */
+	sb->s_magic = AUFS_SUPER_MAGIC;
+	sb->s_maxbytes = 0;
+	sb->s_stack_depth = 1;
+
+	err = alloc_root(sb);
+	if (unlikely(err)) {
+		si_write_unlock(sb);
+		goto out_info;
+	}
+	root = sb->s_root;
+	inode = root->d_inode;
+
+	/*
+	 * actually we can parse options regardless aufs lock here.
+	 * but at remount time, parsing must be done before aufs lock.
+	 * so we follow the same rule.
+	 */
+	ii_write_lock_parent(inode);
+	aufs_write_unlock(root);
+	err = au_opts_parse(sb, arg, &opts);
+	if (unlikely(err))
+		goto out_root;
+
+	/* lock vfs_inode first, then aufs. */
+	mutex_lock(&inode->i_mutex);
+	aufs_write_lock(root);
+	err = au_opts_mount(sb, &opts);
+	au_opts_free(&opts);
+	aufs_write_unlock(root);
+	mutex_unlock(&inode->i_mutex);
+	if (!err)
+		goto out_opts; /* success */
+
+out_root:
+	dput(root);
+	sb->s_root = NULL;
+out_info:
+	kobject_put(&au_sbi(sb)->si_kobj);
+	sb->s_fs_info = NULL;
+out_opts:
+	free_page((unsigned long)opts.opt);
+out:
+	AuTraceErr(err);
+	err = cvt_err(err);
+	AuTraceErr(err);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+static struct dentry *aufs_mount(struct file_system_type *fs_type, int flags,
+				 const char *dev_name __maybe_unused,
+				 void *raw_data)
+{
+	struct dentry *root;
+	struct super_block *sb;
+
+	/* all timestamps always follow the ones on the branch */
+	/* mnt->mnt_flags |= MNT_NOATIME | MNT_NODIRATIME; */
+	root = mount_nodev(fs_type, flags, raw_data, aufs_fill_super);
+	if (IS_ERR(root))
+		goto out;
+
+	sb = root->d_sb;
+	si_write_lock(sb, !AuLock_FLUSH);
+	sysaufs_brs_add(sb, 0);
+	si_write_unlock(sb);
+	au_sbilist_add(sb);
+
+out:
+	return root;
+}
+
+static void aufs_kill_sb(struct super_block *sb)
+{
+	struct au_sbinfo *sbinfo;
+
+	sbinfo = au_sbi(sb);
+	if (sbinfo) {
+		au_sbilist_del(sb);
+		aufs_write_lock(sb->s_root);
+		if (au_opt_test(sbinfo->si_mntflags, PLINK))
+			au_plink_put(sb, /*verbose*/1);
+		au_xino_clr(sb);
+		sbinfo->si_sb = NULL;
+		aufs_write_unlock(sb->s_root);
+		au_nwt_flush(&sbinfo->si_nowait);
+	}
+	kill_anon_super(sb);
+}
+
+struct file_system_type aufs_fs_type = {
+	.name		= AUFS_FSTYPE,
+	.mount		= aufs_mount,
+	.kill_sb	= aufs_kill_sb,
+	/* no need to __module_get() and module_put(). */
+	.owner		= THIS_MODULE,
 };
