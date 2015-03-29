@@ -82,6 +82,9 @@ struct au_branch {
 
 	struct au_wbr		*br_wbr;
 
+	/* xino truncation */
+	atomic_t		br_xino_running;
+
 #ifdef CONFIG_SYSFS
 	/* entries under sysfs per mount-point */
 	struct au_brsysfs	br_sysfs[AuBrSysfs_Last];
@@ -124,6 +127,7 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount);
 /* xino.c */
 static const loff_t au_loff_max = LLONG_MAX;
 
+int au_xib_trunc(struct super_block *sb);
 ssize_t xino_fread(au_readf_t func, struct file *file, void *buf, size_t size,
 		   loff_t *pos);
 ssize_t xino_fwrite(au_writef_t func, struct file *file, void *buf, size_t size,
@@ -138,6 +142,7 @@ int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 		 ino_t *ino);
 int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t hino,
 	       struct file *base_file, int do_test);
+int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex);
 
 struct au_opt_xino;
 int au_xino_set(struct super_block *sb, struct au_opt_xino *xino, int remount);

@@ -32,6 +32,9 @@ enum {
 	Opt_rdcache, Opt_rdblk, Opt_rdhash,
 	Opt_rdblk_def, Opt_rdhash_def,
 	Opt_xino, Opt_noxino,
+	Opt_trunc_xino, Opt_trunc_xino_v, Opt_notrunc_xino,
+	Opt_trunc_xino_path, Opt_itrunc_xino,
+	Opt_trunc_xib, Opt_notrunc_xib,
 	Opt_plink, Opt_noplink, Opt_list_plink,
 	Opt_udba,
 	Opt_dio, Opt_nodio,
@@ -45,6 +48,14 @@ static match_table_t options = {
 
 	{Opt_xino, "xino=%s"},
 	{Opt_noxino, "noxino"},
+	{Opt_trunc_xino, "trunc_xino"},
+	{Opt_trunc_xino_v, "trunc_xino_v=%d:%d"},
+	{Opt_notrunc_xino, "notrunc_xino"},
+	{Opt_trunc_xino_path, "trunc_xino=%s"},
+	{Opt_itrunc_xino, "itrunc_xino=%d"},
+	/* {Opt_zxino, "zxino=%s"}, */
+	{Opt_trunc_xib, "trunc_xib"},
+	{Opt_notrunc_xib, "notrunc_xib"},
 
 #ifdef CONFIG_PROC_FS
 	{Opt_plink, "plink"},
@@ -438,6 +449,7 @@ static void dump_opts(struct au_opts *opts)
 	union {
 		struct au_opt_add *add;
 		struct au_opt_xino *xino;
+		struct au_opt_xino_itrunc *xino_itrunc;
 		struct au_opt_wbr_create *create;
 	} u;
 	struct au_opt *opt;
@@ -470,8 +482,25 @@ static void dump_opts(struct au_opts *opts)
 			u.xino = &opt->xino;
 			AuDbg("xino {%s %pD}\n", u.xino->path, u.xino->file);
 			break;
+		case Opt_trunc_xino:
+			AuLabel(trunc_xino);
+			break;
+		case Opt_notrunc_xino:
+			AuLabel(notrunc_xino);
+			break;
+		case Opt_trunc_xino_path:
+		case Opt_itrunc_xino:
+			u.xino_itrunc = &opt->xino_itrunc;
+			AuDbg("trunc_xino %d\n", u.xino_itrunc->bindex);
+			break;
 		case Opt_noxino:
 			AuLabel(noxino);
+			break;
+		case Opt_trunc_xib:
+			AuLabel(trunc_xib);
+			break;
+		case Opt_notrunc_xib:
+			AuLabel(notrunc_xib);
 			break;
 		case Opt_plink:
 			AuLabel(plink);
@@ -603,6 +632,44 @@ out:
 	return err;
 }
 
+static int noinline_for_stack
+au_opts_parse_xino_itrunc_path(struct super_block *sb,
+			       struct au_opt_xino_itrunc *xino_itrunc,
+			       substring_t args[])
+{
+	int err;
+	aufs_bindex_t bend, bindex;
+	struct path path;
+	struct dentry *root;
+
+	err = vfsub_kern_path(args[0].from, lkup_dirflags, &path);
+	if (unlikely(err)) {
+		pr_err("lookup failed %s (%d)\n", args[0].from, err);
+		goto out;
+	}
+
+	xino_itrunc->bindex = -1;
+	root = sb->s_root;
+	aufs_read_lock(root, AuLock_FLUSH);
+	bend = au_sbend(sb);
+	for (bindex = 0; bindex <= bend; bindex++) {
+		if (au_h_dptr(root, bindex) == path.dentry) {
+			xino_itrunc->bindex = bindex;
+			break;
+		}
+	}
+	aufs_read_unlock(root, !AuLock_IR);
+	path_put(&path);
+
+	if (unlikely(xino_itrunc->bindex < 0)) {
+		pr_err("no such branch %s\n", args[0].from);
+		err = -EINVAL;
+	}
+
+out:
+	return err;
+}
+
 /* called without aufs lock */
 int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 {
@@ -614,8 +681,8 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 	char *opt_str;
 	/* reduce the stack space */
 	union {
+		struct au_opt_xino_itrunc *xino_itrunc;
 		struct au_opt_wbr_create *create;
-		/* will be added more later */
 	} u;
 	struct {
 		substring_t args[MAX_OPT_ARGS];
@@ -668,6 +735,31 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 				opt->type = token;
 			break;
 
+		case Opt_trunc_xino_path:
+			err = au_opts_parse_xino_itrunc_path
+				(sb, &opt->xino_itrunc, a->args);
+			if (!err)
+				opt->type = token;
+			break;
+
+		case Opt_itrunc_xino:
+			u.xino_itrunc = &opt->xino_itrunc;
+			if (unlikely(match_int(&a->args[0], &n))) {
+				pr_err("bad integer in %s\n", opt_str);
+				break;
+			}
+			u.xino_itrunc->bindex = n;
+			aufs_read_lock(root, AuLock_FLUSH);
+			if (n < 0 || au_sbend(sb) < n) {
+				pr_err("out of bounds, %d\n", n);
+				aufs_read_unlock(root, !AuLock_IR);
+				break;
+			}
+			aufs_read_unlock(root, !AuLock_IR);
+			err = 0;
+			opt->type = token;
+			break;
+
 		case Opt_rdcache:
 			if (unlikely(match_int(&a->args[0], &n))) {
 				pr_err("bad integer in %s\n", opt_str);
@@ -711,7 +803,11 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 			opt->type = token;
 			break;
 
+		case Opt_trunc_xino:
+		case Opt_notrunc_xino:
 		case Opt_noxino:
+		case Opt_trunc_xib:
+		case Opt_notrunc_xib:
 		case Opt_plink:
 		case Opt_noplink:
 		case Opt_list_plink:
@@ -890,6 +986,27 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 		break;
 	case Opt_rdhash_def:
 		sbinfo->si_rdhash = AUFS_RDHASH_DEF;
+		break;
+
+	case Opt_trunc_xino:
+		au_opt_set(sbinfo->si_mntflags, TRUNC_XINO);
+		break;
+	case Opt_notrunc_xino:
+		au_opt_clr(sbinfo->si_mntflags, TRUNC_XINO);
+		break;
+
+	case Opt_trunc_xino_path:
+	case Opt_itrunc_xino:
+		err = au_xino_trunc(sb, opt->xino_itrunc.bindex);
+		if (!err)
+			err = 1;
+		break;
+
+	case Opt_trunc_xib:
+		au_fset_opts(opts->flags, TRUNC_XIB);
+		break;
+	case Opt_notrunc_xib:
+		au_fclr_opts(opts->flags, TRUNC_XIB);
 		break;
 
 	default:
@@ -1163,6 +1280,12 @@ int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 	rerr = au_opts_verify(sb, opts->sb_flags, /*pending*/0);
 	if (unlikely(rerr && !err))
 		err = rerr;
+
+	if (au_ftest_opts(opts->flags, TRUNC_XIB)) {
+		rerr = au_xib_trunc(sb);
+		if (unlikely(rerr && !err))
+			err = rerr;
+	}
 
 	/* will be handled by the caller */
 	if (!au_ftest_opts(opts->flags, REFRESH)

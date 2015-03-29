@@ -34,6 +34,7 @@ struct super_block;
 /* mount flags */
 #define AuOpt_XINO		1		/* external inode number bitmap
 						   and translation table */
+#define AuOpt_TRUNC_XINO	(1 << 1)	/* truncate xino files */
 #define AuOpt_UDBA_NONE		(1 << 2)	/* users direct branch access */
 #define AuOpt_UDBA_REVAL	(1 << 3)
 #define AuOpt_PLINK		(1 << 6)	/* pseudo-link */
@@ -107,6 +108,10 @@ struct au_opt_xino {
 	struct file	*file;
 };
 
+struct au_opt_xino_itrunc {
+	aufs_bindex_t	bindex;
+};
+
 struct au_opt_wbr_create {
 	int			wbr_create;
 	int			mfs_second;
@@ -117,6 +122,7 @@ struct au_opt {
 	int type;
 	union {
 		struct au_opt_xino	xino;
+		struct au_opt_xino_itrunc xino_itrunc;
 		struct au_opt_add	add;
 		int			rdcache;
 		unsigned int		rdblk;
@@ -130,6 +136,7 @@ struct au_opt {
 /* opts flags */
 #define AuOpts_REMOUNT		1
 #define AuOpts_REFRESH		(1 << 1)
+#define AuOpts_TRUNC_XIB	(1 << 2)
 #define AuOpts_REFRESH_DYAOP	(1 << 3)
 #define au_ftest_opts(flags, name)	((flags) & AuOpts_##name)
 #define au_fset_opts(flags, name) \

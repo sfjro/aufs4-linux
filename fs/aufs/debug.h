@@ -71,6 +71,12 @@ AuStubInt0(au_debug_test, void)
 		pr_warn(fmt, ##__VA_ARGS__); \
 } while (0)
 
+#define AuErr1(fmt, ...) do { \
+	static unsigned char _c; \
+	if (!_c++) \
+		pr_err(fmt, ##__VA_ARGS__); \
+} while (0)
+
 #define AuIOErr1(fmt, ...) do { \
 	static unsigned char _c; \
 	if (!_c++) \

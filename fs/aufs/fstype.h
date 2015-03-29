@@ -291,5 +291,11 @@ static inline int au_test_fs_bad_xino(struct super_block *sb)
 		|| au_test_nilfs(sb);
 }
 
+static inline int au_test_fs_trunc_xino(struct super_block *sb)
+{
+	return au_test_tmpfs(sb)
+		|| au_test_ramfs(sb);
+}
+
 #endif /* __KERNEL__ */
 #endif /* __AUFS_FSTYPE_H__ */

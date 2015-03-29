@@ -348,6 +348,7 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	spin_lock_init(&br->br_dykey_lock);
 	memset(br->br_dykey, 0, sizeof(br->br_dykey));
 	atomic_set(&br->br_count, 0);
+	atomic_set(&br->br_xino_running, 0);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
 

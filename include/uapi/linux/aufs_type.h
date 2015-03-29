@@ -83,6 +83,8 @@ typedef int16_t aufs_bindex_t;
 				- AUFS_WH_TMP_LEN)	/* hex */
 #define AUFS_XINO_FNAME		"." AUFS_NAME ".xino"
 #define AUFS_XINO_DEFPATH	"/tmp/" AUFS_XINO_FNAME
+#define AUFS_XINO_DEF_SEC	30 /* seconds */
+#define AUFS_XINO_DEF_TRUNC	45 /* percentage */
 #define AUFS_RDCACHE_DEF	10 /* seconds */
 #define AUFS_RDCACHE_MAX	3600 /* seconds */
 #define AUFS_RDBLK_DEF		512 /* bytes */
