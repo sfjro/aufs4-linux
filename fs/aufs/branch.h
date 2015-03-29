@@ -47,6 +47,9 @@ struct au_wbr {
 #define wbr_whbase		wbr_wh[AuBrWh_BASE]	/* whiteout base */
 #define wbr_plink		wbr_wh[AuBrWh_PLINK]	/* pseudo-link dir */
 #define wbr_orph		wbr_wh[AuBrWh_ORPH]	/* dir for orphans */
+
+	/* mfs mode */
+	unsigned long long	wbr_bytes;
 };
 
 /* sysfs entries */

@@ -19,6 +19,7 @@
  * policies for selecting one among multiple writable branches
  */
 
+#include <linux/statfs.h>
 #include "aufs.h"
 
 /* subset of cpup_attr() */
@@ -301,6 +302,339 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+/* an exception for the policy other than tdp */
+static int au_wbr_create_exp(struct dentry *dentry)
+{
+	int err;
+	aufs_bindex_t bwh, bdiropq;
+	struct dentry *parent;
+
+	err = -1;
+	bwh = au_dbwh(dentry);
+	parent = dget_parent(dentry);
+	bdiropq = au_dbdiropq(parent);
+	if (bwh >= 0) {
+		if (bdiropq >= 0)
+			err = min(bdiropq, bwh);
+		else
+			err = bwh;
+		AuDbg("%d\n", err);
+	} else if (bdiropq >= 0) {
+		err = bdiropq;
+		AuDbg("%d\n", err);
+	}
+	dput(parent);
+
+	if (err >= 0)
+		err = au_wbr_nonopq(dentry, err);
+
+	if (err >= 0 && au_br_rdonly(au_sbr(dentry->d_sb, err)))
+		err = -1;
+
+	AuDbg("%d\n", err);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/* round robin */
+static int au_wbr_create_init_rr(struct super_block *sb)
+{
+	int err;
+
+	err = au_wbr_bu(sb, au_sbend(sb));
+	atomic_set(&au_sbi(sb)->si_wbr_rr_next, -err); /* less important */
+	/* smp_mb(); */
+
+	AuDbg("b%d\n", err);
+	return err;
+}
+
+static int au_wbr_create_rr(struct dentry *dentry, unsigned int flags)
+{
+	int err, nbr;
+	unsigned int u;
+	aufs_bindex_t bindex, bend;
+	struct super_block *sb;
+	atomic_t *next;
+
+	err = au_wbr_create_exp(dentry);
+	if (err >= 0)
+		goto out;
+
+	sb = dentry->d_sb;
+	next = &au_sbi(sb)->si_wbr_rr_next;
+	bend = au_sbend(sb);
+	nbr = bend + 1;
+	for (bindex = 0; bindex <= bend; bindex++) {
+		if (!au_ftest_wbr(flags, DIR)) {
+			err = atomic_dec_return(next) + 1;
+			/* modulo for 0 is meaningless */
+			if (unlikely(!err))
+				err = atomic_dec_return(next) + 1;
+		} else
+			err = atomic_read(next);
+		AuDbg("%d\n", err);
+		u = err;
+		err = u % nbr;
+		AuDbg("%d\n", err);
+		if (!au_br_rdonly(au_sbr(sb, err)))
+			break;
+		err = -EROFS;
+	}
+
+	if (err >= 0)
+		err = au_wbr_nonopq(dentry, err);
+
+out:
+	AuDbg("%d\n", err);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/* most free space */
+static void au_mfs(struct dentry *dentry, struct dentry *parent)
+{
+	struct super_block *sb;
+	struct au_branch *br;
+	struct au_wbr_mfs *mfs;
+	struct dentry *h_parent;
+	aufs_bindex_t bindex, bend;
+	int err;
+	unsigned long long b, bavail;
+	struct path h_path;
+	/* reduce the stack usage */
+	struct kstatfs *st;
+
+	st = kmalloc(sizeof(*st), GFP_NOFS);
+	if (unlikely(!st)) {
+		AuWarn1("failed updating mfs(%d), ignored\n", -ENOMEM);
+		return;
+	}
+
+	bavail = 0;
+	sb = dentry->d_sb;
+	mfs = &au_sbi(sb)->si_wbr_mfs;
+	MtxMustLock(&mfs->mfs_lock);
+	mfs->mfs_bindex = -EROFS;
+	mfs->mfsrr_bytes = 0;
+	if (!parent) {
+		bindex = 0;
+		bend = au_sbend(sb);
+	} else {
+		bindex = au_dbstart(parent);
+		bend = au_dbtaildir(parent);
+	}
+
+	for (; bindex <= bend; bindex++) {
+		if (parent) {
+			h_parent = au_h_dptr(parent, bindex);
+			if (!h_parent || !h_parent->d_inode)
+				continue;
+		}
+		br = au_sbr(sb, bindex);
+		if (au_br_rdonly(br))
+			continue;
+
+		/* sb->s_root for NFS is unreliable */
+		h_path.mnt = au_br_mnt(br);
+		h_path.dentry = h_path.mnt->mnt_root;
+		err = vfs_statfs(&h_path, st);
+		if (unlikely(err)) {
+			AuWarn1("failed statfs, b%d, %d\n", bindex, err);
+			continue;
+		}
+
+		/* when the available size is equal, select the lower one */
+		BUILD_BUG_ON(sizeof(b) < sizeof(st->f_bavail)
+			     || sizeof(b) < sizeof(st->f_bsize));
+		b = st->f_bavail * st->f_bsize;
+		br->br_wbr->wbr_bytes = b;
+		if (b >= bavail) {
+			bavail = b;
+			mfs->mfs_bindex = bindex;
+			mfs->mfs_jiffy = jiffies;
+		}
+	}
+
+	mfs->mfsrr_bytes = bavail;
+	AuDbg("b%d\n", mfs->mfs_bindex);
+	kfree(st);
+}
+
+static int au_wbr_create_mfs(struct dentry *dentry, unsigned int flags)
+{
+	int err;
+	struct dentry *parent;
+	struct super_block *sb;
+	struct au_wbr_mfs *mfs;
+
+	err = au_wbr_create_exp(dentry);
+	if (err >= 0)
+		goto out;
+
+	sb = dentry->d_sb;
+	parent = NULL;
+	if (au_ftest_wbr(flags, PARENT))
+		parent = dget_parent(dentry);
+	mfs = &au_sbi(sb)->si_wbr_mfs;
+	mutex_lock(&mfs->mfs_lock);
+	if (time_after(jiffies, mfs->mfs_jiffy + mfs->mfs_expire)
+	    || mfs->mfs_bindex < 0
+	    || au_br_rdonly(au_sbr(sb, mfs->mfs_bindex)))
+		au_mfs(dentry, parent);
+	mutex_unlock(&mfs->mfs_lock);
+	err = mfs->mfs_bindex;
+	dput(parent);
+
+	if (err >= 0)
+		err = au_wbr_nonopq(dentry, err);
+
+out:
+	AuDbg("b%d\n", err);
+	return err;
+}
+
+static int au_wbr_create_init_mfs(struct super_block *sb)
+{
+	struct au_wbr_mfs *mfs;
+
+	mfs = &au_sbi(sb)->si_wbr_mfs;
+	mutex_init(&mfs->mfs_lock);
+	mfs->mfs_jiffy = 0;
+	mfs->mfs_bindex = -EROFS;
+
+	return 0;
+}
+
+static int au_wbr_create_fin_mfs(struct super_block *sb __maybe_unused)
+{
+	mutex_destroy(&au_sbi(sb)->si_wbr_mfs.mfs_lock);
+	return 0;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/* most free space and then round robin */
+static int au_wbr_create_mfsrr(struct dentry *dentry, unsigned int flags)
+{
+	int err;
+	struct au_wbr_mfs *mfs;
+
+	err = au_wbr_create_mfs(dentry, flags);
+	if (err >= 0) {
+		mfs = &au_sbi(dentry->d_sb)->si_wbr_mfs;
+		mutex_lock(&mfs->mfs_lock);
+		if (mfs->mfsrr_bytes < mfs->mfsrr_watermark)
+			err = au_wbr_create_rr(dentry, flags);
+		mutex_unlock(&mfs->mfs_lock);
+	}
+
+	AuDbg("b%d\n", err);
+	return err;
+}
+
+static int au_wbr_create_init_mfsrr(struct super_block *sb)
+{
+	int err;
+
+	au_wbr_create_init_mfs(sb); /* ignore */
+	err = au_wbr_create_init_rr(sb);
+
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/* top down parent and most free space */
+static int au_wbr_create_pmfs(struct dentry *dentry, unsigned int flags)
+{
+	int err, e2;
+	unsigned long long b;
+	aufs_bindex_t bindex, bstart, bend;
+	struct super_block *sb;
+	struct dentry *parent, *h_parent;
+	struct au_branch *br;
+
+	err = au_wbr_create_tdp(dentry, flags);
+	if (unlikely(err < 0))
+		goto out;
+	parent = dget_parent(dentry);
+	bstart = au_dbstart(parent);
+	bend = au_dbtaildir(parent);
+	if (bstart == bend)
+		goto out_parent; /* success */
+
+	e2 = au_wbr_create_mfs(dentry, flags);
+	if (e2 < 0)
+		goto out_parent; /* success */
+
+	/* when the available size is equal, select upper one */
+	sb = dentry->d_sb;
+	br = au_sbr(sb, err);
+	b = br->br_wbr->wbr_bytes;
+	AuDbg("b%d, %llu\n", err, b);
+
+	for (bindex = bstart; bindex <= bend; bindex++) {
+		h_parent = au_h_dptr(parent, bindex);
+		if (!h_parent || !h_parent->d_inode)
+			continue;
+
+		br = au_sbr(sb, bindex);
+		if (!au_br_rdonly(br) && br->br_wbr->wbr_bytes > b) {
+			b = br->br_wbr->wbr_bytes;
+			err = bindex;
+			AuDbg("b%d, %llu\n", err, b);
+		}
+	}
+
+	if (err >= 0)
+		err = au_wbr_nonopq(dentry, err);
+
+out_parent:
+	dput(parent);
+out:
+	AuDbg("b%d\n", err);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/*
+ * - top down parent
+ * - most free space with parent
+ * - most free space round-robin regardless parent
+ */
+static int au_wbr_create_pmfsrr(struct dentry *dentry, unsigned int flags)
+{
+	int err;
+	unsigned long long watermark;
+	struct super_block *sb;
+	struct au_branch *br;
+	struct au_wbr_mfs *mfs;
+
+	err = au_wbr_create_pmfs(dentry, flags | AuWbr_PARENT);
+	if (unlikely(err < 0))
+		goto out;
+
+	sb = dentry->d_sb;
+	br = au_sbr(sb, err);
+	mfs = &au_sbi(sb)->si_wbr_mfs;
+	mutex_lock(&mfs->mfs_lock);
+	watermark = mfs->mfsrr_watermark;
+	mutex_unlock(&mfs->mfs_lock);
+	if (br->br_wbr->wbr_bytes < watermark)
+		/* regardless the parent dir */
+		err = au_wbr_create_mfsrr(dentry, flags);
+
+out:
+	AuDbg("b%d\n", err);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
 /* policies for copyup */
 
 /* top down parent */
@@ -309,16 +643,122 @@ static int au_wbr_copyup_tdp(struct dentry *dentry)
 	return au_wbr_create_tdp(dentry, /*flags, anything is ok*/0);
 }
 
+/* bottom up parent */
+static int au_wbr_copyup_bup(struct dentry *dentry)
+{
+	int err;
+	aufs_bindex_t bindex, bstart;
+	struct dentry *parent, *h_parent;
+	struct super_block *sb;
+
+	err = -EROFS;
+	sb = dentry->d_sb;
+	parent = dget_parent(dentry);
+	bstart = au_dbstart(parent);
+	for (bindex = au_dbstart(dentry); bindex >= bstart; bindex--) {
+		h_parent = au_h_dptr(parent, bindex);
+		if (!h_parent || !h_parent->d_inode)
+			continue;
+
+		if (!au_br_rdonly(au_sbr(sb, bindex))) {
+			err = bindex;
+			break;
+		}
+	}
+	dput(parent);
+
+	/* bottom up here */
+	if (unlikely(err < 0))
+		err = au_wbr_bu(sb, bstart - 1);
+
+	AuDbg("b%d\n", err);
+	return err;
+}
+
+/* bottom up */
+int au_wbr_do_copyup_bu(struct dentry *dentry, aufs_bindex_t bstart)
+{
+	int err;
+
+	err = au_wbr_bu(dentry->d_sb, bstart);
+	AuDbg("b%d\n", err);
+	if (err > bstart)
+		err = au_wbr_nonopq(dentry, err);
+
+	AuDbg("b%d\n", err);
+	return err;
+}
+
+static int au_wbr_copyup_bu(struct dentry *dentry)
+{
+	int err;
+	aufs_bindex_t bstart;
+
+	bstart = au_dbstart(dentry);
+	err = au_wbr_do_copyup_bu(dentry, bstart);
+	return err;
+}
+
 /* ---------------------------------------------------------------------- */
 
 struct au_wbr_copyup_operations au_wbr_copyup_ops[] = {
 	[AuWbrCopyup_TDP] = {
 		.copyup	= au_wbr_copyup_tdp
+	},
+	[AuWbrCopyup_BUP] = {
+		.copyup	= au_wbr_copyup_bup
+	},
+	[AuWbrCopyup_BU] = {
+		.copyup	= au_wbr_copyup_bu
 	}
 };
 
 struct au_wbr_create_operations au_wbr_create_ops[] = {
 	[AuWbrCreate_TDP] = {
 		.create	= au_wbr_create_tdp
+	},
+	[AuWbrCreate_RR] = {
+		.create	= au_wbr_create_rr,
+		.init	= au_wbr_create_init_rr
+	},
+	[AuWbrCreate_MFS] = {
+		.create	= au_wbr_create_mfs,
+		.init	= au_wbr_create_init_mfs,
+		.fin	= au_wbr_create_fin_mfs
+	},
+	[AuWbrCreate_MFSV] = {
+		.create	= au_wbr_create_mfs,
+		.init	= au_wbr_create_init_mfs,
+		.fin	= au_wbr_create_fin_mfs
+	},
+	[AuWbrCreate_MFSRR] = {
+		.create	= au_wbr_create_mfsrr,
+		.init	= au_wbr_create_init_mfsrr,
+		.fin	= au_wbr_create_fin_mfs
+	},
+	[AuWbrCreate_MFSRRV] = {
+		.create	= au_wbr_create_mfsrr,
+		.init	= au_wbr_create_init_mfsrr,
+		.fin	= au_wbr_create_fin_mfs
+	},
+	[AuWbrCreate_PMFS] = {
+		.create	= au_wbr_create_pmfs,
+		.init	= au_wbr_create_init_mfs,
+		.fin	= au_wbr_create_fin_mfs
+	},
+	[AuWbrCreate_PMFSV] = {
+		.create	= au_wbr_create_pmfs,
+		.init	= au_wbr_create_init_mfs,
+		.fin	= au_wbr_create_fin_mfs
+	},
+	[AuWbrCreate_PMFSRR] = {
+		.create	= au_wbr_create_pmfsrr,
+		.init	= au_wbr_create_init_mfsrr,
+		.fin	= au_wbr_create_fin_mfs
+	},
+	[AuWbrCreate_PMFSRRV] = {
+		.create	= au_wbr_create_pmfsrr,
+		.init	= au_wbr_create_init_mfsrr,
+		.fin	= au_wbr_create_fin_mfs
 	}
 };

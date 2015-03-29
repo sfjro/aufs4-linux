@@ -302,6 +302,7 @@ static int au_wbr_init(struct au_branch *br, struct super_block *sb,
 	au_rw_init(&wbr->wbr_wh_rwsem);
 	memset(wbr->wbr_wh, 0, sizeof(wbr->wbr_wh));
 	atomic_set(&wbr->wbr_wh_running, 0);
+	wbr->wbr_bytes = 0;
 
 	/*
 	 * a limit for rmdir/rename a dir
