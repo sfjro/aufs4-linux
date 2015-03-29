@@ -247,6 +247,7 @@ void au_plink_append(struct inode *inode, aufs_bindex_t bindex,
 		     struct dentry *h_dentry);
 void au_plink_put(struct super_block *sb, int verbose);
 void au_plink_clean(struct super_block *sb, int verbose);
+void au_plink_half_refresh(struct super_block *sb, aufs_bindex_t br_id);
 #else
 AuStubInt0(au_plink_maint, struct super_block *sb, int flags);
 AuStubVoid(au_plink_maint_leave, struct au_sbinfo *sbinfo);
@@ -259,6 +260,7 @@ AuStubVoid(au_plink_append, struct inode *inode, aufs_bindex_t bindex,
 	   struct dentry *h_dentry);
 AuStubVoid(au_plink_put, struct super_block *sb, int verbose);
 AuStubVoid(au_plink_clean, struct super_block *sb, int verbose);
+AuStubVoid(au_plink_half_refresh, struct super_block *sb, aufs_bindex_t br_id);
 #endif /* CONFIG_PROC_FS */
 
 /* ---------------------------------------------------------------------- */

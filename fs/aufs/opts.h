@@ -38,6 +38,7 @@ struct super_block;
 #define AuOpt_UDBA_NONE		(1 << 2)	/* users direct branch access */
 #define AuOpt_UDBA_REVAL	(1 << 3)
 #define AuOpt_PLINK		(1 << 6)	/* pseudo-link */
+#define AuOpt_VERBOSE		(1 << 13)	/* busy inode when del-branch */
 #define AuOpt_DIO		(1 << 14)	/* direct io */
 
 #define AuOpt_Def	(AuOpt_XINO \
@@ -101,6 +102,11 @@ struct au_opt_add {
 	char		*pathname;
 	int		perm;
 	struct path	path;
+};
+
+struct au_opt_del {
+	char		*pathname;
+	struct path	h_path;
 };
 
 struct au_opt_xino {

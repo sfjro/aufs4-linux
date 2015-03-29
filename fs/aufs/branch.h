@@ -127,6 +127,8 @@ void au_br_free(struct au_sbinfo *sinfo);
 int au_br_index(struct super_block *sb, aufs_bindex_t br_id);
 struct au_opt_add;
 int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount);
+struct au_opt_del;
+int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount);
 
 /* xino.c */
 static const loff_t au_loff_max = LLONG_MAX;
