@@ -68,6 +68,9 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 		       struct file *file);
 int au_do_open(struct file *file, int (*open)(struct file *file, int flags),
 	       struct au_fidir *fidir);
+int au_reopen_nondir(struct file *file);
+struct au_pin;
+int au_ready_to_write(struct file *file, loff_t len, struct au_pin *pin);
 int au_reval_and_lock_fdi(struct file *file, int (*reopen)(struct file *file),
 			  int wlock);
 

@@ -1014,7 +1014,7 @@ static int au_do_cpup_wh(struct au_cp_generic *cpg, struct dentry *wh_dentry,
 	cpg->flags = flags_orig;
 	if (file) {
 		if (!err)
-			err = 0; /* au_reopen_nondir(file); fix later */
+			err = au_reopen_nondir(file);
 		hdp[0 + cpg->bsrc].hd_dentry = h_d_start;
 	}
 	hdp[0 + cpg->bdst].hd_dentry = h_d_dst;
