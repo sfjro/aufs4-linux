@@ -110,6 +110,10 @@ void au_update_iigen(struct inode *inode, int half)
 	iigen = &iinfo->ii_generation;
 	spin_lock(&iinfo->ii_genspin);
 	iigen->ig_generation = sigen;
+	if (half)
+		au_ig_fset(iigen->ig_flags, HALF_REFRESHED);
+	else
+		au_ig_fclr(iigen->ig_flags, HALF_REFRESHED);
 	spin_unlock(&iinfo->ii_genspin);
 }
 

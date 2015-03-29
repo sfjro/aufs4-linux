@@ -37,6 +37,14 @@ static inline const char *au_sbtype(struct super_block *sb)
 	return sb->s_type->name;
 }
 
+static inline int au_test_cramfs(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_CRAMFS) || defined(CONFIG_CRAMFS_MODULE)
+	return sb->s_magic == CRAMFS_MAGIC;
+#endif
+	return 0;
+}
+
 static inline int au_test_nfs(struct super_block *sb __maybe_unused)
 {
 #if defined(CONFIG_NFS_FS) || defined(CONFIG_NFS_FS_MODULE)
@@ -213,6 +221,14 @@ static inline int au_test_fs_notime(struct super_block *sb)
 	return au_test_nfs(sb)
 		|| au_test_ubifs(sb)
 		;
+}
+
+/* temporary support for i#1 in cramfs */
+static inline int au_test_fs_unique_ino(struct inode *inode)
+{
+	if (au_test_cramfs(inode->i_sb))
+		return inode->i_ino != 1;
+	return 1;
 }
 
 /* ---------------------------------------------------------------------- */

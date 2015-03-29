@@ -37,8 +37,16 @@ struct au_hinode {
 	struct dentry		*hi_whdentry;
 };
 
+/* ig_flags */
+#define AuIG_HALF_REFRESHED		1
+#define au_ig_ftest(flags, name)	((flags) & AuIG_##name)
+#define au_ig_fset(flags, name) \
+	do { (flags) |= AuIG_##name; } while (0)
+#define au_ig_fclr(flags, name) \
+	do { (flags) &= ~AuIG_##name; } while (0)
+
 struct au_iigen {
-	__u32		ig_generation;
+	__u32		ig_generation, ig_flags;
 };
 
 struct au_vdir;
@@ -109,8 +117,11 @@ static inline struct au_iinfo *au_ii(struct inode *inode)
 
 /* inode.c */
 struct inode *au_igrab(struct inode *inode);
+int au_refresh_hinode_self(struct inode *inode);
+int au_refresh_hinode(struct inode *inode, struct dentry *dentry);
 int au_ino(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 	   unsigned int d_type, ino_t *ino);
+struct inode *au_new_inode(struct dentry *dentry, int must_new);
 int au_test_ro(struct super_block *sb, aufs_bindex_t bindex,
 	       struct inode *inode);
 int au_test_h_perm(struct inode *h_inode, int mask);
