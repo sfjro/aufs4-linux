@@ -26,6 +26,8 @@
 
 #include <linux/slab.h>
 
+void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp);
+
 /* kmem cache */
 enum {
 	AuCache_DINFO,

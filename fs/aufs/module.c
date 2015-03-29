@@ -22,6 +22,19 @@
 #include <linux/module.h>
 #include "aufs.h"
 
+void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp)
+{
+	if (new_sz <= nused)
+		return p;
+
+	p = krealloc(p, new_sz, gfp);
+	if (p)
+		memset(p + nused, 0, new_sz - nused);
+	return p;
+}
+
+/* ---------------------------------------------------------------------- */
+
 /*
  * aufs caches
  */

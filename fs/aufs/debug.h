@@ -62,6 +62,7 @@ AuStubInt0(au_debug_test, void)
 	if (au_debug_test()) \
 		pr_debug("DEBUG: " fmt, ##__VA_ARGS__); \
 } while (0)
+#define AuLabel(l)		AuDbg(#l "\n")
 #define AuTraceErr(e) do { \
 	if (unlikely((e) < 0)) \
 		AuDbg("err %d\n", (int)(e)); \
