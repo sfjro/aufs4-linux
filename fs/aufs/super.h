@@ -336,11 +336,28 @@ static inline void au_sbilist_del(struct super_block *sb)
 	au_spl_del(&au_sbi(sb)->si_list, &au_sbilist);
 }
 
+#ifdef CONFIG_AUFS_MAGIC_SYSRQ
+static inline void au_sbilist_lock(void)
+{
+	spin_lock(&au_sbilist.spin);
+}
+
+static inline void au_sbilist_unlock(void)
+{
+	spin_unlock(&au_sbilist.spin);
+}
+#define AuGFP_SBILIST	GFP_ATOMIC
+#else
+AuStubVoid(au_sbilist_lock, void)
+AuStubVoid(au_sbilist_unlock, void)
 #define AuGFP_SBILIST	GFP_NOFS
+#endif /* CONFIG_AUFS_MAGIC_SYSRQ */
 #else
 AuStubVoid(au_sbilist_init, void)
 AuStubVoid(au_sbilist_add, struct super_block *sb)
 AuStubVoid(au_sbilist_del, struct super_block *sb)
+AuStubVoid(au_sbilist_lock, void)
+AuStubVoid(au_sbilist_unlock, void)
 #define AuGFP_SBILIST	GFP_NOFS
 #endif
 

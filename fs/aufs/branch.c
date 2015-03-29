@@ -446,12 +446,14 @@ static void au_br_do_add(struct super_block *sb, struct au_branch *br,
 	bend = au_sbend(sb);
 	amount = bend + 1 - bindex;
 	h_dentry = au_br_dentry(br);
+	au_sbilist_lock();
 	au_br_do_add_brp(au_sbi(sb), bindex, br, bend, amount);
 	au_br_do_add_hdp(au_di(root), bindex, bend, amount);
 	au_br_do_add_hip(au_ii(root_inode), bindex, bend, amount);
 	au_set_h_dptr(root, bindex, dget(h_dentry));
 	au_set_h_iptr(root_inode, bindex, au_igrab(h_dentry->d_inode),
 		      /*flags*/0);
+	au_sbilist_unlock();
 }
 
 int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
@@ -939,9 +941,11 @@ static void au_br_do_del(struct super_block *sb, aufs_bindex_t bindex,
 	h_inode = au_igrab(hinode->hi_inode);
 	au_hiput(hinode);
 
+	au_sbilist_lock();
 	au_br_do_del_brp(sbinfo, bindex, bend);
 	au_br_do_del_hdp(au_di(root), bindex, bend);
 	au_br_do_del_hip(au_ii(inode), bindex, bend);
+	au_sbilist_unlock();
 
 	dput(h_root);
 	iput(h_inode);

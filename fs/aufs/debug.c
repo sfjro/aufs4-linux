@@ -408,7 +408,7 @@ void au_dbg_verify_gen(struct dentry *parent, unsigned int sigen)
 void au_dbg_verify_kthread(void)
 {
 	if (au_wkq_test()) {
-		/* au_dbg_blocked(); re-commit later */
+		au_dbg_blocked();
 		/*
 		 * It may be recursive, but udba=notify between two aufs mounts,
 		 * where a single ro branch is shared, is not a problem.

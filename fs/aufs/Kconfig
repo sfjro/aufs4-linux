@@ -45,7 +45,7 @@ endchoice
 
 config AUFS_SBILIST
 	bool
-	depends on PROC_FS
+	depends on AUFS_MAGIC_SYSRQ || PROC_FS
 	default y
 	help
 	Automatic configuration for internal use.
@@ -104,4 +104,12 @@ config AUFS_DEBUG
 	help
 	Enable this to compile aufs internal debug code.
 	It will have a negative impact to the performance.
+
+config AUFS_MAGIC_SYSRQ
+	bool
+	depends on AUFS_DEBUG && MAGIC_SYSRQ
+	default y
+	help
+	Automatic configuration for internal use.
+	When aufs supports Magic SysRq, enabled automatically.
 endif

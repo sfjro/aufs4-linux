@@ -27,6 +27,7 @@
 #include <linux/atomic.h>
 #include <linux/module.h>
 #include <linux/kallsyms.h>
+#include <linux/sysrq.h>
 
 #ifdef CONFIG_AUFS_DEBUG
 #define AuDebugOn(a)		BUG_ON(a)
@@ -198,6 +199,27 @@ AuStubInt0(__init au_debug_init, void)
 #define AuDbgSb(sb)		do {} while (0)
 #define AuDbgSym(addr)		do {} while (0)
 #endif /* CONFIG_AUFS_DEBUG */
+
+/* ---------------------------------------------------------------------- */
+
+#ifdef CONFIG_AUFS_MAGIC_SYSRQ
+int __init au_sysrq_init(void);
+void au_sysrq_fin(void);
+
+#ifdef CONFIG_HW_CONSOLE
+#define au_dbg_blocked() do { \
+	WARN_ON(1); \
+	handle_sysrq('w'); \
+} while (0)
+#else
+AuStubVoid(au_dbg_blocked, void)
+#endif
+
+#else
+AuStubInt0(__init au_sysrq_init, void)
+AuStubVoid(au_sysrq_fin, void)
+AuStubVoid(au_dbg_blocked, void)
+#endif /* CONFIG_AUFS_MAGIC_SYSRQ */
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_DEBUG_H__ */
