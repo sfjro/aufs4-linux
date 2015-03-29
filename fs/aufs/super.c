@@ -576,7 +576,7 @@ static int alloc_root(struct super_block *sb)
 		goto out;
 
 	inode->i_op = &aufs_dir_iop;
-	inode->i_fop = &simple_dir_operations; /* replace later */
+	inode->i_fop = &aufs_dir_fop;
 	inode->i_mode = S_IFDIR;
 	set_nlink(inode, 2);
 	unlock_new_inode(inode);

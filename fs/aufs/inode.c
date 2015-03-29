@@ -201,7 +201,7 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 		isdir = 1;
 		btail = au_dbtaildir(dentry);
 		inode->i_op = &aufs_dir_iop;
-		inode->i_fop = &simple_dir_operations; /* re-commit later */
+		inode->i_fop = &aufs_dir_fop;
 		break;
 	case S_IFLNK:
 		btail = au_dbtail(dentry);
