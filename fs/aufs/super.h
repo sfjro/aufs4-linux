@@ -28,6 +28,10 @@
 #include <linux/kobject.h>
 #include "rwsem.h"
 
+typedef ssize_t (*au_readf_t)(struct file *, char __user *, size_t, loff_t *);
+typedef ssize_t (*au_writef_t)(struct file *, const char __user *, size_t,
+			       loff_t *);
+
 struct au_branch;
 struct au_sbinfo {
 	/*
@@ -45,6 +49,22 @@ struct au_sbinfo {
 	unsigned int		si_last_br_id :
 				sizeof(aufs_bindex_t) * BITS_PER_BYTE - 1;
 	struct au_branch	**si_branch;
+
+	/* mount flags */
+	/* include/asm-ia64/siginfo.h defines a macro named si_flags */
+	unsigned int		si_mntflags;
+
+	/* external inode number (bitmap and translation table) */
+	au_readf_t		si_xread;
+	au_writef_t		si_xwrite;
+	struct file		*si_xib;
+	struct mutex		si_xib_mtx; /* protect xib members */
+	unsigned long		*si_xib_buf;
+	unsigned long		si_xib_last_pindex;
+	int			si_xib_next_bit;
+	aufs_bindex_t		si_xino_brid;
+	/* reserved for future use */
+	/* unsigned long long	si_xib_limit; */	/* Max xib file size */
 
 	/*
 	 * sysfs and lifetime management.
@@ -106,6 +126,12 @@ static inline aufs_bindex_t au_sbend(struct super_block *sb)
 {
 	SiMustAnyLock(sb);
 	return au_sbi(sb)->si_bend;
+}
+
+static inline unsigned int au_mntflags(struct super_block *sb)
+{
+	SiMustAnyLock(sb);
+	return au_sbi(sb)->si_mntflags;
 }
 
 static inline unsigned int au_sigen(struct super_block *sb)

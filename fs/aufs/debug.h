@@ -63,6 +63,13 @@ AuStubInt0(au_debug_test, void)
 		pr_debug("DEBUG: " fmt, ##__VA_ARGS__); \
 } while (0)
 #define AuLabel(l)		AuDbg(#l "\n")
+#define AuIOErr(fmt, ...)	pr_err("I/O Error, " fmt, ##__VA_ARGS__)
+
+#define AuIOErr1(fmt, ...) do { \
+	static unsigned char _c; \
+	if (!_c++) \
+		AuIOErr(fmt, ##__VA_ARGS__); \
+} while (0)
 
 #define AuTraceErr(e) do { \
 	if (unlikely((e) < 0)) \

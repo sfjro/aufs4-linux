@@ -16,40 +16,42 @@
  */
 
 /*
- * mount options/flags
+ * sub-routines for VFS
  */
 
-#ifndef __AUFS_OPTS_H__
-#define __AUFS_OPTS_H__
+#ifndef __AUFS_VFSUB_H__
+#define __AUFS_VFSUB_H__
 
 #ifdef __KERNEL__
 
-#include <linux/path.h>
+#include <linux/fs.h>
+#include "debug.h"
 
 /* ---------------------------------------------------------------------- */
 
-/* mount flags */
-#define AuOpt_XINO		1		/* external inode number bitmap
-						   and translation table */
-
-#define AuOpt_Def	AuOpt_XINO
-
-#define au_opt_test(flags, name)	(flags & AuOpt_##name)
-#define au_opt_set(flags, name) do { \
-	((flags) |= AuOpt_##name); \
-} while (0)
-#define au_opt_clr(flags, name) do { \
-	((flags) &= ~AuOpt_##name); \
-} while (0)
-
-/* ---------------------------------------------------------------------- */
-
-struct au_opt_add {
-	aufs_bindex_t	bindex;
-	char		*pathname;
-	int		perm;
-	struct path	path;
+/* lock subclass for lower inode */
+/* default MAX_LOCKDEP_SUBCLASSES(8) is not enough */
+/* reduce? gave up. */
+enum {
+	AuLsc_I_Begin = I_MUTEX_PARENT2, /* 5 */
+	AuLsc_I_PARENT,		/* lower inode, parent first */
+	AuLsc_I_PARENT2,	/* copyup dirs */
+	AuLsc_I_PARENT3,	/* copyup wh */
+	AuLsc_I_CHILD,
+	AuLsc_I_CHILD2,
+	AuLsc_I_End
 };
 
+/* to debug easier, do not make them inlined functions */
+#define MtxMustLock(mtx)	AuDebugOn(!mutex_is_locked(mtx))
+#define IMustLock(i)		MtxMustLock(&(i)->i_mutex)
+
+/* ---------------------------------------------------------------------- */
+
+static inline loff_t vfsub_f_size_read(struct file *file)
+{
+	return i_size_read(file_inode(file));
+}
+
 #endif /* __KERNEL__ */
-#endif /* __AUFS_OPTS_H__ */
+#endif /* __AUFS_VFSUB_H__ */

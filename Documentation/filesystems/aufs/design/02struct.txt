@@ -101,3 +101,16 @@ hierarchy.
 Because aufs supports manipulating branches, ie. add/delete/change
 dynamically, a branch has its own id. When the branch order changes,
 aufs finds the new index by searching the branch id.
+
+
+XIB(external inode number bitmap)
+----------------------------------------------------------------------
+Addition to the xino file per a branch, aufs has an external inode number
+bitmap in a superblock object. It is also an internal file such like a
+xino file.
+It is a simple bitmap to mark whether the aufs inode number is in-use or
+not.
+To reduce the file I/O, aufs prepares a single memory page to cache xib.
+
+As well as XINO files, aufs has a feature to truncate/refresh XIB to
+reduce the number of consumed disk blocks for these files.

@@ -66,4 +66,14 @@ typedef int16_t aufs_bindex_t;
 #endif
 #endif /* __KERNEL__ */
 
+/* ---------------------------------------------------------------------- */
+
+#define AUFS_FSTYPE		AUFS_NAME
+
+#define AUFS_ROOT_INO		2
+#define AUFS_FIRST_INO		11
+
+#define AUFS_XINO_FNAME		"." AUFS_NAME ".xino"
+#define AUFS_XINO_DEFPATH	"/tmp/" AUFS_XINO_FNAME
+
 #endif /* __AUFS_TYPE_H__ */

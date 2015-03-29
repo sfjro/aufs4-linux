@@ -29,8 +29,18 @@
 
 /* ---------------------------------------------------------------------- */
 
+/* a xino file */
+struct au_xino_file {
+	struct file		*xi_file;
+	struct mutex		xi_nondir_mtx;
+
+	/* todo: make xino files an array to support huge inode number */
+};
+
 /* protected by superblock rwsem */
 struct au_branch {
+	struct au_xino_file	br_xino;
+
 	aufs_bindex_t		br_id;
 
 	int			br_perm;
@@ -63,6 +73,20 @@ void au_br_free(struct au_sbinfo *sinfo);
 int au_br_index(struct super_block *sb, aufs_bindex_t br_id);
 struct au_opt_add;
 int au_br_add(struct super_block *sb, struct au_opt_add *add);
+
+/* xino.c */
+static const loff_t au_loff_max = LLONG_MAX;
+
+ssize_t xino_fread(au_readf_t func, struct file *file, void *buf, size_t size,
+		   loff_t *pos);
+ssize_t xino_fwrite(au_writef_t func, struct file *file, void *buf, size_t size,
+		    loff_t *pos);
+ino_t au_xino_new_ino(struct super_block *sb);
+void au_xino_delete_inode(struct inode *inode, const int unlinked);
+int au_xino_write(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
+		  ino_t ino);
+int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
+		 ino_t *ino);
 
 /* ---------------------------------------------------------------------- */
 
