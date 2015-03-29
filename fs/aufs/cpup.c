@@ -16,32 +16,17 @@
  */
 
 /*
- * all header files
+ * copy-up functions, see wbr_policy.c for copy-down
  */
 
-#ifndef __AUFS_H__
-#define __AUFS_H__
+#include "aufs.h"
 
-#ifdef __KERNEL__
+void au_cpup_igen(struct inode *inode, struct inode *h_inode)
+{
+	struct au_iinfo *iinfo = au_ii(inode);
 
-#define AuStub(type, name, body, ...) \
-	static inline type name(__VA_ARGS__) { body; }
+	IiMustWriteLock(inode);
 
-#define AuStubVoid(name, ...) \
-	AuStub(void, name, , __VA_ARGS__)
-#define AuStubInt0(name, ...) \
-	AuStub(int, name, return 0, __VA_ARGS__)
-
-#include "debug.h"
-
-#include "cpup.h"
-#include "dcsub.h"
-#include "dentry.h"
-#include "fstype.h"
-#include "inode.h"
-#include "module.h"
-#include "rwsem.h"
-#include "super.h"
-
-#endif /* __KERNEL__ */
-#endif /* __AUFS_H__ */
+	iinfo->ii_higen = h_inode->i_generation;
+	iinfo->ii_hsb1 = h_inode->i_sb;
+}

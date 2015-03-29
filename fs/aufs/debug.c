@@ -103,8 +103,8 @@ void au_dpri_inode(struct inode *inode)
 	iinfo = au_ii(inode);
 	if (!iinfo)
 		return;
-	dpri("i-1: bstart %d, bend %d\n",
-	     iinfo->ii_bstart, iinfo->ii_bend);
+	dpri("i-1: bstart %d, bend %d, gen %d\n",
+	     iinfo->ii_bstart, iinfo->ii_bend, au_iigen(inode, NULL));
 	if (iinfo->ii_bstart < 0)
 		return;
 	for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend; bindex++)
@@ -152,8 +152,9 @@ void au_dpri_dentry(struct dentry *dentry)
 	dinfo = au_di(dentry);
 	if (!dinfo)
 		return;
-	dpri("d-1: bstart %d, bend %d\n",
-	     dinfo->di_bstart, dinfo->di_bend);
+	dpri("d-1: bstart %d, bend %d, gen %d\n",
+	     dinfo->di_bstart, dinfo->di_bend,
+	     au_digen(dentry));
 	if (dinfo->di_bstart < 0)
 		return;
 	hdp = dinfo->di_hdentry;
@@ -195,4 +196,24 @@ void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line)
 			BUG();
 		}
 	}
+}
+
+void au_dbg_verify_gen(struct dentry *parent, unsigned int sigen)
+{
+	int err, i, j;
+	struct au_dcsub_pages dpages;
+	struct au_dpage *dpage;
+	struct dentry **dentries;
+
+	err = au_dpages_init(&dpages, GFP_NOFS);
+	AuDebugOn(err);
+	err = au_dcsub_pages_rev_aufs(&dpages, parent, /*do_include*/1);
+	AuDebugOn(err);
+	for (i = dpages.ndpage - 1; !err && i >= 0; i--) {
+		dpage = dpages.dpages + i;
+		dentries = dpage->dentries;
+		for (j = dpage->ndentry - 1; !err && j >= 0; j--)
+			AuDebugOn(au_digen_test(dentries[j], sigen));
+	}
+	au_dpages_free(&dpages);
 }

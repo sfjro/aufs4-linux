@@ -37,6 +37,8 @@ struct au_sbinfo {
 	struct au_rwsem		si_rwsem;
 
 	/* branch management */
+	unsigned int		si_generation;
+
 	aufs_bindex_t		si_bend;
 	struct au_branch	**si_branch;
 
@@ -70,6 +72,8 @@ struct inode *au_iget_locked(struct super_block *sb, ino_t ino);
 void au_si_free(struct kobject *kobj);
 int au_si_alloc(struct super_block *sb);
 
+unsigned int au_sigen_inc(struct super_block *sb);
+
 /* ---------------------------------------------------------------------- */
 
 static inline struct au_sbinfo *au_sbi(struct super_block *sb)
@@ -96,6 +100,12 @@ static inline aufs_bindex_t au_sbend(struct super_block *sb)
 {
 	SiMustAnyLock(sb);
 	return au_sbi(sb)->si_bend;
+}
+
+static inline unsigned int au_sigen(struct super_block *sb)
+{
+	SiMustAnyLock(sb);
+	return au_sbi(sb)->si_generation;
 }
 
 #endif /* __KERNEL__ */

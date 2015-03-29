@@ -16,32 +16,17 @@
  */
 
 /*
- * all header files
+ * copy-up/down functions
  */
 
-#ifndef __AUFS_H__
-#define __AUFS_H__
+#ifndef __AUFS_CPUP_H__
+#define __AUFS_CPUP_H__
 
 #ifdef __KERNEL__
 
-#define AuStub(type, name, body, ...) \
-	static inline type name(__VA_ARGS__) { body; }
+struct inode;
 
-#define AuStubVoid(name, ...) \
-	AuStub(void, name, , __VA_ARGS__)
-#define AuStubInt0(name, ...) \
-	AuStub(int, name, return 0, __VA_ARGS__)
-
-#include "debug.h"
-
-#include "cpup.h"
-#include "dcsub.h"
-#include "dentry.h"
-#include "fstype.h"
-#include "inode.h"
-#include "module.h"
-#include "rwsem.h"
-#include "super.h"
+void au_cpup_igen(struct inode *inode, struct inode *h_inode);
 
 #endif /* __KERNEL__ */
-#endif /* __AUFS_H__ */
+#endif /* __AUFS_CPUP_H__ */

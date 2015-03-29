@@ -38,6 +38,20 @@ void au_hiput(struct au_hinode *hinode)
 	iput(hinode->hi_inode);
 }
 
+void au_update_iigen(struct inode *inode, int half)
+{
+	struct au_iinfo *iinfo;
+	struct au_iigen *iigen;
+	unsigned int sigen;
+
+	sigen = au_sigen(inode->i_sb);
+	iinfo = au_ii(inode);
+	iigen = &iinfo->ii_generation;
+	spin_lock(&iinfo->ii_genspin);
+	iigen->ig_generation = sigen;
+	spin_unlock(&iinfo->ii_genspin);
+}
+
 /* ---------------------------------------------------------------------- */
 
 void au_icntnr_init_once(void *_c)
@@ -46,6 +60,7 @@ void au_icntnr_init_once(void *_c)
 	struct au_iinfo *iinfo = &c->iinfo;
 	static struct lock_class_key aufs_ii;
 
+	spin_lock_init(&iinfo->ii_genspin);
 	au_rw_init(&iinfo->ii_rwsem);
 	au_rw_class(&iinfo->ii_rwsem, &aufs_ii);
 	inode_init_once(&c->vfs_inode);
@@ -62,6 +77,7 @@ int au_iinfo_init(struct inode *inode)
 	nbr = 1; /* re-commit later */
 	iinfo->ii_hinode = kcalloc(nbr, sizeof(*iinfo->ii_hinode), GFP_NOFS);
 	if (iinfo->ii_hinode) {
+		iinfo->ii_generation.ig_generation = au_sigen(sb);
 		iinfo->ii_bstart = -1;
 		iinfo->ii_bend = -1;
 		return 0;
