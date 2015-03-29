@@ -838,7 +838,8 @@ int aufs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	/* make the dir opaque */
 	diropq = 0;
 	h_mtx = &h_path.dentry->d_inode->i_mutex;
-	if (wh_dentry) {
+	if (wh_dentry
+	    || au_opt_test(au_mntflags(sb), ALWAYS_DIROPQ)) {
 		mutex_lock_nested(h_mtx, AuLsc_I_CHILD);
 		opq_dentry = au_diropq_create(dentry, bindex);
 		mutex_unlock(h_mtx);

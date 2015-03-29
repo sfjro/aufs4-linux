@@ -334,7 +334,8 @@ static int do_rename(struct au_ren_args *a)
 	    && (a->dst_wh_dentry
 		|| au_dbdiropq(d) == a->btgt
 		/* hide the lower to keep xino */
-		|| a->btgt < au_dbend(d)))
+		|| a->btgt < au_dbend(d)
+		|| au_opt_test(au_mntflags(d->d_sb), ALWAYS_DIROPQ)))
 		au_fset_ren(a->flags, DIROPQ);
 	err = au_ren_or_cpup(a);
 	if (unlikely(err))

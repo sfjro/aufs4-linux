@@ -266,6 +266,10 @@ static int aufs_show_options(struct seq_file *m, struct dentry *dentry)
 	if (v != AuWbrCopyup_Def)
 		seq_printf(m, ",cpup=%s", au_optstr_wbr_copyup(v));
 
+	v = au_opt_test(mnt_flags, ALWAYS_DIROPQ);
+	if (v != au_opt_test(AuOpt_Def, ALWAYS_DIROPQ))
+		seq_printf(m, ",diropq=%c", v ? 'a' : 'w');
+
 	AuUInt(DIRWH, dirwh, sbinfo->si_dirwh);
 
 	v = jiffies_to_msecs(sbinfo->si_rdcache) / MSEC_PER_SEC;
