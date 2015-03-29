@@ -72,6 +72,15 @@ struct inode *au_igrab(struct inode *inode);
 /* iinfo.c */
 struct inode *au_h_iptr(struct inode *inode, aufs_bindex_t bindex);
 void au_hiput(struct au_hinode *hinode);
+unsigned int au_hi_flags(struct inode *inode, int isdir);
+
+/* hinode flags */
+#define AuHi_XINO	1
+#define au_ftest_hi(flags, name)	((flags) & AuHi_##name)
+#define au_fset_hi(flags, name) \
+	do { (flags) |= AuHi_##name; } while (0)
+#define au_fclr_hi(flags, name) \
+	do { (flags) &= ~AuHi_##name; } while (0)
 
 void au_set_h_iptr(struct inode *inode, aufs_bindex_t bindex,
 		   struct inode *h_inode, unsigned int flags);

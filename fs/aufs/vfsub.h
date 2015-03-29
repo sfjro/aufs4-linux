@@ -48,10 +48,23 @@ enum {
 
 /* ---------------------------------------------------------------------- */
 
+struct file *vfsub_dentry_open(struct path *path, int flags);
+struct file *vfsub_filp_open(const char *path, int oflags, int mode);
+
+struct dentry *vfsub_lookup_one_len(const char *name, struct dentry *parent,
+				    int len);
+
+/* ---------------------------------------------------------------------- */
+
 static inline loff_t vfsub_f_size_read(struct file *file)
 {
 	return i_size_read(file_inode(file));
 }
+
+/* ---------------------------------------------------------------------- */
+
+int vfsub_unlink(struct inode *dir, struct path *path,
+		 struct inode **delegated_inode, int force);
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_VFSUB_H__ */

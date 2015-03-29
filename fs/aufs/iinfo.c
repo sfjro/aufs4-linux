@@ -38,6 +38,17 @@ void au_hiput(struct au_hinode *hinode)
 	iput(hinode->hi_inode);
 }
 
+unsigned int au_hi_flags(struct inode *inode, int isdir)
+{
+	unsigned int flags;
+	const unsigned int mnt_flags = au_mntflags(inode->i_sb);
+
+	flags = 0;
+	if (au_opt_test(mnt_flags, XINO))
+		au_fset_hi(flags, XINO);
+	return flags;
+}
+
 void au_set_h_iptr(struct inode *inode, aufs_bindex_t bindex,
 		   struct inode *h_inode, unsigned int flags)
 {
@@ -55,6 +66,7 @@ void au_set_h_iptr(struct inode *inode, aufs_bindex_t bindex,
 		au_hiput(hinode);
 	hinode->hi_inode = h_inode;
 	if (h_inode) {
+		int err;
 		struct super_block *sb = inode->i_sb;
 		struct au_branch *br;
 
@@ -65,6 +77,12 @@ void au_set_h_iptr(struct inode *inode, aufs_bindex_t bindex,
 			au_cpup_igen(inode, h_inode);
 		br = au_sbr(sb, bindex);
 		hinode->hi_id = br->br_id;
+		if (au_ftest_hi(flags, XINO)) {
+			err = au_xino_write(sb, bindex, h_inode->i_ino,
+					    inode->i_ino);
+			if (unlikely(err))
+				AuIOErr1("failed au_xino_write() %d\n", err);
+		}
 	}
 }
 
@@ -145,11 +163,14 @@ void au_iinfo_fin(struct inode *inode)
 	struct au_iinfo *iinfo;
 	struct au_hinode *hi;
 	aufs_bindex_t bindex, bend;
+	const unsigned char unlinked = !inode->i_nlink;
 
 	iinfo = au_ii(inode);
 	/* bad_inode case */
 	if (!iinfo)
 		return;
+
+	au_xino_delete_inode(inode, unlinked);
 
 	bindex = iinfo->ii_bstart;
 	if (bindex >= 0) {

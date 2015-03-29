@@ -103,6 +103,121 @@ ssize_t xino_fwrite(au_writef_t func, struct file *file, void *buf, size_t size,
 
 /* ---------------------------------------------------------------------- */
 
+/*
+ * create a new xinofile at the same place/path as @base_file.
+ */
+struct file *au_xino_create2(struct file *base_file, struct file *copy_src)
+{
+	struct file *file;
+	struct dentry *base, *parent;
+	struct inode *dir, *delegated;
+	struct qstr *name;
+	struct path path;
+	int err;
+
+	base = base_file->f_path.dentry;
+	parent = base->d_parent; /* dir inode is locked */
+	dir = parent->d_inode;
+	IMustLock(dir);
+
+	file = ERR_PTR(-EINVAL);
+	name = &base->d_name;
+	path.dentry = vfsub_lookup_one_len(name->name, parent, name->len);
+	if (IS_ERR(path.dentry)) {
+		file = (void *)path.dentry;
+		pr_err("%pd lookup err %ld\n",
+		       base, PTR_ERR(path.dentry));
+		goto out;
+	}
+
+	/* no need to mnt_want_write() since we call dentry_open() later */
+	err = vfs_create(dir, path.dentry, S_IRUGO | S_IWUGO, NULL);
+	if (unlikely(err)) {
+		file = ERR_PTR(err);
+		pr_err("%pd create err %d\n", base, err);
+		goto out_dput;
+	}
+
+	path.mnt = base_file->f_path.mnt;
+	file = vfsub_dentry_open(&path,
+				 O_RDWR | O_CREAT | O_EXCL | O_LARGEFILE
+				 /* | __FMODE_NONOTIFY */);
+	if (IS_ERR(file)) {
+		pr_err("%pd open err %ld\n", base, PTR_ERR(file));
+		goto out_dput;
+	}
+
+	delegated = NULL;
+	err = vfsub_unlink(dir, &file->f_path, &delegated, /*force*/0);
+	if (unlikely(err == -EWOULDBLOCK)) {
+		pr_warn("cannot retry for NFSv4 delegation"
+			" for an internal unlink\n");
+		iput(delegated);
+	}
+	if (unlikely(err)) {
+		pr_err("%pd unlink err %d\n", base, err);
+		goto out_fput;
+	}
+
+	if (copy_src) {
+		/* no one can touch copy_src xino */
+		/* err = au_copy_file(file, copy_src, vfsub_f_size_read(copy_src)); later */
+		err = 0;
+		if (unlikely(err)) {
+			pr_err("%pd copy err %d\n", base, err);
+			goto out_fput;
+		}
+	}
+	goto out_dput; /* success */
+
+out_fput:
+	fput(file);
+	file = ERR_PTR(err);
+out_dput:
+	dput(path.dentry);
+out:
+	return file;
+}
+
+struct au_xino_lock_dir {
+	struct au_hinode *hdir;
+	struct dentry *parent;
+	struct mutex *mtx;
+};
+
+static void au_xino_lock_dir(struct super_block *sb, struct file *xino,
+			     struct au_xino_lock_dir *ldir)
+{
+	aufs_bindex_t brid, bindex;
+
+	ldir->hdir = NULL;
+	bindex = -1;
+	brid = au_xino_brid(sb);
+	if (brid >= 0)
+		bindex = au_br_index(sb, brid);
+	if (bindex >= 0) {
+		ldir->hdir = au_hi(sb->s_root->d_inode, bindex);
+		mutex_lock_nested(&ldir->hdir->hi_inode->i_mutex,
+				  AuLsc_I_PARENT);
+	} else {
+		ldir->parent = dget_parent(xino->f_path.dentry);
+		ldir->mtx = &ldir->parent->d_inode->i_mutex;
+		mutex_lock_nested(ldir->mtx, AuLsc_I_PARENT);
+	}
+}
+
+static void au_xino_unlock_dir(struct au_xino_lock_dir *ldir)
+{
+	if (ldir->hdir)
+		mutex_unlock(&ldir->hdir->hi_inode->i_mutex);
+	else {
+		mutex_unlock(ldir->mtx);
+		dput(ldir->parent);
+	}
+}
+
+/* ---------------------------------------------------------------------- */
+
 static int au_xino_do_write(au_writef_t write, struct file *file,
 			    ino_t h_ino, ino_t ino)
 {
@@ -396,5 +511,125 @@ int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 		AuIOErr("xino read error (%zd)\n", sz);
 	}
 
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/* create and set a new xino file */
+
+struct file *au_xino_create(struct super_block *sb, char *fname, int silent)
+{
+	struct file *file;
+	struct dentry *h_parent, *d;
+	struct inode *h_dir;
+	int err;
+
+	/*
+	 * at mount-time, and the xino file is the default path,
+	 * hnotify is disabled so we have no notify events to ignore.
+	 * when a user specified the xino, we cannot get au_hdir to be ignored.
+	 */
+	file = vfsub_filp_open(fname, O_RDWR | O_CREAT | O_EXCL | O_LARGEFILE
+			       /* | __FMODE_NONOTIFY */,
+			       S_IRUGO | S_IWUGO);
+	if (IS_ERR(file)) {
+		if (!silent)
+			pr_err("open %s(%ld)\n", fname, PTR_ERR(file));
+		return file;
+	}
+
+	/* keep file count */
+	h_parent = dget_parent(file->f_path.dentry);
+	h_dir = h_parent->d_inode;
+	mutex_lock_nested(&h_dir->i_mutex, AuLsc_I_PARENT);
+	/* mnt_want_write() is unnecessary here */
+	/* no delegation since it is just created */
+	err = vfsub_unlink(h_dir, &file->f_path, /*delegated*/NULL, /*force*/0);
+	mutex_unlock(&h_dir->i_mutex);
+	dput(h_parent);
+	if (unlikely(err)) {
+		if (!silent)
+			pr_err("unlink %s(%d)\n", fname, err);
+		goto out;
+	}
+
+	err = -EINVAL;
+	d = file->f_path.dentry;
+	if (unlikely(sb == d->d_sb)) {
+		if (!silent)
+			pr_err("%s must be outside\n", fname);
+		goto out;
+	}
+	if (unlikely(au_test_fs_bad_xino(d->d_sb))) {
+		if (!silent)
+			pr_err("xino doesn't support %s(%s)\n",
+			       fname, au_sbtype(d->d_sb));
+		goto out;
+	}
+	return file; /* success */
+
+out:
+	fput(file);
+	file = ERR_PTR(err);
+	return file;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/*
+ * initialize the xinofile for the specified branch @br
+ * at the place/path where @base_file indicates.
+ * test whether another branch is on the same filesystem or not,
+ * if @do_test is true.
+ */
+int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t h_ino,
+	       struct file *base_file, int do_test)
+{
+	int err;
+	ino_t ino;
+	aufs_bindex_t bend, bindex;
+	struct au_branch *shared_br, *b;
+	struct file *file;
+	struct super_block *tgt_sb;
+
+	shared_br = NULL;
+	bend = au_sbend(sb);
+	if (do_test) {
+		tgt_sb = au_br_sb(br);
+		for (bindex = 0; bindex <= bend; bindex++) {
+			b = au_sbr(sb, bindex);
+			if (tgt_sb == au_br_sb(b)) {
+				shared_br = b;
+				break;
+			}
+		}
+	}
+
+	if (!shared_br || !shared_br->br_xino.xi_file) {
+		struct au_xino_lock_dir ldir;
+
+		au_xino_lock_dir(sb, base_file, &ldir);
+		/* mnt_want_write() is unnecessary here */
+		file = au_xino_create2(base_file, NULL);
+		au_xino_unlock_dir(&ldir);
+		err = PTR_ERR(file);
+		if (IS_ERR(file))
+			goto out;
+		br->br_xino.xi_file = file;
+	} else {
+		br->br_xino.xi_file = shared_br->br_xino.xi_file;
+		get_file(br->br_xino.xi_file);
+	}
+
+	ino = AUFS_ROOT_INO;
+	err = au_xino_do_write(au_sbi(sb)->si_xwrite, br->br_xino.xi_file,
+			       h_ino, ino);
+	if (unlikely(err)) {
+		fput(br->br_xino.xi_file);
+		br->br_xino.xi_file = NULL;
+	}
+
+out:
 	return err;
 }

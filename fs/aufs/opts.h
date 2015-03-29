@@ -26,6 +26,8 @@
 
 #include <linux/path.h>
 
+struct file;
+
 /* ---------------------------------------------------------------------- */
 
 /* mount flags */
@@ -49,6 +51,11 @@ struct au_opt_add {
 	char		*pathname;
 	int		perm;
 	struct path	path;
+};
+
+struct au_opt_xino {
+	char		*path;
+	struct file	*file;
 };
 
 #endif /* __KERNEL__ */

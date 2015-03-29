@@ -19,6 +19,7 @@
  * branch management
  */
 
+#include <linux/file.h>
 #include "aufs.h"
 
 /*
@@ -26,6 +27,10 @@
  */
 static void au_br_do_free(struct au_branch *br)
 {
+	if (br->br_xino.xi_file)
+		fput(br->br_xino.xi_file);
+	mutex_destroy(&br->br_xino.xi_nondir_mtx);
+
 	AuDebugOn(atomic_read(&br->br_count));
 
 	/* recursive lock, s_umount of branch's */
@@ -196,15 +201,27 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	int err;
 
 	err = 0;
+	memset(&br->br_xino, 0, sizeof(br->br_xino));
+	mutex_init(&br->br_xino.xi_nondir_mtx);
 	br->br_perm = add->perm;
 	br->br_path = add->path; /* set first, path_get() later */
 	atomic_set(&br->br_count, 0);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
 
+	if (au_opt_test(au_mntflags(sb), XINO)) {
+		err = au_xino_br(sb, br, add->path.dentry->d_inode->i_ino,
+				 au_sbr(sb, 0)->br_xino.xi_file, /*do_test*/1);
+		if (unlikely(err)) {
+			AuDebugOn(br->br_xino.xi_file);
+			goto out_err;
+		}
+	}
+
 	path_get(&br->br_path);
 	goto out; /* success */
 
+out_err:
 	memset(&br->br_path, 0, sizeof(br->br_path));
 out:
 	return err;
@@ -286,6 +303,7 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add)
 
 	root = sb->s_root;
 	root_inode = root->d_inode;
+	IMustLock(root_inode);
 	err = test_add(sb, add);
 	if (unlikely(err < 0))
 		goto out;
@@ -312,6 +330,18 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add)
 	h_dentry = add->path.dentry;
 	if (!add_bindex)
 		sb->s_maxbytes = h_dentry->d_sb->s_maxbytes;
+
+	/*
+	 * this test/set prevents aufs from handling unnecesary notify events
+	 * of xino files, in case of re-adding a writable branch which was
+	 * once detached from aufs.
+	 */
+	if (au_xino_brid(sb) < 0
+	    /* && au_br_writable(add_branch->br_perm) re-commit later */
+	    && !au_test_fs_bad_xino(h_dentry->d_sb)
+	    && add_branch->br_xino.xi_file
+	    && add_branch->br_xino.xi_file->f_path.dentry->d_parent == h_dentry)
+		au_xino_brid_set(sb, add_branch->br_id);
 
 out:
 	return err;

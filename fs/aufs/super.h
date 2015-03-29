@@ -147,5 +147,17 @@ static inline struct au_branch *au_sbr(struct super_block *sb,
 	return au_sbi(sb)->si_branch[0 + bindex];
 }
 
+static inline void au_xino_brid_set(struct super_block *sb, aufs_bindex_t brid)
+{
+	SiMustWriteLock(sb);
+	au_sbi(sb)->si_xino_brid = brid;
+}
+
+static inline aufs_bindex_t au_xino_brid(struct super_block *sb)
+{
+	SiMustAnyLock(sb);
+	return au_sbi(sb)->si_xino_brid;
+}
+
 #endif /* __KERNEL__ */
 #endif /* __AUFS_SUPER_H__ */

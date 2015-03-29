@@ -37,6 +37,33 @@ static inline const char *au_sbtype(struct super_block *sb)
 	return sb->s_type->name;
 }
 
+static inline int au_test_nfs(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_NFS_FS) || defined(CONFIG_NFS_FS_MODULE)
+	return sb->s_magic == NFS_SUPER_MAGIC;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_xfs(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_XFS_FS) || defined(CONFIG_XFS_FS_MODULE)
+	return sb->s_magic == XFS_SB_MAGIC;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_tmpfs(struct super_block *sb __maybe_unused)
+{
+#ifdef CONFIG_TMPFS
+	return sb->s_magic == TMPFS_MAGIC;
+#else
+	return 0;
+#endif
+}
+
 static inline int au_test_ecryptfs(struct super_block *sb __maybe_unused)
 {
 #if defined(CONFIG_ECRYPT_FS) || defined(CONFIG_ECRYPT_FS_MODULE)
@@ -49,6 +76,15 @@ static inline int au_test_ecryptfs(struct super_block *sb __maybe_unused)
 static inline int au_test_ramfs(struct super_block *sb)
 {
 	return sb->s_magic == RAMFS_MAGIC;
+}
+
+static inline int au_test_ubifs(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_UBIFS_FS) || defined(CONFIG_UBIFS_FS_MODULE)
+	return sb->s_magic == UBIFS_SUPER_MAGIC;
+#else
+	return 0;
+#endif
 }
 
 static inline int au_test_procfs(struct super_block *sb __maybe_unused)
@@ -87,6 +123,15 @@ static inline int au_test_securityfs(struct super_block *sb __maybe_unused)
 #endif
 }
 
+static inline int au_test_btrfs(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_BTRFS_FS) || defined(CONFIG_BTRFS_FS_MODULE)
+	return sb->s_magic == BTRFS_SUPER_MAGIC;
+#else
+	return 0;
+#endif
+}
+
 static inline int au_test_xenfs(struct super_block *sb __maybe_unused)
 {
 #if defined(CONFIG_XENFS) || defined(CONFIG_XENFS_MODULE)
@@ -100,6 +145,15 @@ static inline int au_test_debugfs(struct super_block *sb __maybe_unused)
 {
 #ifdef CONFIG_DEBUG_FS
 	return sb->s_magic == DEBUGFS_MAGIC;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_nilfs(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_NILFS) || defined(CONFIG_NILFS_MODULE)
+	return sb->s_magic == NILFS_SUPER_MAGIC;
 #else
 	return 0;
 #endif
@@ -122,6 +176,42 @@ static inline int au_test_fs_unsuppoted(struct super_block *sb)
 		|| au_test_ecryptfs(sb)
 		/* || !strcmp(au_sbtype(sb), "unionfs") */
 		|| au_test_aufs(sb); /* will be supported in next version */
+}
+
+static inline int au_test_fs_remote(struct super_block *sb)
+{
+	return !au_test_tmpfs(sb)
+		&& !(sb->s_type->fs_flags & FS_REQUIRES_DEV);
+}
+
+/* ---------------------------------------------------------------------- */
+
+/*
+ * filesystems which don't maintain i_size or i_blocks.
+ */
+static inline int au_test_fs_bad_iattr_size(struct super_block *sb)
+{
+	return au_test_xfs(sb)
+		|| au_test_btrfs(sb)
+		|| au_test_ubifs(sb)
+		/* || au_test_minix(sb) */	/* untested */
+		;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/*
+ * the filesystem where the xino files placed must support i/o after unlink and
+ * maintain i_size and i_blocks.
+ */
+static inline int au_test_fs_bad_xino(struct super_block *sb)
+{
+	return au_test_fs_remote(sb)
+		|| au_test_fs_bad_iattr_size(sb)
+		/* don't want unnecessary work for xino */
+		|| au_test_aufs(sb)
+		|| au_test_ecryptfs(sb)
+		|| au_test_nilfs(sb);
 }
 
 #endif /* __KERNEL__ */
