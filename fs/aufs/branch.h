@@ -60,6 +60,13 @@ struct au_wbr {
 /* ext2 has 3 types of operations at least, ext3 has 4 */
 #define AuBrDynOp (AuDyLast * 4)
 
+#ifdef CONFIG_AUFS_HFSNOTIFY
+/* support for asynchronous destruction */
+struct au_br_hfsnotify {
+	struct fsnotify_group	*hfsn_group;
+};
+#endif
+
 /* sysfs entries */
 struct au_brsysfs {
 	char			name[16];
@@ -89,6 +96,10 @@ struct au_branch {
 	/* xino truncation */
 	atomic_t		br_xino_running;
 
+#ifdef CONFIG_AUFS_HFSNOTIFY
+	struct au_br_hfsnotify	*br_hfsn;
+#endif
+
 #ifdef CONFIG_SYSFS
 	/* entries under sysfs per mount-point */
 	struct au_brsysfs	br_sysfs[AuBrSysfs_Last];
@@ -117,6 +128,15 @@ static inline int au_br_rdonly(struct au_branch *br)
 	return ((au_br_sb(br)->s_flags & MS_RDONLY)
 		|| !au_br_writable(br->br_perm))
 		? -EROFS : 0;
+}
+
+static inline int au_br_hnotifyable(int brperm __maybe_unused)
+{
+#ifdef CONFIG_AUFS_HNOTIFY
+	return !(brperm & AuBrPerm_RR);
+#else
+	return 0;
+#endif
 }
 
 /* ---------------------------------------------------------------------- */

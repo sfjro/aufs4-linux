@@ -22,7 +22,6 @@
 #ifdef CONFIG_AUFS_DEBUG
 #include <linux/migrate.h>
 #endif
-#include <linux/fsnotify.h>
 #include <linux/pagemap.h>
 #include "aufs.h"
 

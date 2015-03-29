@@ -213,5 +213,21 @@ static inline void au_set_dbdiropq(struct dentry *dentry, aufs_bindex_t bindex)
 	au_di(dentry)->di_bdiropq = bindex;
 }
 
+/* ---------------------------------------------------------------------- */
+
+#ifdef CONFIG_AUFS_HNOTIFY
+static inline void au_digen_dec(struct dentry *d)
+{
+	atomic_dec(&au_di(d)->di_generation);
+}
+
+static inline void au_hn_di_reinit(struct dentry *dentry)
+{
+	dentry->d_fsdata = NULL;
+}
+#else
+AuStubVoid(au_hn_di_reinit, struct dentry *dentry __maybe_unused)
+#endif /* CONFIG_AUFS_HNOTIFY */
+
 #endif /* __KERNEL__ */
 #endif /* __AUFS_DENTRY_H__ */
