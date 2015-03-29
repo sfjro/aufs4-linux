@@ -23,6 +23,7 @@
 #include "aufs.h"
 
 #define AuLkup_ALLOW_NEG	1
+#define AuLkup_IGNORE_PERM	(1 << 1)
 #define au_ftest_lkup(flags, name)	((flags) & AuLkup_##name)
 #define au_fset_lkup(flags, name) \
 	do { (flags) |= AuLkup_##name; } while (0)
@@ -49,6 +50,8 @@ au_do_lookup(struct dentry *h_parent, struct dentry *dentry,
 	int wh_found, opq;
 	unsigned char wh_able;
 	const unsigned char allow_neg = !!au_ftest_lkup(args->flags, ALLOW_NEG);
+	const unsigned char ignore_perm = !!au_ftest_lkup(args->flags,
+							  IGNORE_PERM);
 
 	wh_found = 0;
 	br = au_sbr(dentry->d_sb, bindex);
@@ -68,7 +71,10 @@ au_do_lookup(struct dentry *h_parent, struct dentry *dentry,
 		return NULL; /* success */
 
 real_lookup:
-	h_dentry = vfsub_lkup_one(&dentry->d_name, h_parent);
+	if (!ignore_perm)
+		h_dentry = vfsub_lkup_one(&dentry->d_name, h_parent);
+	else
+		h_dentry = au_sio_lkup_one(&dentry->d_name, h_parent);
 	if (IS_ERR(h_dentry)) {
 		if (PTR_ERR(h_dentry) == -ENAMETOOLONG
 		    && !allow_neg)
@@ -122,7 +128,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 {
 	int npositive, err;
 	aufs_bindex_t bindex, btail, bdiropq;
-	unsigned char isdir;
+	unsigned char isdir, dirperm1;
 	struct qstr whname;
 	struct au_do_lookup_args args = {
 		.flags		= 0,
@@ -142,6 +148,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 	isdir = !!d_is_dir(dentry);
 	if (!type)
 		au_fset_lkup(args.flags, ALLOW_NEG);
+	dirperm1 = !!au_opt_test(au_mntflags(sb), DIRPERM1);
 
 	npositive = 0;
 	parent = dget_parent(dentry);
@@ -172,6 +179,8 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 			goto out_parent;
 		if (h_dentry)
 			au_fclr_lkup(args.flags, ALLOW_NEG);
+		if (dirperm1)
+			au_fset_lkup(args.flags, IGNORE_PERM);
 
 		if (au_dbwh(dentry) >= 0)
 			break;

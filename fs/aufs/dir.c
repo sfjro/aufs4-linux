@@ -562,6 +562,8 @@ int au_test_empty_lower(struct dentry *dentry)
 	arg.whlist = &whlist;
 	bstart = au_dbstart(dentry);
 	test_empty = do_test_empty;
+	if (au_opt_test(au_mntflags(dentry->d_sb), DIRPERM1))
+		test_empty = sio_test_empty;
 	arg.bindex = bstart;
 	err = test_empty(dentry, &arg);
 	if (unlikely(err))

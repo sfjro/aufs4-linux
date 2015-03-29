@@ -252,6 +252,7 @@ static int aufs_show_options(struct seq_file *m, struct dentry *dentry)
 	AuStr(UDBA, udba);
 	AuBool(PLINK, plink);
 	AuBool(DIO, dio);
+	AuBool(DIRPERM1, dirperm1);
 
 	v = sbinfo->si_wbr_create;
 	if (v != AuWbrCreate_Def)

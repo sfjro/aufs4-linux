@@ -39,6 +39,8 @@ struct super_block;
 #define AuOpt_UDBA_REVAL	(1 << 3)
 #define AuOpt_UDBA_HNOTIFY	(1 << 4)
 #define AuOpt_PLINK		(1 << 6)	/* pseudo-link */
+#define AuOpt_DIRPERM1		(1 << 7)	/* ignore the lower dir's perm
+						   bits */
 #define AuOpt_SUM		(1 << 10)	/* summation for statfs(2) */
 #define AuOpt_SUM_W		(1 << 11)	/* unimplemented */
 #define AuOpt_WARN_PERM		(1 << 12)	/* warn when add-branch */
@@ -53,6 +55,7 @@ struct super_block;
 #define AuOpt_Def	(AuOpt_XINO \
 			 | AuOpt_UDBA_REVAL \
 			 | AuOpt_PLINK \
+			 /* | AuOpt_DIRPERM1 */ \
 			 | AuOpt_WARN_PERM)
 #define AuOptMask_UDBA	(AuOpt_UDBA_NONE \
 			 | AuOpt_UDBA_REVAL \
