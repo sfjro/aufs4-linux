@@ -78,6 +78,43 @@ void au_di_free(struct au_dinfo *dinfo)
 	au_cache_free_dinfo(dinfo);
 }
 
+void au_di_swap(struct au_dinfo *a, struct au_dinfo *b)
+{
+	struct au_hdentry *p;
+	aufs_bindex_t bi;
+
+	AuRwMustWriteLock(&a->di_rwsem);
+	AuRwMustWriteLock(&b->di_rwsem);
+
+#define DiSwap(v, name)				\
+	do {					\
+		v = a->di_##name;		\
+		a->di_##name = b->di_##name;	\
+		b->di_##name = v;		\
+	} while (0)
+
+	DiSwap(p, hdentry);
+	DiSwap(bi, bstart);
+	DiSwap(bi, bend);
+	DiSwap(bi, bwh);
+	DiSwap(bi, bdiropq);
+	/* smp_mb(); */
+
+#undef DiSwap
+}
+
+void au_di_cp(struct au_dinfo *dst, struct au_dinfo *src)
+{
+	AuRwMustWriteLock(&dst->di_rwsem);
+	AuRwMustWriteLock(&src->di_rwsem);
+
+	dst->di_bstart = src->di_bstart;
+	dst->di_bend = src->di_bend;
+	dst->di_bwh = src->di_bwh;
+	dst->di_bdiropq = src->di_bdiropq;
+	/* smp_mb(); */
+}
+
 int au_di_init(struct dentry *dentry)
 {
 	int err;

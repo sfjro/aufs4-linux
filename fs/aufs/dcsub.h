@@ -43,6 +43,8 @@ struct au_dcsub_pages {
 int au_dpages_init(struct au_dcsub_pages *dpages, gfp_t gfp);
 void au_dpages_free(struct au_dcsub_pages *dpages);
 typedef int (*au_dpages_test)(struct dentry *dentry, void *arg);
+int au_dcsub_pages(struct au_dcsub_pages *dpages, struct dentry *root,
+		   au_dpages_test test, void *arg);
 int au_dcsub_pages_rev(struct au_dcsub_pages *dpages, struct dentry *dentry,
 		       int do_include, au_dpages_test test, void *arg);
 int au_dcsub_pages_rev_aufs(struct au_dcsub_pages *dpages,

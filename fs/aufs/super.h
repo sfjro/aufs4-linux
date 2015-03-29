@@ -103,6 +103,9 @@ struct au_sbinfo {
 	/* branch management */
 	unsigned int		si_generation;
 
+	/* see AuSi_ flags */
+	unsigned char		au_si_status;
+
 	aufs_bindex_t		si_bend;
 
 	/* dirty trick to keep br_id plus */
@@ -164,6 +167,30 @@ struct au_sbinfo {
 	/* dirty, necessary for unmounting, sysfs and sysrq */
 	struct super_block	*si_sb;
 };
+
+/* sbinfo status flags */
+/*
+ * set true when refresh_dirs() failed at remount time.
+ * then try refreshing dirs at access time again.
+ * if it is false, refreshing dirs at access time is unnecesary
+ */
+#define AuSi_FAILED_REFRESH_DIR	1
+
+static inline unsigned char au_do_ftest_si(struct au_sbinfo *sbi,
+					   unsigned int flag)
+{
+	AuRwMustAnyLock(&sbi->si_rwsem);
+	return sbi->au_si_status & flag;
+}
+#define au_ftest_si(sbinfo, name)	au_do_ftest_si(sbinfo, AuSi_##name)
+#define au_fset_si(sbinfo, name) do { \
+	AuRwMustWriteLock(&(sbinfo)->si_rwsem); \
+	(sbinfo)->au_si_status |= AuSi_##name; \
+} while (0)
+#define au_fclr_si(sbinfo, name) do { \
+	AuRwMustWriteLock(&(sbinfo)->si_rwsem); \
+	(sbinfo)->au_si_status &= ~AuSi_##name; \
+} while (0)
 
 /* ---------------------------------------------------------------------- */
 
