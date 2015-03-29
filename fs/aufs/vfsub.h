@@ -26,6 +26,7 @@
 
 #include <linux/fs.h>
 #include <linux/mount.h>
+#include <linux/xattr.h>
 #include "debug.h"
 
 /* copied from linux/fs/internal.h */
@@ -77,6 +78,7 @@ static inline int vfsub_native_ro(struct inode *inode)
 
 /* ---------------------------------------------------------------------- */
 
+int vfsub_update_h_iattr(struct path *h_path, int *did);
 struct file *vfsub_dentry_open(struct path *path, int flags);
 struct file *vfsub_filp_open(const char *path, int oflags, int mode);
 int vfsub_kern_path(const char *name, unsigned int flags, struct path *path);
@@ -192,6 +194,7 @@ static inline void vfsub_touch_atime(struct vfsmount *h_mnt,
 		.mnt	= h_mnt
 	};
 	touch_atime(&h_path);
+	vfsub_update_h_iattr(&h_path, /*did*/NULL); /*ignore*/
 }
 
 static inline int vfsub_update_time(struct inode *h_inode, struct timespec *ts,
@@ -243,6 +246,31 @@ int vfsub_notify_change(struct path *path, struct iattr *ia,
 			struct inode **delegated_inode);
 int vfsub_unlink(struct inode *dir, struct path *path,
 		 struct inode **delegated_inode, int force);
+
+/* ---------------------------------------------------------------------- */
+
+static inline int vfsub_setxattr(struct dentry *dentry, const char *name,
+				 const void *value, size_t size, int flags)
+{
+	int err;
+
+	lockdep_off();
+	err = vfs_setxattr(dentry, name, value, size, flags);
+	lockdep_on();
+
+	return err;
+}
+
+static inline int vfsub_removexattr(struct dentry *dentry, const char *name)
+{
+	int err;
+
+	lockdep_off();
+	err = vfs_removexattr(dentry, name);
+	lockdep_on();
+
+	return err;
+}
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_VFSUB_H__ */

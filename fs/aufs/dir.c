@@ -411,11 +411,17 @@ out:
 
 #define AuTestEmpty_WHONLY	1
 #define AuTestEmpty_CALLED	(1 << 1)
+#define AuTestEmpty_SHWH	(1 << 2)
 #define au_ftest_testempty(flags, name)	((flags) & AuTestEmpty_##name)
 #define au_fset_testempty(flags, name) \
 	do { (flags) |= AuTestEmpty_##name; } while (0)
 #define au_fclr_testempty(flags, name) \
 	do { (flags) &= ~AuTestEmpty_##name; } while (0)
+
+#ifndef CONFIG_AUFS_SHWH
+#undef AuTestEmpty_SHWH
+#define AuTestEmpty_SHWH	0
+#endif
 
 struct test_empty_arg {
 	struct dir_context ctx;
@@ -452,7 +458,8 @@ static int test_empty_cb(struct dir_context *ctx, const char *__name,
 	namelen -= AUFS_WH_PFX_LEN;
 	if (!au_nhash_test_known_wh(arg->whlist, name, namelen))
 		arg->err = au_nhash_append_wh
-			(arg->whlist, name, namelen, ino, d_type, arg->bindex);
+			(arg->whlist, name, namelen, ino, d_type, arg->bindex,
+			 au_ftest_testempty(arg->flags, SHWH));
 
 out:
 	/* smp_mb(); */
@@ -561,7 +568,11 @@ int au_test_empty_lower(struct dentry *dentry)
 	arg.flags = 0;
 	arg.whlist = &whlist;
 	bstart = au_dbstart(dentry);
+	if (au_opt_test(au_mntflags(dentry->d_sb), SHWH))
+		au_fset_testempty(arg.flags, SHWH);
 	test_empty = do_test_empty;
+	if (au_opt_test(au_mntflags(dentry->d_sb), DIRPERM1))
+		test_empty = sio_test_empty;
 	arg.bindex = bstart;
 	err = test_empty(dentry, &arg);
 	if (unlikely(err))
@@ -598,6 +609,8 @@ int au_test_empty(struct dentry *dentry, struct au_nhash *whlist)
 	err = 0;
 	arg.whlist = whlist;
 	arg.flags = AuTestEmpty_WHONLY;
+	if (au_opt_test(au_mntflags(dentry->d_sb), SHWH))
+		au_fset_testempty(arg.flags, SHWH);
 	btail = au_dbtaildir(dentry);
 	for (bindex = au_dbstart(dentry); !err && bindex <= btail; bindex++) {
 		struct dentry *h_dentry;

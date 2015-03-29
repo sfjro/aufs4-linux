@@ -38,7 +38,14 @@ struct super_block;
 #define AuOpt_UDBA_NONE		(1 << 2)	/* users direct branch access */
 #define AuOpt_UDBA_REVAL	(1 << 3)
 #define AuOpt_UDBA_HNOTIFY	(1 << 4)
+#define AuOpt_SHWH		(1 << 5)	/* show whiteout */
 #define AuOpt_PLINK		(1 << 6)	/* pseudo-link */
+#define AuOpt_DIRPERM1		(1 << 7)	/* ignore the lower dir's perm
+						   bits */
+#define AuOpt_ALWAYS_DIROPQ	(1 << 9)	/* policy to creating diropq */
+#define AuOpt_SUM		(1 << 10)	/* summation for statfs(2) */
+#define AuOpt_SUM_W		(1 << 11)	/* unimplemented */
+#define AuOpt_WARN_PERM		(1 << 12)	/* warn when add-branch */
 #define AuOpt_VERBOSE		(1 << 13)	/* busy inode when del-branch */
 #define AuOpt_DIO		(1 << 14)	/* direct io */
 
@@ -46,10 +53,16 @@ struct super_block;
 #undef AuOpt_UDBA_HNOTIFY
 #define AuOpt_UDBA_HNOTIFY	0
 #endif
+#ifndef CONFIG_AUFS_SHWH
+#undef AuOpt_SHWH
+#define AuOpt_SHWH		0
+#endif
 
 #define AuOpt_Def	(AuOpt_XINO \
 			 | AuOpt_UDBA_REVAL \
-			 | AuOpt_PLINK)
+			 | AuOpt_PLINK \
+			 /* | AuOpt_DIRPERM1 */ \
+			 | AuOpt_WARN_PERM)
 #define AuOptMask_UDBA	(AuOpt_UDBA_NONE \
 			 | AuOpt_UDBA_REVAL \
 			 | AuOpt_UDBA_HNOTIFY)

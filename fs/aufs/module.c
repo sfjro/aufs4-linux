@@ -108,6 +108,11 @@ int sysaufs_brs = 1;
 MODULE_PARM_DESC(brs, "use <sysfs>/fs/aufs/si_*/brN");
 module_param_named(brs, sysaufs_brs, int, S_IRUGO);
 
+/* this module parameter has no meaning when USER_NS is disabled */
+static bool au_userns;
+MODULE_PARM_DESC(allow_userns, "allow unprivileged to mount under userns");
+module_param_named(allow_userns, au_userns, bool, S_IRUGO);
+
 /* ---------------------------------------------------------------------- */
 
 static char au_esc_chars[0x20 + 3]; /* 0x01-0x20, backslash, del, and NULL */
@@ -146,9 +151,12 @@ static int __init aufs_init(void)
 	err = au_wkq_init();
 	if (unlikely(err))
 		goto out_procfs;
-	err = au_hnotify_init();
+	err = au_loopback_init();
 	if (unlikely(err))
 		goto out_wkq;
+	err = au_hnotify_init();
+	if (unlikely(err))
+		goto out_loopback;
 	err = au_sysrq_init();
 	if (unlikely(err))
 		goto out_hin;
@@ -156,6 +164,7 @@ static int __init aufs_init(void)
 	if (unlikely(err))
 		goto out_sysrq;
 
+	aufs_fs_type.fs_flags |= au_userns ? FS_USERNS_MOUNT : 0;
 	err = register_filesystem(&aufs_fs_type);
 	if (unlikely(err))
 		goto out_cache;
@@ -170,6 +179,8 @@ out_sysrq:
 	au_sysrq_fin();
 out_hin:
 	au_hnotify_fin();
+out_loopback:
+	au_loopback_fin();
 out_wkq:
 	au_wkq_fin();
 out_procfs:
@@ -187,6 +198,7 @@ static void __exit aufs_exit(void)
 	au_cache_fin();
 	au_sysrq_fin();
 	au_hnotify_fin();
+	au_loopback_fin();
 	au_wkq_fin();
 	au_procfs_fin();
 	sysaufs_fin();

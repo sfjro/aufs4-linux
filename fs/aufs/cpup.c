@@ -21,7 +21,6 @@
 
 #include <linux/fs_stack.h>
 #include <linux/mm.h>
-#include <linux/uaccess.h>
 #include "aufs.h"
 
 void au_cpup_attr_flags(struct inode *dst, unsigned int iflags)
@@ -166,15 +165,17 @@ static noinline_for_stack
 int cpup_iattr(struct dentry *dst, aufs_bindex_t bindex, struct dentry *h_src,
 	       struct au_cpup_reg_attr *h_src_attr)
 {
-	int err, sbits;
+	int err, sbits, icex;
 	struct iattr ia;
 	struct path h_path;
 	struct inode *h_isrc, *h_idst;
 	struct kstat *h_st;
+	struct au_branch *br;
 
 	h_path.dentry = au_h_dptr(dst, bindex);
 	h_idst = h_path.dentry->d_inode;
-	h_path.mnt = au_sbr_mnt(dst->d_sb, bindex);
+	br = au_sbr(dst->d_sb, bindex);
+	h_path.mnt = au_br_mnt(br);
 	h_isrc = h_src->d_inode;
 	ia.ia_valid = ATTR_FORCE | ATTR_UID | ATTR_GID
 		| ATTR_ATIME | ATTR_MTIME
@@ -214,6 +215,10 @@ int cpup_iattr(struct dentry *dst, aufs_bindex_t bindex, struct dentry *h_src,
 		ia.ia_mode = h_isrc->i_mode;
 		err = vfsub_notify_change(&h_path, &ia, /*delegated*/NULL);
 	}
+
+	icex = br->br_perm & AuBrAttr_ICEX;
+	if (!err)
+		err = au_cpup_xattr(h_path.dentry, h_src, icex);
 
 	return err;
 }
@@ -950,6 +955,14 @@ static int au_do_sio_cpup_simple(struct au_cp_generic *cpg)
 
 	dentry = cpg->dentry;
 	h_file = NULL;
+	if (au_ftest_cpup(cpg->flags, HOPEN)) {
+		AuDebugOn(cpg->bsrc < 0);
+		h_file = au_h_open_pre(dentry, cpg->bsrc, /*force_wr*/0);
+		err = PTR_ERR(h_file);
+		if (IS_ERR(h_file))
+			goto out;
+	}
+
 	parent = dget_parent(dentry);
 	h_dir = au_h_iptr(parent->d_inode, cpg->bdst);
 	if (!au_test_h_perm_sio(h_dir, MAY_EXEC | MAY_WRITE)
@@ -966,7 +979,10 @@ static int au_do_sio_cpup_simple(struct au_cp_generic *cpg)
 	}
 
 	dput(parent);
+	if (h_file)
+		au_h_open_post(dentry, cpg->bsrc, h_file);
 
+out:
 	return err;
 }
 
@@ -1135,6 +1151,7 @@ int au_sio_cpup_wh(struct au_cp_generic *cpg, struct file *file)
 		au_set_h_iptr(dir, bdst, au_igrab(h_tmpdir), /*flags*/0);
 
 		mutex_lock_nested(&h_tmpdir->i_mutex, AuLsc_I_PARENT3);
+		/* todo: au_h_open_pre()? */
 
 		pin_orig = cpg->pin;
 		au_pin_init(&wh_pin, dentry, bdst, AuLsc_DI_PARENT,
@@ -1158,6 +1175,7 @@ int au_sio_cpup_wh(struct au_cp_generic *cpg, struct file *file)
 
 	if (h_orph) {
 		mutex_unlock(&h_tmpdir->i_mutex);
+		/* todo: au_h_open_post()? */
 		au_set_h_iptr(dir, bdst, au_igrab(h_dir), /*flags*/0);
 		au_set_h_dptr(parent, bdst, h_parent);
 		AuDebugOn(!pin_orig);

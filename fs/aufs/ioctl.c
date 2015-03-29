@@ -25,7 +25,6 @@
 
 #include <linux/compat.h>
 #include <linux/file.h>
-#include <linux/uaccess.h>
 #include "aufs.h"
 
 static int au_wbr_fd(struct path *path, struct aufs_wbr_fd __user *arg)

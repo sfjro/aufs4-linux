@@ -334,7 +334,8 @@ static int do_rename(struct au_ren_args *a)
 	    && (a->dst_wh_dentry
 		|| au_dbdiropq(d) == a->btgt
 		/* hide the lower to keep xino */
-		|| a->btgt < au_dbend(d)))
+		|| a->btgt < au_dbend(d)
+		|| au_opt_test(au_mntflags(d->d_sb), ALWAYS_DIROPQ)))
 		au_fset_ren(a->flags, DIROPQ);
 	err = au_ren_or_cpup(a);
 	if (unlikely(err))
@@ -351,6 +352,7 @@ static int do_rename(struct au_ren_args *a)
 	/* update target timestamps */
 	AuDebugOn(au_dbstart(a->src_dentry) != a->btgt);
 	a->h_path.dentry = au_h_dptr(a->src_dentry, a->btgt);
+	vfsub_update_h_iattr(&a->h_path, /*did*/NULL); /*ignore*/
 	a->src_inode->i_ctime = a->h_path.dentry->d_inode->i_ctime;
 
 	/* remove whiteout for dentry */
@@ -937,7 +939,7 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 				.bsrc	= a->src_bstart,
 				.len	= -1,
 				.pin	= &pin,
-				.flags	= AuCpup_DTIME
+				.flags	= AuCpup_DTIME | AuCpup_HOPEN
 			};
 			AuDebugOn(au_dbstart(a->src_dentry) != a->src_bstart);
 			err = au_sio_cpup_simple(&cpg);

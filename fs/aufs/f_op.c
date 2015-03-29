@@ -381,6 +381,13 @@ static ssize_t aufs_splice_read(struct file *file, loff_t *ppos,
 	err = -EINVAL;
 	h_file = au_hf_top(file);
 	get_file(h_file);
+	if (au_test_loopback_kthread()) {
+		au_warn_loopback(h_file->f_path.dentry->d_sb);
+		if (file->f_mapping != h_file->f_mapping) {
+			file->f_mapping = h_file->f_mapping;
+			smp_mb(); /* unnecessary? */
+		}
+	}
 	di_read_unlock(dentry, AuLock_IR);
 	fi_read_unlock(file);
 
@@ -782,6 +789,9 @@ const struct file_operations aufs_file_fop = {
 	.read_iter	= aufs_read_iter,
 	.write_iter	= aufs_write_iter,
 
+#ifdef CONFIG_AUFS_POLL
+	.poll		= aufs_poll,
+#endif
 	.unlocked_ioctl	= aufs_ioctl_nondir,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl	= aufs_compat_ioctl_nondir,

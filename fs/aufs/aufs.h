@@ -44,6 +44,7 @@
 #include "file.h"
 #include "fstype.h"
 #include "inode.h"
+#include "loop.h"
 #include "module.h"
 #include "opts.h"
 #include "rwsem.h"

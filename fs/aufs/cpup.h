@@ -52,6 +52,8 @@ struct au_cp_generic {
 #define AuCpup_KEEPLINO		(1 << 1)	/* do not clear the lower xino,
 						   for link(2) */
 #define AuCpup_RENAME		(1 << 2)	/* rename after cpup */
+#define AuCpup_HOPEN		(1 << 3)	/* call h_open_pre/post() in
+						   cpup */
 #define AuCpup_OVERWRITE	(1 << 4)	/* allow overwriting the
 						   existing entry */
 #define AuCpup_RWDST		(1 << 5)	/* force write target even if

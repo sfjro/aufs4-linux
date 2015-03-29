@@ -22,7 +22,6 @@
 #include <linux/compat.h>
 #include <linux/fs_stack.h>
 #include <linux/security.h>
-#include <linux/uaccess.h>
 #include "aufs.h"
 
 /* bits for struct aufs_rdu.flags */
@@ -209,6 +208,7 @@ static int au_rdu(struct file *file, struct aufs_rdu *rdu)
 	AuDbg("rent %llu\n", rdu->rent);
 
 	if (!err && !au_ftest_rdu(cookie->flags, CONT)) {
+		rdu->shwh = !!au_opt_test(au_sbi(arg.sb)->si_mntflags, SHWH);
 		au_fset_rdu(cookie->flags, CONT);
 		cookie->generation = au_figen(file);
 	}
@@ -254,7 +254,11 @@ static int au_rdu_ino(struct file *file, struct aufs_rdu *rdu)
 		}
 
 		/* AuDbg("b%d, i%llu\n", ent.bindex, ent.ino); */
-		err = au_ino(sb, ent.bindex, ent.ino, ent.type, &ino);
+		if (!ent.wh)
+			err = au_ino(sb, ent.bindex, ent.ino, ent.type, &ino);
+		else
+			err = au_wh_ino(sb, ent.bindex, ent.ino, ent.type,
+					&ino);
 		if (unlikely(err)) {
 			AuTraceErr(err);
 			break;
@@ -277,11 +281,11 @@ static int au_rdu_ino(struct file *file, struct aufs_rdu *rdu)
 
 static int au_rdu_verify(struct aufs_rdu *rdu)
 {
-	AuDbg("rdu{%llu, %p, %u | %u | %llu, %u | "
+	AuDbg("rdu{%llu, %p, %u | %u | %llu, %u, %u | "
 	      "%llu, b%d, 0x%x, g%u}\n",
 	      rdu->sz, rdu->ent.e, rdu->verify[AufsCtlRduV_SZ],
 	      rdu->blk,
-	      rdu->rent, rdu->full,
+	      rdu->rent, rdu->shwh, rdu->full,
 	      rdu->cookie.h_pos, rdu->cookie.bindex, rdu->cookie.flags,
 	      rdu->cookie.generation);
 

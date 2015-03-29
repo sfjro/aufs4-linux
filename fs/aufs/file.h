@@ -26,6 +26,7 @@
 
 #include <linux/file.h>
 #include <linux/fs.h>
+#include <linux/poll.h>
 #include "rwsem.h"
 
 struct au_branch;
@@ -81,6 +82,24 @@ int au_reval_and_lock_fdi(struct file *file, int (*reopen)(struct file *file),
 			  int wlock);
 int au_do_flush(struct file *file, fl_owner_t id,
 		int (*flush)(struct file *file, fl_owner_t id));
+
+/* poll.c */
+#ifdef CONFIG_AUFS_POLL
+unsigned int aufs_poll(struct file *file, poll_table *wait);
+#endif
+
+#ifdef CONFIG_AUFS_BR_HFSPLUS
+/* hfsplus.c */
+struct file *au_h_open_pre(struct dentry *dentry, aufs_bindex_t bindex,
+			   int force_wr);
+void au_h_open_post(struct dentry *dentry, aufs_bindex_t bindex,
+		    struct file *h_file);
+#else
+AuStub(struct file *, au_h_open_pre, return NULL, struct dentry *dentry,
+       aufs_bindex_t bindex, int force_wr)
+AuStubVoid(au_h_open_post, struct dentry *dentry, aufs_bindex_t bindex,
+	   struct file *h_file);
+#endif
 
 /* f_op.c */
 extern const struct file_operations aufs_file_fop;

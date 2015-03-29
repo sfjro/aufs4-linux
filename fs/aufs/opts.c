@@ -36,12 +36,18 @@ enum {
 	Opt_trunc_xino, Opt_trunc_xino_v, Opt_notrunc_xino,
 	Opt_trunc_xino_path, Opt_itrunc_xino,
 	Opt_trunc_xib, Opt_notrunc_xib,
+	Opt_shwh, Opt_noshwh,
 	Opt_plink, Opt_noplink, Opt_list_plink,
 	Opt_udba,
 	Opt_dio, Opt_nodio,
+	Opt_diropq_a, Opt_diropq_w,
+	Opt_warn_perm, Opt_nowarn_perm,
 	Opt_wbr_copyup, Opt_wbr_create,
 	Opt_fhsm_sec,
 	Opt_verbose, Opt_noverbose,
+	Opt_sum, Opt_nosum, Opt_wsum,
+	Opt_dirperm1, Opt_nodirperm1,
+	Opt_acl, Opt_noacl,
 	Opt_tail, Opt_ignore, Opt_ignore_silent, Opt_err
 };
 
@@ -101,12 +107,36 @@ static match_table_t options = {
 	{Opt_ignore_silent, "fhsm_sec=%d"},
 #endif
 
+	{Opt_diropq_a, "diropq=always"},
+	{Opt_diropq_a, "diropq=a"},
+	{Opt_diropq_w, "diropq=whiteouted"},
+	{Opt_diropq_w, "diropq=w"},
+
+	{Opt_warn_perm, "warn_perm"},
+	{Opt_nowarn_perm, "nowarn_perm"},
+
+	/* keep them temporary */
+	{Opt_ignore_silent, "nodlgt"},
+	{Opt_ignore_silent, "clean_plink"},
+
+#ifdef CONFIG_AUFS_SHWH
+	{Opt_shwh, "shwh"},
+#endif
+	{Opt_noshwh, "noshwh"},
+
+	{Opt_dirperm1, "dirperm1"},
+	{Opt_nodirperm1, "nodirperm1"},
+
 	{Opt_verbose, "verbose"},
 	{Opt_verbose, "v"},
 	{Opt_noverbose, "noverbose"},
 	{Opt_noverbose, "quiet"},
 	{Opt_noverbose, "q"},
 	{Opt_noverbose, "silent"},
+
+	{Opt_sum, "sum"},
+	{Opt_nosum, "nosum"},
+	{Opt_wsum, "wsum"},
 
 	{Opt_rdcache, "rdcache=%d"},
 	{Opt_rdblk, "rdblk=%d"},
@@ -120,8 +150,23 @@ static match_table_t options = {
 	{Opt_wbr_copyup, "copyup=%s"},
 	{Opt_wbr_copyup, "copyup_policy=%s"},
 
+	/* generic VFS flag */
+#ifdef CONFIG_FS_POSIX_ACL
+	{Opt_acl, "acl"},
+	{Opt_noacl, "noacl"},
+#else
+	{Opt_ignore_silent, "acl"},
+	{Opt_ignore_silent, "noacl"},
+#endif
+
 	/* internal use for the scripts */
 	{Opt_ignore_silent, "si=%s"},
+
+	{Opt_br, "dirs=%s"},
+	{Opt_ignore, "debug=%d"},
+	{Opt_ignore, "delete=whiteout"},
+	{Opt_ignore, "delete=all"},
+	{Opt_ignore, "imap=%s"},
 
 	/* temporary workaround, due to old mount(8)? */
 	{Opt_ignore_silent, "relatime"},
@@ -180,8 +225,18 @@ static match_table_t brattr = {
 	/* general */
 	{AuBrAttr_COO_REG, AUFS_BRATTR_COO_REG},
 	{AuBrAttr_COO_ALL, AUFS_BRATTR_COO_ALL},
+	/* 'unpin' attrib is meaningless since linux-3.18-rc1 */
+	{AuBrAttr_UNPIN, AUFS_BRATTR_UNPIN},
 #ifdef CONFIG_AUFS_FHSM
 	{AuBrAttr_FHSM, AUFS_BRATTR_FHSM},
+#endif
+#ifdef CONFIG_AUFS_XATTR
+	{AuBrAttr_ICEX, AUFS_BRATTR_ICEX},
+	{AuBrAttr_ICEX_SEC, AUFS_BRATTR_ICEX_SEC},
+	{AuBrAttr_ICEX_SYS, AUFS_BRATTR_ICEX_SYS},
+	{AuBrAttr_ICEX_TR, AUFS_BRATTR_ICEX_TR},
+	{AuBrAttr_ICEX_USR, AUFS_BRATTR_ICEX_USR},
+	{AuBrAttr_ICEX_OTH, AUFS_BRATTR_ICEX_OTH},
 #endif
 
 	/* ro/rr branch */
@@ -287,6 +342,17 @@ static int noinline_for_stack br_perm_val(char *perm)
 		val &= ~AuBrRAttr_Mask;
 		break;
 	}
+
+	/*
+	 * 'unpin' attrib becomes meaningless since linux-3.18-rc1, but aufs
+	 * does not treat it as an error, just warning.
+	 * this is a tiny guard for the user operation.
+	 */
+	if (val & AuBrAttr_UNPIN) {
+		bad |= AuBrAttr_UNPIN;
+		val &= ~AuBrAttr_UNPIN;
+	}
+
 	if (unlikely(bad)) {
 		sz = au_do_optstr_br_attr(&attr, bad);
 		AuDebugOn(!sz);
@@ -583,6 +649,18 @@ static void dump_opts(struct au_opts *opts)
 		case Opt_notrunc_xib:
 			AuLabel(notrunc_xib);
 			break;
+		case Opt_shwh:
+			AuLabel(shwh);
+			break;
+		case Opt_noshwh:
+			AuLabel(noshwh);
+			break;
+		case Opt_dirperm1:
+			AuLabel(dirperm1);
+			break;
+		case Opt_nodirperm1:
+			AuLabel(nodirperm1);
+			break;
 		case Opt_plink:
 			AuLabel(plink);
 			break;
@@ -602,11 +680,32 @@ static void dump_opts(struct au_opts *opts)
 		case Opt_nodio:
 			AuLabel(nodio);
 			break;
+		case Opt_diropq_a:
+			AuLabel(diropq_a);
+			break;
+		case Opt_diropq_w:
+			AuLabel(diropq_w);
+			break;
+		case Opt_warn_perm:
+			AuLabel(warn_perm);
+			break;
+		case Opt_nowarn_perm:
+			AuLabel(nowarn_perm);
+			break;
 		case Opt_verbose:
 			AuLabel(verbose);
 			break;
 		case Opt_noverbose:
 			AuLabel(noverbose);
+			break;
+		case Opt_sum:
+			AuLabel(sum);
+			break;
+		case Opt_nosum:
+			AuLabel(nosum);
+			break;
+		case Opt_wsum:
+			AuLabel(wsum);
 			break;
 		case Opt_wbr_create:
 			u.create = &opt->wbr_create;
@@ -635,6 +734,12 @@ static void dump_opts(struct au_opts *opts)
 			break;
 		case Opt_fhsm_sec:
 			AuDbg("fhsm_sec %u\n", opt->fhsm_second);
+			break;
+		case Opt_acl:
+			AuLabel(acl);
+			break;
+		case Opt_noacl:
+			AuLabel(noacl);
 			break;
 		default:
 			BUG();
@@ -1060,15 +1165,28 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 		case Opt_noxino:
 		case Opt_trunc_xib:
 		case Opt_notrunc_xib:
+		case Opt_shwh:
+		case Opt_noshwh:
+		case Opt_dirperm1:
+		case Opt_nodirperm1:
 		case Opt_plink:
 		case Opt_noplink:
 		case Opt_list_plink:
 		case Opt_dio:
 		case Opt_nodio:
+		case Opt_diropq_a:
+		case Opt_diropq_w:
+		case Opt_warn_perm:
+		case Opt_nowarn_perm:
 		case Opt_verbose:
 		case Opt_noverbose:
+		case Opt_sum:
+		case Opt_nosum:
+		case Opt_wsum:
 		case Opt_rdblk_def:
 		case Opt_rdhash_def:
+		case Opt_acl:
+		case Opt_noacl:
 			err = 0;
 			opt->type = token;
 			break;
@@ -1235,11 +1353,36 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 		au_fhsm_set(sbinfo, opt->fhsm_second);
 		break;
 
+	case Opt_diropq_a:
+		au_opt_set(sbinfo->si_mntflags, ALWAYS_DIROPQ);
+		break;
+	case Opt_diropq_w:
+		au_opt_clr(sbinfo->si_mntflags, ALWAYS_DIROPQ);
+		break;
+
+	case Opt_warn_perm:
+		au_opt_set(sbinfo->si_mntflags, WARN_PERM);
+		break;
+	case Opt_nowarn_perm:
+		au_opt_clr(sbinfo->si_mntflags, WARN_PERM);
+		break;
+
 	case Opt_verbose:
 		au_opt_set(sbinfo->si_mntflags, VERBOSE);
 		break;
 	case Opt_noverbose:
 		au_opt_clr(sbinfo->si_mntflags, VERBOSE);
+		break;
+
+	case Opt_sum:
+		au_opt_set(sbinfo->si_mntflags, SUM);
+		break;
+	case Opt_wsum:
+		au_opt_clr(sbinfo->si_mntflags, SUM);
+		au_opt_set(sbinfo->si_mntflags, SUM_W);
+	case Opt_nosum:
+		au_opt_clr(sbinfo->si_mntflags, SUM);
+		au_opt_clr(sbinfo->si_mntflags, SUM_W);
 		break;
 
 	case Opt_wbr_create:
@@ -1271,6 +1414,20 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 		sbinfo->si_rdhash = AUFS_RDHASH_DEF;
 		break;
 
+	case Opt_shwh:
+		au_opt_set(sbinfo->si_mntflags, SHWH);
+		break;
+	case Opt_noshwh:
+		au_opt_clr(sbinfo->si_mntflags, SHWH);
+		break;
+
+	case Opt_dirperm1:
+		au_opt_set(sbinfo->si_mntflags, DIRPERM1);
+		break;
+	case Opt_nodirperm1:
+		au_opt_clr(sbinfo->si_mntflags, DIRPERM1);
+		break;
+
 	case Opt_trunc_xino:
 		au_opt_set(sbinfo->si_mntflags, TRUNC_XINO);
 		break;
@@ -1290,6 +1447,13 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 		break;
 	case Opt_notrunc_xib:
 		au_fclr_opts(opts->flags, TRUNC_XIB);
+		break;
+
+	case Opt_acl:
+		sb->s_flags |= MS_POSIXACL;
+		break;
+	case Opt_noacl:
+		sb->s_flags &= ~MS_POSIXACL;
 		break;
 
 	default:
@@ -1420,11 +1584,17 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 	if (!(sb_flags & MS_RDONLY)) {
 		if (unlikely(!au_br_writable(au_sbr_perm(sb, 0))))
 			pr_warn("first branch should be rw\n");
+		if (unlikely(au_opt_test(sbinfo->si_mntflags, SHWH)))
+			pr_warn("shwh should be used with ro\n");
 	}
 
 	if (au_opt_test((sbinfo->si_mntflags | pending), UDBA_HNOTIFY)
 	    && !au_opt_test(sbinfo->si_mntflags, XINO))
 		pr_warn("udba=*notify requires xino\n");
+
+	if (au_opt_test(sbinfo->si_mntflags, DIRPERM1))
+		pr_warn("dirperm1 breaks the protection"
+			" by the permission bits on the lower branch\n");
 
 	err = 0;
 	fhsm = 0;
@@ -1436,8 +1606,17 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		skip = 0;
 		h_dir = au_h_iptr(dir, bindex);
 		br = au_sbr(sb, bindex);
-		do_free = 0;
 
+		if ((br->br_perm & AuBrAttr_ICEX)
+		    && !h_dir->i_op->listxattr)
+			br->br_perm &= ~AuBrAttr_ICEX;
+#if 0
+		if ((br->br_perm & AuBrAttr_ICEX_SEC)
+		    && (au_br_sb(br)->s_flags & MS_NOSEC))
+			br->br_perm &= ~AuBrAttr_ICEX_SEC;
+#endif
+
+		do_free = 0;
 		wbr = br->br_wbr;
 		if (wbr)
 			wbr_wh_read_lock(wbr);

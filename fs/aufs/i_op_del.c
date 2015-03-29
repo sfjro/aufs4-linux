@@ -126,7 +126,9 @@ int au_may_del(struct dentry *dentry, aufs_bindex_t bindex,
 	 * let's try heavy test.
 	 */
 	err = -EACCES;
-	if (unlikely(au_test_h_perm(h_parent->d_inode, MAY_EXEC | MAY_WRITE)))
+	if (unlikely(!au_opt_test(au_mntflags(dentry->d_sb), DIRPERM1)
+		     && au_test_h_perm(h_parent->d_inode,
+				       MAY_EXEC | MAY_WRITE)))
 		goto out;
 
 	h_latest = au_sio_lkup_one(&dentry->d_name, h_parent);
@@ -359,9 +361,11 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 		epilog(dir, dentry, bindex);
 
 		/* update target timestamps */
-		if (bindex == bstart)
+		if (bindex == bstart) {
+			vfsub_update_h_iattr(&a->h_path, /*did*/NULL);
+			/*ignore*/
 			inode->i_ctime = a->h_path.dentry->d_inode->i_ctime;
-		else
+		} else
 			/* todo: this timestamp may be reverted later */
 			inode->i_ctime = h_dir->i_ctime;
 		goto out_unpin; /* success */
