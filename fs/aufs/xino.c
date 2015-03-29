@@ -90,14 +90,41 @@ struct do_xino_fwrite_args {
 	loff_t *pos;
 };
 
+static void call_do_xino_fwrite(void *args)
+{
+	struct do_xino_fwrite_args *a = args;
+	*a->errp = do_xino_fwrite(a->func, a->file, a->buf, a->size, a->pos);
+}
+
 ssize_t xino_fwrite(au_writef_t func, struct file *file, void *buf, size_t size,
 		    loff_t *pos)
 {
 	ssize_t err;
 
-	lockdep_off();
-	err = do_xino_fwrite(func, file, buf, size, pos);
-	lockdep_on();
+	/* todo: signal block and no wkq? */
+	if (rlimit(RLIMIT_FSIZE) == RLIM_INFINITY) {
+		lockdep_off();
+		err = do_xino_fwrite(func, file, buf, size, pos);
+		lockdep_on();
+	} else {
+		/*
+		 * it breaks RLIMIT_FSIZE and normal user's limit,
+		 * users should care about quota and real 'filesystem full.'
+		 */
+		int wkq_err;
+		struct do_xino_fwrite_args args = {
+			.errp	= &err,
+			.func	= func,
+			.file	= file,
+			.buf	= buf,
+			.size	= size,
+			.pos	= pos
+		};
+
+		wkq_err = au_wkq_wait(call_do_xino_fwrite, &args);
+		if (unlikely(wkq_err))
+			err = wkq_err;
+	}
 
 	return err;
 }
@@ -634,6 +661,69 @@ int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t h_ino,
 out:
 	return err;
 }
+
+/* ---------------------------------------------------------------------- */
+
+/*
+ * create a xinofile at the default place/path.
+ */
+struct file *au_xino_def(struct super_block *sb)
+{
+	struct file *file;
+	char *page, *p;
+	struct au_branch *br;
+	struct super_block *h_sb;
+	struct path path;
+	aufs_bindex_t bend, bindex, bwr;
+
+	br = NULL;
+	bend = au_sbend(sb);
+	bwr = -1;
+	for (bindex = 0; bindex <= bend; bindex++) {
+		br = au_sbr(sb, bindex);
+		if (au_br_writable(br->br_perm)
+		    && !au_test_fs_bad_xino(au_br_sb(br))) {
+			bwr = bindex;
+			break;
+		}
+	}
+
+	if (bwr >= 0) {
+		file = ERR_PTR(-ENOMEM);
+		page = (void *)__get_free_page(GFP_NOFS);
+		if (unlikely(!page))
+			goto out;
+		path.mnt = au_br_mnt(br);
+		path.dentry = au_h_dptr(sb->s_root, bwr);
+		p = d_path(&path, page, PATH_MAX - sizeof(AUFS_XINO_FNAME));
+		file = (void *)p;
+		if (!IS_ERR(p)) {
+			strcat(p, "/" AUFS_XINO_FNAME);
+			AuDbg("%s\n", p);
+			file = au_xino_create(sb, p, /*silent*/0);
+			if (!IS_ERR(file))
+				au_xino_brid_set(sb, br->br_id);
+		}
+		free_page((unsigned long)page);
+	} else {
+		file = au_xino_create(sb, AUFS_XINO_DEFPATH, /*silent*/0);
+		if (IS_ERR(file))
+			goto out;
+		h_sb = file->f_path.dentry->d_sb;
+		if (unlikely(au_test_fs_bad_xino(h_sb))) {
+			pr_err("xino doesn't support %s(%s)\n",
+			       AUFS_XINO_DEFPATH, au_sbtype(h_sb));
+			fput(file);
+			file = ERR_PTR(-EINVAL);
+		}
+		if (!IS_ERR(file))
+			au_xino_brid_set(sb, -1);
+	}
+
+out:
+	return file;
+}
+
 /* ---------------------------------------------------------------------- */
 
 int au_xino_path(struct seq_file *seq, struct file *file)

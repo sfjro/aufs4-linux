@@ -76,6 +76,11 @@ typedef int16_t aufs_bindex_t;
 #define AUFS_WH_PFX		".wh."
 #define AUFS_WH_PFX_LEN		((int)sizeof(AUFS_WH_PFX) - 1)
 #define AUFS_WH_TMP_LEN		4
+/* a limit for rmdir/rename a dir and copyup */
+#define AUFS_MAX_NAMELEN	(NAME_MAX \
+				- AUFS_WH_PFX_LEN * 2	/* doubly whiteouted */\
+				- 1			/* dot */\
+				- AUFS_WH_TMP_LEN)	/* hex */
 #define AUFS_XINO_FNAME		"." AUFS_NAME ".xino"
 #define AUFS_XINO_DEFPATH	"/tmp/" AUFS_XINO_FNAME
 #define AUFS_WKQ_NAME		AUFS_NAME "d"
@@ -88,6 +93,15 @@ typedef int16_t aufs_bindex_t;
 
 #define AUFS_DIROPQ_NAME	AUFS_WH_PFX ".opq" /* whiteouted doubly */
 #define AUFS_WH_DIROPQ		AUFS_WH_PFX AUFS_DIROPQ_NAME
+
+#define AUFS_BASE_NAME		AUFS_WH_PFX AUFS_NAME
+#define AUFS_PLINKDIR_NAME	AUFS_WH_PFX "plnk"
+#define AUFS_ORPHDIR_NAME	AUFS_WH_PFX "orph"
+
+/* doubly whiteouted */
+#define AUFS_WH_BASE		AUFS_WH_PFX AUFS_BASE_NAME
+#define AUFS_WH_PLINKDIR	AUFS_WH_PFX AUFS_PLINKDIR_NAME
+#define AUFS_WH_ORPHDIR		AUFS_WH_PFX AUFS_ORPHDIR_NAME
 
 /* branch permissions and attributes */
 #define AUFS_BRPERM_RW		"rw"
@@ -121,6 +135,11 @@ static inline int au_br_writable(int brperm)
 static inline int au_br_whable(int brperm)
 {
 	return brperm & (AuBrPerm_RW | AuBrRAttr_WH);
+}
+
+static inline int au_br_wh_linkable(int brperm)
+{
+	return !(brperm & AuBrWAttr_NoLinkWH);
 }
 
 #endif /* __AUFS_TYPE_H__ */

@@ -280,6 +280,39 @@ static void call_do_whplink(void *args)
 	*a->errp = do_whplink(a->tgt, a->h_parent, a->h_dentry, a->br);
 }
 
+static int whplink(struct dentry *h_dentry, struct inode *inode,
+		   aufs_bindex_t bindex, struct au_branch *br)
+{
+	int err, wkq_err;
+	struct au_wbr *wbr;
+	struct dentry *h_parent;
+	struct inode *h_dir;
+	char a[PLINK_NAME_LEN];
+	struct qstr tgtname = QSTR_INIT(a, 0);
+
+	wbr = au_sbr(inode->i_sb, bindex)->br_wbr;
+	h_parent = wbr->wbr_plink;
+	h_dir = h_parent->d_inode;
+	tgtname.len = plink_name(a, sizeof(a), inode, bindex);
+
+	/* always superio. */
+	if (!uid_eq(current_fsuid(), GLOBAL_ROOT_UID)) {
+		struct do_whplink_args args = {
+			.errp		= &err,
+			.tgt		= &tgtname,
+			.h_parent	= h_parent,
+			.h_dentry	= h_dentry,
+			.br		= br
+		};
+		wkq_err = au_wkq_wait(call_do_whplink, &args);
+		if (unlikely(wkq_err))
+			err = wkq_err;
+	} else
+		err = do_whplink(&tgtname, h_parent, h_dentry, br);
+
+	return err;
+}
+
 /* free a single plink */
 static void do_put_plink(struct pseudo_link *plink, int do_del)
 {
@@ -348,8 +381,7 @@ void au_plink_append(struct inode *inode, aufs_bindex_t bindex,
 		if (cnt > AUFS_PLINK_WARN)
 			AuWarn1(msg ", %d\n", cnt);
 #undef msg
-		/* err = whplink(h_dentry, inode, bindex, au_sbr(sb, bindex)); re-commit later */
-		err = 0;
+		err = whplink(h_dentry, inode, bindex, au_sbr(sb, bindex));
 	} else {
 		do_put_plink(tmp, 0);
 		return;

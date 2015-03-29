@@ -48,12 +48,16 @@ out:
 
 static match_table_t brperm = {
 	{AuBrPerm_RO, AUFS_BRPERM_RO},
+	{AuBrPerm_RW, AUFS_BRPERM_RW},
 	{0, NULL}
 };
 
 static match_table_t brattr = {
 	/* ro/rr branch */
 	{AuBrRAttr_WH, AUFS_BRRATTR_WH},
+
+	/* rw branch */
+	{AuBrWAttr_NoLinkWH, AUFS_BRWATTR_NLWH},
 
 	{0, NULL}
 };
@@ -116,9 +120,10 @@ out:
 
 static int noinline_for_stack br_perm_val(char *perm)
 {
-	int val;
+	int val, bad, sz;
 	char *p;
 	substring_t args[MAX_OPT_ARGS];
+	au_br_perm_str_t attr;
 
 	p = strchr(perm, '+');
 	if (p)
@@ -135,6 +140,23 @@ static int noinline_for_stack br_perm_val(char *perm)
 		goto out;
 
 	val |= br_attr_val(p + 1, brattr, args);
+
+	bad = 0;
+	switch (val & AuBrPerm_Mask) {
+	case AuBrPerm_RO:
+		bad = val & AuBrWAttr_Mask;
+		val &= ~AuBrWAttr_Mask;
+		break;
+	case AuBrPerm_RW:
+		bad = val & AuBrRAttr_Mask;
+		val &= ~AuBrRAttr_Mask;
+		break;
+	}
+	if (unlikely(bad)) {
+		sz = au_do_optstr_br_attr(&attr, bad);
+		AuDebugOn(!sz);
+		pr_warn("ignored branch attribute %s\n", attr.a);
+	}
 
 out:
 	return val;

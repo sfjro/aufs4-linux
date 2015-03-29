@@ -141,6 +141,269 @@ int au_wh_unlink_dentry(struct inode *h_dir, struct path *h_path,
 
 /* ---------------------------------------------------------------------- */
 /*
+ * initialize/clean whiteout for a branch
+ */
+
+static void au_wh_clean(struct inode *h_dir, struct path *whpath,
+			const int isdir)
+{
+	int err;
+	struct inode *delegated;
+
+	if (!whpath->dentry->d_inode)
+		return;
+
+	if (isdir)
+		err = vfsub_rmdir(h_dir, whpath);
+	else {
+		delegated = NULL;
+		err = vfsub_unlink(h_dir, whpath, &delegated, /*force*/0);
+		if (unlikely(err == -EWOULDBLOCK)) {
+			pr_warn("cannot retry for NFSv4 delegation"
+				" for an internal unlink\n");
+			iput(delegated);
+		}
+	}
+	if (unlikely(err))
+		pr_warn("failed removing %pd (%d), ignored.\n",
+			whpath->dentry, err);
+}
+
+static int test_linkable(struct dentry *h_root)
+{
+	struct inode *h_dir = h_root->d_inode;
+
+	if (h_dir->i_op->link)
+		return 0;
+
+	pr_err("%pd (%s) doesn't support link(2), use noplink and rw+nolwh\n",
+	       h_root, au_sbtype(h_root->d_sb));
+	return -ENOSYS;
+}
+
+/* todo: should this mkdir be done in /sbin/mount.aufs helper? */
+static int au_whdir(struct inode *h_dir, struct path *path)
+{
+	int err;
+
+	err = -EEXIST;
+	if (!path->dentry->d_inode) {
+		int mode = S_IRWXU;
+
+		if (au_test_nfs(path->dentry->d_sb))
+			mode |= S_IXUGO;
+		err = vfsub_mkdir(h_dir, path, mode);
+	} else if (d_is_dir(path->dentry))
+		err = 0;
+	else
+		pr_err("unknown %pd exists\n", path->dentry);
+
+	return err;
+}
+
+struct au_wh_base {
+	const struct qstr *name;
+	struct dentry *dentry;
+};
+
+static void au_wh_init_ro(struct inode *h_dir, struct au_wh_base base[],
+			  struct path *h_path)
+{
+	h_path->dentry = base[AuBrWh_BASE].dentry;
+	au_wh_clean(h_dir, h_path, /*isdir*/0);
+	h_path->dentry = base[AuBrWh_PLINK].dentry;
+	au_wh_clean(h_dir, h_path, /*isdir*/1);
+	h_path->dentry = base[AuBrWh_ORPH].dentry;
+	au_wh_clean(h_dir, h_path, /*isdir*/1);
+}
+
+/*
+ * returns tri-state,
+ * minus: error, caller should print the message
+ * zero: succuess
+ * plus: error, caller should NOT print the message
+ */
+static int au_wh_init_rw_nolink(struct dentry *h_root, struct au_wbr *wbr,
+				int do_plink, struct au_wh_base base[],
+				struct path *h_path)
+{
+	int err;
+	struct inode *h_dir;
+
+	h_dir = h_root->d_inode;
+	h_path->dentry = base[AuBrWh_BASE].dentry;
+	au_wh_clean(h_dir, h_path, /*isdir*/0);
+	h_path->dentry = base[AuBrWh_PLINK].dentry;
+	if (do_plink) {
+		err = test_linkable(h_root);
+		if (unlikely(err)) {
+			err = 1;
+			goto out;
+		}
+
+		err = au_whdir(h_dir, h_path);
+		if (unlikely(err))
+			goto out;
+		wbr->wbr_plink = dget(base[AuBrWh_PLINK].dentry);
+	} else
+		au_wh_clean(h_dir, h_path, /*isdir*/1);
+	h_path->dentry = base[AuBrWh_ORPH].dentry;
+	err = au_whdir(h_dir, h_path);
+	if (unlikely(err))
+		goto out;
+	wbr->wbr_orph = dget(base[AuBrWh_ORPH].dentry);
+
+out:
+	return err;
+}
+
+/*
+ * for the moment, aufs supports the branch filesystem which does not support
+ * link(2). testing on FAT which does not support i_op->setattr() fully either,
+ * copyup failed. finally, such filesystem will not be used as the writable
+ * branch.
+ *
+ * returns tri-state, see above.
+ */
+static int au_wh_init_rw(struct dentry *h_root, struct au_wbr *wbr,
+			 int do_plink, struct au_wh_base base[],
+			 struct path *h_path)
+{
+	int err;
+	struct inode *h_dir;
+
+	WbrWhMustWriteLock(wbr);
+
+	err = test_linkable(h_root);
+	if (unlikely(err)) {
+		err = 1;
+		goto out;
+	}
+
+	/*
+	 * todo: should this create be done in /sbin/mount.aufs helper?
+	 */
+	err = -EEXIST;
+	h_dir = h_root->d_inode;
+	if (!base[AuBrWh_BASE].dentry->d_inode) {
+		h_path->dentry = base[AuBrWh_BASE].dentry;
+		err = vfsub_create(h_dir, h_path, WH_MASK, /*want_excl*/true);
+	} else if (d_is_reg(base[AuBrWh_BASE].dentry))
+		err = 0;
+	else
+		pr_err("unknown %pd2 exists\n", base[AuBrWh_BASE].dentry);
+	if (unlikely(err))
+		goto out;
+
+	h_path->dentry = base[AuBrWh_PLINK].dentry;
+	if (do_plink) {
+		err = au_whdir(h_dir, h_path);
+		if (unlikely(err))
+			goto out;
+		wbr->wbr_plink = dget(base[AuBrWh_PLINK].dentry);
+	} else
+		au_wh_clean(h_dir, h_path, /*isdir*/1);
+	wbr->wbr_whbase = dget(base[AuBrWh_BASE].dentry);
+
+	h_path->dentry = base[AuBrWh_ORPH].dentry;
+	err = au_whdir(h_dir, h_path);
+	if (unlikely(err))
+		goto out;
+	wbr->wbr_orph = dget(base[AuBrWh_ORPH].dentry);
+
+out:
+	return err;
+}
+
+/*
+ * initialize the whiteout base file/dir for @br.
+ */
+int au_wh_init(struct au_branch *br, struct super_block *sb)
+{
+	int err, i;
+	const unsigned char do_plink
+		= !!au_opt_test(au_mntflags(sb), PLINK);
+	struct inode *h_dir;
+	struct path path = br->br_path;
+	struct dentry *h_root = path.dentry;
+	struct au_wbr *wbr = br->br_wbr;
+	static const struct qstr base_name[] = {
+		[AuBrWh_BASE] = QSTR_INIT(AUFS_BASE_NAME,
+					  sizeof(AUFS_BASE_NAME) - 1),
+		[AuBrWh_PLINK] = QSTR_INIT(AUFS_PLINKDIR_NAME,
+					   sizeof(AUFS_PLINKDIR_NAME) - 1),
+		[AuBrWh_ORPH] = QSTR_INIT(AUFS_ORPHDIR_NAME,
+					  sizeof(AUFS_ORPHDIR_NAME) - 1)
+	};
+	struct au_wh_base base[] = {
+		[AuBrWh_BASE] = {
+			.name	= base_name + AuBrWh_BASE,
+			.dentry	= NULL
+		},
+		[AuBrWh_PLINK] = {
+			.name	= base_name + AuBrWh_PLINK,
+			.dentry	= NULL
+		},
+		[AuBrWh_ORPH] = {
+			.name	= base_name + AuBrWh_ORPH,
+			.dentry	= NULL
+		}
+	};
+
+	if (wbr)
+		WbrWhMustWriteLock(wbr);
+
+	for (i = 0; i < AuBrWh_Last; i++) {
+		/* doubly whiteouted */
+		struct dentry *d;
+
+		d = au_wh_lkup(h_root, (void *)base[i].name, br);
+		err = PTR_ERR(d);
+		if (IS_ERR(d))
+			goto out;
+
+		base[i].dentry = d;
+		AuDebugOn(wbr
+			  && wbr->wbr_wh[i]
+			  && wbr->wbr_wh[i] != base[i].dentry);
+	}
+
+	if (wbr)
+		for (i = 0; i < AuBrWh_Last; i++) {
+			dput(wbr->wbr_wh[i]);
+			wbr->wbr_wh[i] = NULL;
+		}
+
+	err = 0;
+	if (!au_br_writable(br->br_perm)) {
+		h_dir = h_root->d_inode;
+		au_wh_init_ro(h_dir, base, &path);
+	} else if (!au_br_wh_linkable(br->br_perm)) {
+		err = au_wh_init_rw_nolink(h_root, wbr, do_plink, base, &path);
+		if (err > 0)
+			goto out;
+		else if (err)
+			goto out_err;
+	} else {
+		err = au_wh_init_rw(h_root, wbr, do_plink, base, &path);
+		if (err > 0)
+			goto out;
+		else if (err)
+			goto out_err;
+	}
+	goto out; /* success */
+
+out_err:
+	pr_err("an error(%d) on the writable branch %pd(%s)\n",
+	       err, h_root, au_sbtype(h_root->d_sb));
+out:
+	for (i = 0; i < AuBrWh_Last; i++)
+		dput(base[i].dentry);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+/*
  * whiteouts are all hard-linked usually.
  * when its link count reaches a ceiling, we create a new whiteout base
  * asynchronously.
@@ -203,10 +466,8 @@ static void reinit_br_wh(void *arg)
 	}
 	dput(wbr->wbr_whbase);
 	wbr->wbr_whbase = NULL;
-#if 0 /* re-commit later */
 	if (!err)
 		err = au_wh_init(a->br, a->sb);
-#endif
 	wbr_wh_write_unlock(wbr);
 	mutex_unlock(&hdir->hi_inode->i_mutex);
 	di_read_unlock(a->sb->s_root, AuLock_IR);

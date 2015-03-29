@@ -130,6 +130,50 @@ out:
 	return err;
 }
 
+int vfsub_mkdir(struct inode *dir, struct path *path, int mode)
+{
+	int err;
+	struct dentry *d;
+
+	IMustLock(dir);
+
+	d = path->dentry;
+	path->dentry = d->d_parent;
+	err = security_path_mkdir(path, d, mode);
+	path->dentry = d;
+	if (unlikely(err))
+		goto out;
+
+	lockdep_off();
+	err = vfs_mkdir(dir, path->dentry, mode);
+	lockdep_on();
+
+out:
+	return err;
+}
+
+int vfsub_rmdir(struct inode *dir, struct path *path)
+{
+	int err;
+	struct dentry *d;
+
+	IMustLock(dir);
+
+	d = path->dentry;
+	path->dentry = d->d_parent;
+	err = security_path_rmdir(path, d);
+	path->dentry = d;
+	if (unlikely(err))
+		goto out;
+
+	lockdep_off();
+	err = vfs_rmdir(dir, path->dentry);
+	lockdep_on();
+
+out:
+	return err;
+}
+
 /* ---------------------------------------------------------------------- */
 
 struct unlink_args {

@@ -20,6 +20,7 @@
  */
 
 #include <linux/file.h>
+#include <linux/statfs.h>
 #include "aufs.h"
 
 /*
@@ -27,16 +28,28 @@
  */
 static void au_br_do_free(struct au_branch *br)
 {
+	int i;
+	struct au_wbr *wbr;
+
 	if (br->br_xino.xi_file)
 		fput(br->br_xino.xi_file);
 	mutex_destroy(&br->br_xino.xi_nondir_mtx);
 
 	AuDebugOn(atomic_read(&br->br_count));
 
+	wbr = br->br_wbr;
+	if (wbr) {
+		for (i = 0; i < AuBrWh_Last; i++)
+			dput(wbr->wbr_wh[i]);
+		AuDebugOn(atomic_read(&wbr->wbr_wh_running));
+		AuRwDestroy(&wbr->wbr_wh_rwsem);
+	}
+
 	/* recursive lock, s_umount of branch's */
 	lockdep_off();
 	path_put(&br->br_path);
 	lockdep_on();
+	kfree(wbr);
 	kfree(br);
 }
 
@@ -104,6 +117,15 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 	if (unlikely(!add_branch))
 		goto out;
 
+	add_branch->br_wbr = NULL;
+	if (au_br_writable(perm)) {
+		/* may be freed separately at changing the branch permission */
+		add_branch->br_wbr = kmalloc(sizeof(*add_branch->br_wbr),
+					     GFP_NOFS);
+		if (unlikely(!add_branch->br_wbr))
+			goto out_br;
+	}
+
 	err = au_sbr_realloc(au_sbi(sb), new_nbranch);
 	if (!err)
 		err = au_di_realloc(au_di(root), new_nbranch);
@@ -112,9 +134,29 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 	if (!err)
 		return add_branch; /* success */
 
+	kfree(add_branch->br_wbr);
+out_br:
 	kfree(add_branch);
 out:
 	return ERR_PTR(err);
+}
+
+/*
+ * test if the branch permission is legal or not.
+ */
+static int test_br(struct inode *inode, int brperm, char *path)
+{
+	int err;
+
+	err = (au_br_writable(brperm) && IS_RDONLY(inode));
+	if (!err)
+		goto out;
+
+	err = -EINVAL;
+	pr_err("write permission for readonly mount or inode, %s\n", path);
+
+out:
+	return err;
 }
 
 /*
@@ -177,6 +219,10 @@ static int test_add(struct super_block *sb, struct au_opt_add *add)
 		goto out;
 	}
 
+	err = test_br(add->path.dentry->d_inode, add->perm, add->pathname);
+	if (unlikely(err))
+		goto out;
+
 	if (bend < 0)
 		return 0; /* success */
 
@@ -189,6 +235,89 @@ static int test_add(struct super_block *sb, struct au_opt_add *add)
 		}
 
 	err = 0;
+
+out:
+	return err;
+}
+
+/*
+ * initialize or clean the whiteouts for an adding branch
+ */
+static int au_br_init_wh(struct super_block *sb, struct au_branch *br,
+			 int new_perm)
+{
+	int err, old_perm;
+	aufs_bindex_t bindex;
+	struct mutex *h_mtx;
+	struct au_wbr *wbr;
+	struct au_hinode *hdir;
+
+	err = vfsub_mnt_want_write(au_br_mnt(br));
+	if (unlikely(err))
+		goto out;
+
+	wbr = br->br_wbr;
+	old_perm = br->br_perm;
+	br->br_perm = new_perm;
+	hdir = NULL;
+	h_mtx = NULL;
+	bindex = au_br_index(sb, br->br_id);
+	if (0 <= bindex) {
+		hdir = au_hi(sb->s_root->d_inode, bindex);
+		mutex_lock_nested(&hdir->hi_inode->i_mutex, AuLsc_I_PARENT);
+	} else {
+		h_mtx = &au_br_dentry(br)->d_inode->i_mutex;
+		mutex_lock_nested(h_mtx, AuLsc_I_PARENT);
+	}
+	if (!wbr)
+		err = au_wh_init(br, sb);
+	else {
+		wbr_wh_write_lock(wbr);
+		err = au_wh_init(br, sb);
+		wbr_wh_write_unlock(wbr);
+	}
+	if (hdir)
+		mutex_unlock(&hdir->hi_inode->i_mutex);
+	else
+		mutex_unlock(h_mtx);
+	vfsub_mnt_drop_write(au_br_mnt(br));
+	br->br_perm = old_perm;
+
+	if (!err && wbr && !au_br_writable(new_perm)) {
+		kfree(wbr);
+		br->br_wbr = NULL;
+	}
+
+out:
+	return err;
+}
+
+static int au_wbr_init(struct au_branch *br, struct super_block *sb,
+		       int perm)
+{
+	int err;
+	struct kstatfs kst;
+	struct au_wbr *wbr;
+
+	wbr = br->br_wbr;
+	au_rw_init(&wbr->wbr_wh_rwsem);
+	memset(wbr->wbr_wh, 0, sizeof(wbr->wbr_wh));
+	atomic_set(&wbr->wbr_wh_running, 0);
+
+	/*
+	 * a limit for rmdir/rename a dir
+	 * cf. AUFS_MAX_NAMELEN in include/uapi/linux/aufs_type.h
+	 */
+	err = vfs_statfs(&br->br_path, &kst);
+	if (unlikely(err))
+		goto out;
+	err = -EINVAL;
+	if (kst.f_namelen >= NAME_MAX)
+		err = au_br_init_wh(sb, br, perm);
+	else
+		pr_err("%pd(%s), unsupported namelen %ld\n",
+		       au_br_dentry(br),
+		       au_sbtype(au_br_dentry(br)->d_sb), kst.f_namelen);
 
 out:
 	return err;
@@ -208,6 +337,12 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	atomic_set(&br->br_count, 0);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
+
+	if (au_br_writable(add->perm)) {
+		err = au_wbr_init(br, sb, add->perm);
+		if (unlikely(err))
+			goto out_err;
+	}
 
 	if (au_opt_test(au_mntflags(sb), XINO)) {
 		err = au_xino_br(sb, br, add->path.dentry->d_inode->i_ino,
@@ -338,7 +473,7 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add)
 	 * once detached from aufs.
 	 */
 	if (au_xino_brid(sb) < 0
-	    /* && au_br_writable(add_branch->br_perm) re-commit later */
+	    && au_br_writable(add_branch->br_perm)
 	    && !au_test_fs_bad_xino(h_dentry->d_sb)
 	    && add_branch->br_xino.xi_file
 	    && add_branch->br_xino.xi_file->f_path.dentry->d_parent == h_dentry)
