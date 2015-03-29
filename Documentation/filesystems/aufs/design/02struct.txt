@@ -142,3 +142,27 @@ whiteout base and etc. This is unrelated to a privilege.
 Most of aufs operation tries acquiring a rw_semaphore for aufs
 superblock at the beginning, at the same time waits for the completion
 of all queued asynchronous tasks.
+
+
+Whiteout
+----------------------------------------------------------------------
+The whiteout in aufs is very similar to Unionfs's. That is represented
+by its filename. UnionMount takes an approach of a file mode, but I am
+afraid several utilities (find(1) or something) will have to support it.
+
+Basically the whiteout represents "logical deletion" which stops aufs to
+lookup further, but also it represents "dir is opaque" which also stop
+further lookup.
+
+In aufs, rmdir(2) and rename(2) for dir uses whiteout alternatively.
+In order to make several functions in a single systemcall to be
+revertible, aufs adopts an approach to rename a directory to a temporary
+unique whiteouted name.
+For example, in rename(2) dir where the target dir already existed, aufs
+renames the target dir to a temporary unique whiteouted name before the
+actual rename on a branch, and then handles other actions (make it opaque,
+update the attributes, etc). If an error happens in these actions, aufs
+simply renames the whiteouted name back and returns an error. If all are
+succeeded, aufs registers a function to remove the whiteouted unique
+temporary name completely and asynchronously to the system global
+workqueue.

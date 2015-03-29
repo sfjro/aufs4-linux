@@ -73,6 +73,9 @@ typedef int16_t aufs_bindex_t;
 #define AUFS_ROOT_INO		2
 #define AUFS_FIRST_INO		11
 
+#define AUFS_WH_PFX		".wh."
+#define AUFS_WH_PFX_LEN		((int)sizeof(AUFS_WH_PFX) - 1)
+#define AUFS_WH_TMP_LEN		4
 #define AUFS_XINO_FNAME		"." AUFS_NAME ".xino"
 #define AUFS_XINO_DEFPATH	"/tmp/" AUFS_XINO_FNAME
 #define AUFS_WKQ_NAME		AUFS_NAME "d"

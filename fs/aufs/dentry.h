@@ -36,7 +36,7 @@ struct au_dinfo {
 	atomic_t		di_generation;
 
 	struct au_rwsem		di_rwsem;
-	aufs_bindex_t		di_bstart, di_bend;
+	aufs_bindex_t		di_bstart, di_bend, di_bwh;
 	struct au_hdentry	*di_hdentry;
 } ____cacheline_aligned_in_smp;
 
@@ -150,6 +150,12 @@ static inline aufs_bindex_t au_dbend(struct dentry *dentry)
 	return au_di(dentry)->di_bend;
 }
 
+static inline aufs_bindex_t au_dbwh(struct dentry *dentry)
+{
+	DiMustAnyLock(dentry);
+	return au_di(dentry)->di_bwh;
+}
+
 /* todo: hard/soft set? */
 static inline void au_set_dbstart(struct dentry *dentry, aufs_bindex_t bindex)
 {
@@ -161,6 +167,13 @@ static inline void au_set_dbend(struct dentry *dentry, aufs_bindex_t bindex)
 {
 	DiMustWriteLock(dentry);
 	au_di(dentry)->di_bend = bindex;
+}
+
+static inline void au_set_dbwh(struct dentry *dentry, aufs_bindex_t bindex)
+{
+	DiMustWriteLock(dentry);
+	/* dbwh can be outside of bstart - bend range */
+	au_di(dentry)->di_bwh = bindex;
 }
 
 #endif /* __KERNEL__ */

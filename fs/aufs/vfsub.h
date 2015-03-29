@@ -54,6 +54,12 @@ struct file *vfsub_filp_open(const char *path, int oflags, int mode);
 struct dentry *vfsub_lookup_one_len(const char *name, struct dentry *parent,
 				    int len);
 
+static inline struct dentry *vfsub_lkup_one(struct qstr *name,
+					    struct dentry *parent)
+{
+	return vfsub_lookup_one_len(name->name, parent, name->len);
+}
+
 /* ---------------------------------------------------------------------- */
 
 static inline loff_t vfsub_f_size_read(struct file *file)

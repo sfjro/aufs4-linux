@@ -16,38 +16,27 @@
  */
 
 /*
- * all header files
+ * whiteout for logical deletion and opaque directory
  */
 
-#ifndef __AUFS_H__
-#define __AUFS_H__
+#ifndef __AUFS_WHOUT_H__
+#define __AUFS_WHOUT_H__
 
 #ifdef __KERNEL__
 
-#define AuStub(type, name, body, ...) \
-	static inline type name(__VA_ARGS__) { body; }
+struct qstr;
+struct path;
+struct super_block;
 
-#define AuStubVoid(name, ...) \
-	AuStub(void, name, , __VA_ARGS__)
-#define AuStubInt0(name, ...) \
-	AuStub(int, name, return 0, __VA_ARGS__)
+/* whout.c */
+int au_wh_name_alloc(struct qstr *wh, const struct qstr *name);
+int au_wh_test(struct dentry *h_parent, struct qstr *wh_name, int try_sio);
 
-#include "debug.h"
-
-#include "branch.h"
-#include "cpup.h"
-#include "dcsub.h"
-#include "dentry.h"
-#include "fstype.h"
-#include "inode.h"
-#include "module.h"
-#include "opts.h"
-#include "rwsem.h"
-#include "super.h"
-#include "sysaufs.h"
-#include "vfsub.h"
-#include "whout.h"
-#include "wkq.h"
+struct au_branch;
+struct dentry *au_wh_lkup(struct dentry *h_parent, struct qstr *base_name,
+			  struct au_branch *br);
+struct dentry *au_wh_create(struct dentry *dentry, aufs_bindex_t bindex,
+			    struct dentry *h_parent);
 
 #endif /* __KERNEL__ */
-#endif /* __AUFS_H__ */
+#endif /* __AUFS_WHOUT_H__ */
