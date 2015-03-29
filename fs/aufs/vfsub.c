@@ -76,6 +76,12 @@ out:
 	return path.dentry;
 }
 
+void vfsub_call_lkup_one(void *args)
+{
+	struct vfsub_lkup_one_args *a = args;
+	*a->errp = vfsub_lkup_one(a->name, a->parent);
+}
+
 /* ---------------------------------------------------------------------- */
 
 int vfsub_create(struct inode *dir, struct path *path, int mode, bool want_excl)

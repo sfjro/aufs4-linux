@@ -21,6 +21,68 @@
 
 #include "aufs.h"
 
+struct dentry *au_sio_lkup_one(struct qstr *name, struct dentry *parent)
+{
+	struct dentry *dentry;
+	int wkq_err;
+
+	if (!au_test_h_perm_sio(parent->d_inode, MAY_EXEC))
+		dentry = vfsub_lkup_one(name, parent);
+	else {
+		struct vfsub_lkup_one_args args = {
+			.errp	= &dentry,
+			.name	= name,
+			.parent	= parent
+		};
+
+		wkq_err = au_wkq_wait(vfsub_call_lkup_one, &args);
+		if (unlikely(wkq_err))
+			dentry = ERR_PTR(wkq_err);
+	}
+
+	return dentry;
+}
+
+/*
+ * lookup @dentry on @bindex which should be negative.
+ */
+int au_lkup_neg(struct dentry *dentry, aufs_bindex_t bindex, int wh)
+{
+	int err;
+	struct dentry *parent, *h_parent, *h_dentry;
+	struct au_branch *br;
+
+	parent = dget_parent(dentry);
+	h_parent = au_h_dptr(parent, bindex);
+	br = au_sbr(dentry->d_sb, bindex);
+	if (wh)
+		h_dentry = au_whtmp_lkup(h_parent, br, &dentry->d_name);
+	else
+		h_dentry = au_sio_lkup_one(&dentry->d_name, h_parent);
+	err = PTR_ERR(h_dentry);
+	if (IS_ERR(h_dentry))
+		goto out;
+	if (unlikely(h_dentry->d_inode)) {
+		err = -EIO;
+		AuIOErr("%pd should be negative on b%d.\n", h_dentry, bindex);
+		dput(h_dentry);
+		goto out;
+	}
+
+	err = 0;
+	if (bindex < au_dbstart(dentry))
+		au_set_dbstart(dentry, bindex);
+	if (au_dbend(dentry) < bindex)
+		au_set_dbend(dentry, bindex);
+	au_set_h_dptr(dentry, bindex, h_dentry);
+
+out:
+	dput(parent);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
 /* subset of struct inode */
 struct au_iattr {
 	unsigned long		i_ino;

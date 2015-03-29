@@ -44,8 +44,11 @@ struct au_dinfo {
 
 /* dentry.c */
 struct au_branch;
+struct dentry *au_sio_lkup_one(struct qstr *name, struct dentry *parent);
 int au_h_verify(struct dentry *h_dentry, unsigned int udba, struct inode *h_dir,
 		struct dentry *h_parent, struct au_branch *br);
+
+int au_lkup_neg(struct dentry *dentry, aufs_bindex_t bindex, int wh);
 
 /* dinfo.c */
 void au_di_init_once(void *_di);

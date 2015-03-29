@@ -31,9 +31,11 @@ struct super_block;
 /* whout.c */
 int au_wh_name_alloc(struct qstr *wh, const struct qstr *name);
 int au_wh_test(struct dentry *h_parent, struct qstr *wh_name, int try_sio);
+struct au_branch;
+struct dentry *au_whtmp_lkup(struct dentry *h_parent, struct au_branch *br,
+			     struct qstr *prefix);
 int au_wh_unlink_dentry(struct inode *h_dir, struct path *h_path,
 			struct dentry *dentry);
-struct au_branch;
 int au_wh_init(struct au_branch *br, struct super_block *sb);
 
 /* diropq flags */

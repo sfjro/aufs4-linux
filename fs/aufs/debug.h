@@ -86,6 +86,9 @@ AuStubInt0(au_debug_test, void)
 		AuDbg("err %ld\n", PTR_ERR(p)); \
 } while (0)
 
+/* dirty macros for debug print, use with "%.*s" and caution */
+#define AuLNPair(qstr)		(qstr)->len, (qstr)->name
+
 /* ---------------------------------------------------------------------- */
 
 struct dentry;
