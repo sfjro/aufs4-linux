@@ -496,7 +496,7 @@ static void reinit_br_wh(void *arg)
 
 	mutex_lock_nested(&hdir->hi_inode->i_mutex, AuLsc_I_PARENT);
 	wbr_wh_write_lock(wbr);
-	err = au_h_verify(wbr->wbr_whbase, /*udba dummy*/0, hdir->hi_inode,
+	err = au_h_verify(wbr->wbr_whbase, au_opt_udba(a->sb), hdir->hi_inode,
 			  h_root, a->br);
 	if (!err) {
 		h_path.dentry = wbr->wbr_whbase;

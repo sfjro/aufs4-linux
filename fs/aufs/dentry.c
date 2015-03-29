@@ -168,10 +168,11 @@ int au_h_verify(struct dentry *h_dentry, unsigned int udba, struct inode *h_dir,
 	int err;
 
 	err = 0;
-	if (!au_test_fs_remote(h_dentry->d_sb)) {
+	if (udba == AuOpt_UDBA_REVAL
+	    && !au_test_fs_remote(h_dentry->d_sb)) {
 		IMustLock(h_dir);
 		err = (h_dentry->d_parent->d_inode != h_dir);
-	} else
+	} else if (udba != AuOpt_UDBA_NONE)
 		err = au_h_verify_dentry(h_dentry, h_parent, br);
 
 	return err;

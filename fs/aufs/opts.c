@@ -33,6 +33,7 @@ enum {
 	Opt_rdblk_def, Opt_rdhash_def,
 	Opt_xino, Opt_noxino,
 	Opt_plink, Opt_noplink, Opt_list_plink,
+	Opt_udba,
 	Opt_wbr_copyup, Opt_wbr_create,
 	Opt_tail, Opt_ignore, Opt_ignore_silent, Opt_err
 };
@@ -55,6 +56,8 @@ static match_table_t options = {
 #ifdef CONFIG_AUFS_DEBUG
 	{Opt_list_plink, "list_plink"},
 #endif
+
+	{Opt_udba, "udba=%s"},
 
 	{Opt_rdcache, "rdcache=%d"},
 	{Opt_rdblk, "rdblk=%d"},
@@ -258,6 +261,26 @@ void au_optstr_br_perm(au_br_perm_str_t *str, int perm)
 
 /* ---------------------------------------------------------------------- */
 
+static match_table_t udbalevel = {
+	{AuOpt_UDBA_REVAL, "reval"},
+	{AuOpt_UDBA_NONE, "none"},
+	{-1, NULL}
+};
+
+static int noinline_for_stack udba_val(char *str)
+{
+	substring_t args[MAX_OPT_ARGS];
+
+	return match_token(str, udbalevel, args);
+}
+
+const char *au_optstr_udba(int udba)
+{
+	return au_parser_pattern(udba, udbalevel);
+}
+
+/* ---------------------------------------------------------------------- */
+
 static match_table_t au_wbr_create_policy = {
 	{AuWbrCreate_TDP, "tdp"},
 	{AuWbrCreate_TDP, "top-down-parent"},
@@ -454,6 +477,10 @@ static void dump_opts(struct au_opts *opts)
 			break;
 		case Opt_list_plink:
 			AuLabel(list_plink);
+			break;
+		case Opt_udba:
+			AuDbg("udba %d, %s\n",
+				  opt->udba, au_optstr_udba(opt->udba));
 			break;
 		case Opt_wbr_create:
 			u.create = &opt->wbr_create;
@@ -684,6 +711,15 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 			opt->type = token;
 			break;
 
+		case Opt_udba:
+			opt->udba = udba_val(a->args[0].from);
+			if (opt->udba >= 0) {
+				err = 0;
+				opt->type = token;
+			} else
+				pr_err("wrong value, %s\n", opt_str);
+			break;
+
 		case Opt_wbr_create:
 			u.create = &opt->wbr_create;
 			u.create->wbr_create
@@ -791,6 +827,12 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 	err = 1; /* handled */
 	sbinfo = au_sbi(sb);
 	switch (opt->type) {
+	case Opt_udba:
+		sbinfo->si_mntflags &= ~AuOptMask_UDBA;
+		sbinfo->si_mntflags |= opt->udba;
+		opts->given_udba |= opt->udba;
+		break;
+
 	case Opt_plink:
 		au_opt_set(sbinfo->si_mntflags, PLINK);
 		break;
@@ -919,6 +961,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 	SiMustAnyLock(sb);
 
 	sbinfo = au_sbi(sb);
+	AuDebugOn(!(sbinfo->si_mntflags & AuOptMask_UDBA));
 
 	if (!(sb_flags & MS_RDONLY)) {
 		if (unlikely(!au_br_writable(au_sbr_perm(sb, 0))))
@@ -1010,10 +1053,11 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 	else if (unlikely(err < 0))
 		goto out;
 
-	/* disable xino temporary */
+	/* disable xino and udba temporary */
 	sbinfo = au_sbi(sb);
 	tmp = sbinfo->si_mntflags;
 	au_opt_clr(sbinfo->si_mntflags, XINO);
+	au_opt_set_udba(sbinfo->si_mntflags, UDBA_REVAL);
 
 	opt = opts->opt;
 	while (err >= 0 && opt->type != Opt_tail)
@@ -1055,8 +1099,19 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 			goto out;
 	}
 
+	/* restore udba */
+	tmp &= AuOptMask_UDBA;
+	sbinfo->si_mntflags &= ~AuOptMask_UDBA;
+	sbinfo->si_mntflags |= tmp;
 	bend = au_sbend(sb);
 
 out:
 	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+unsigned int au_opt_udba(struct super_block *sb)
+{
+	return au_mntflags(sb) & AuOptMask_UDBA;
 }

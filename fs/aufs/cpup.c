@@ -569,7 +569,8 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 	}
 
 	mnt_flags = au_mntflags(sb);
-	if (!isdir
+	if (!au_opt_test(mnt_flags, UDBA_NONE)
+	    && !isdir
 	    && au_opt_test(mnt_flags, XINO)
 	    && (h_inode->i_nlink == 1
 		|| (h_inode->i_state & I_LINKABLE))
@@ -1162,7 +1163,7 @@ int au_cp_dirs(struct dentry *dentry, aufs_bindex_t bdst,
 		goto out;
 
 	au_pin_init(&pin, dentry, bdst, AuLsc_DI_PARENT2, AuLsc_I_PARENT2,
-		    /*udba dummy*/0, AuPin_MNT_WRITE);
+		    au_opt_udba(dentry->d_sb), AuPin_MNT_WRITE);
 
 	/* do not use au_dpage */
 	real_parent = parent;
