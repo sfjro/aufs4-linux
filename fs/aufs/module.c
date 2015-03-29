@@ -126,6 +126,7 @@ static int __init aufs_init(void)
 
 	au_sbilist_init();
 	sysaufs_brs_init();
+	au_debug_init();
 	au_dy_init();
 	err = sysaufs_init();
 	if (unlikely(err))

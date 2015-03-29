@@ -127,6 +127,8 @@ void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line);
 void au_dbg_verify_gen(struct dentry *parent, unsigned int sigen);
 void au_dbg_verify_kthread(void);
 
+int __init au_debug_init(void);
+
 #define AuDbgWhlist(w) do { \
 	mutex_lock(&au_dbg_mtx); \
 	AuDbg(#w "\n"); \
@@ -185,6 +187,7 @@ void au_dbg_verify_kthread(void);
 AuStubVoid(au_dbg_verify_dinode, struct dentry *dentry)
 AuStubVoid(au_dbg_verify_gen, struct dentry *parent, unsigned int sigen)
 AuStubVoid(au_dbg_verify_kthread, void)
+AuStubInt0(__init au_debug_init, void)
 
 #define AuDbgWhlist(w)		do {} while (0)
 #define AuDbgVdir(v)		do {} while (0)

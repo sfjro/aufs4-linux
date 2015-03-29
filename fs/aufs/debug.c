@@ -409,3 +409,23 @@ void au_dbg_verify_kthread(void)
 		/* WARN_ON(1); */
 	}
 }
+
+/* ---------------------------------------------------------------------- */
+
+int __init au_debug_init(void)
+{
+	aufs_bindex_t bindex;
+	struct au_vdir_destr destr;
+
+	bindex = -1;
+	AuDebugOn(bindex >= 0);
+
+	destr.len = -1;
+	AuDebugOn(destr.len < NAME_MAX);
+
+#ifdef CONFIG_4KSTACKS
+	pr_warn("CONFIG_4KSTACKS is defined.\n");
+#endif
+
+	return 0;
+}
