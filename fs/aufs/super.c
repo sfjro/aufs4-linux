@@ -271,6 +271,8 @@ static int aufs_show_options(struct seq_file *m, struct dentry *dentry)
 
 	au_fhsm_show(m, sbinfo);
 
+	AuBool(SUM, sum);
+	/* AuBool(SUM_W, wsum); */
 	AuBool(WARN_PERM, warn_perm);
 	AuBool(VERBOSE, verbose);
 
@@ -290,6 +292,98 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+/* sum mode which returns the summation for statfs(2) */
+
+static u64 au_add_till_max(u64 a, u64 b)
+{
+	u64 old;
+
+	old = a;
+	a += b;
+	if (old <= a)
+		return a;
+	return ULLONG_MAX;
+}
+
+static u64 au_mul_till_max(u64 a, long mul)
+{
+	u64 old;
+
+	old = a;
+	a *= mul;
+	if (old <= a)
+		return a;
+	return ULLONG_MAX;
+}
+
+static int au_statfs_sum(struct super_block *sb, struct kstatfs *buf)
+{
+	int err;
+	long bsize, factor;
+	u64 blocks, bfree, bavail, files, ffree;
+	aufs_bindex_t bend, bindex, i;
+	unsigned char shared;
+	struct path h_path;
+	struct super_block *h_sb;
+
+	err = 0;
+	bsize = LONG_MAX;
+	files = 0;
+	ffree = 0;
+	blocks = 0;
+	bfree = 0;
+	bavail = 0;
+	bend = au_sbend(sb);
+	for (bindex = 0; bindex <= bend; bindex++) {
+		h_path.mnt = au_sbr_mnt(sb, bindex);
+		h_sb = h_path.mnt->mnt_sb;
+		shared = 0;
+		for (i = 0; !shared && i < bindex; i++)
+			shared = (au_sbr_sb(sb, i) == h_sb);
+		if (shared)
+			continue;
+
+		/* sb->s_root for NFS is unreliable */
+		h_path.dentry = h_path.mnt->mnt_root;
+		err = vfs_statfs(&h_path, buf);
+		if (unlikely(err))
+			goto out;
+
+		if (bsize > buf->f_bsize) {
+			/*
+			 * we will reduce bsize, so we have to expand blocks
+			 * etc. to match them again
+			 */
+			factor = (bsize / buf->f_bsize);
+			blocks = au_mul_till_max(blocks, factor);
+			bfree = au_mul_till_max(bfree, factor);
+			bavail = au_mul_till_max(bavail, factor);
+			bsize = buf->f_bsize;
+		}
+
+		factor = (buf->f_bsize / bsize);
+		blocks = au_add_till_max(blocks,
+				au_mul_till_max(buf->f_blocks, factor));
+		bfree = au_add_till_max(bfree,
+				au_mul_till_max(buf->f_bfree, factor));
+		bavail = au_add_till_max(bavail,
+				au_mul_till_max(buf->f_bavail, factor));
+		files = au_add_till_max(files, buf->f_files);
+		ffree = au_add_till_max(ffree, buf->f_ffree);
+	}
+
+	buf->f_bsize = bsize;
+	buf->f_blocks = blocks;
+	buf->f_bfree = bfree;
+	buf->f_bavail = bavail;
+	buf->f_files = files;
+	buf->f_ffree = ffree;
+	buf->f_frsize = 0;
+
+out:
+	return err;
+}
+
 static int aufs_statfs(struct dentry *dentry, struct kstatfs *buf)
 {
 	int err;
@@ -299,10 +393,13 @@ static int aufs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	/* lock free root dinfo */
 	sb = dentry->d_sb;
 	si_noflush_read_lock(sb);
-	/* sb->s_root for NFS is unreliable */
-	h_path.mnt = au_sbr_mnt(sb, 0);
-	h_path.dentry = h_path.mnt->mnt_root;
-	err = vfs_statfs(&h_path, buf);
+	if (!au_opt_test(au_mntflags(sb), SUM)) {
+		/* sb->s_root for NFS is unreliable */
+		h_path.mnt = au_sbr_mnt(sb, 0);
+		h_path.dentry = h_path.mnt->mnt_root;
+		err = vfs_statfs(&h_path, buf);
+	} else
+		err = au_statfs_sum(sb, buf);
 	si_read_unlock(sb);
 
 	if (!err) {

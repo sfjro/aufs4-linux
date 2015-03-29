@@ -39,6 +39,8 @@ struct super_block;
 #define AuOpt_UDBA_REVAL	(1 << 3)
 #define AuOpt_UDBA_HNOTIFY	(1 << 4)
 #define AuOpt_PLINK		(1 << 6)	/* pseudo-link */
+#define AuOpt_SUM		(1 << 10)	/* summation for statfs(2) */
+#define AuOpt_SUM_W		(1 << 11)	/* unimplemented */
 #define AuOpt_WARN_PERM		(1 << 12)	/* warn when add-branch */
 #define AuOpt_VERBOSE		(1 << 13)	/* busy inode when del-branch */
 #define AuOpt_DIO		(1 << 14)	/* direct io */
