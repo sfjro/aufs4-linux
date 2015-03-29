@@ -19,6 +19,7 @@
  * mount and super_block operations
  */
 
+#include <linux/mm.h>
 #include <linux/seq_file.h>
 #include "aufs.h"
 
@@ -217,6 +218,96 @@ static void aufs_put_super(struct super_block *sb)
 		return;
 
 	kobject_put(&sbinfo->si_kobj);
+}
+
+/* ---------------------------------------------------------------------- */
+
+void au_array_free(void *array)
+{
+	if (array) {
+		if (!is_vmalloc_addr(array))
+			kfree(array);
+		else
+			vfree(array);
+	}
+}
+
+void *au_array_alloc(unsigned long long *hint, au_arraycb_t cb, void *arg)
+{
+	void *array;
+	unsigned long long n, sz;
+
+	array = NULL;
+	n = 0;
+	if (!*hint)
+		goto out;
+
+	if (*hint > ULLONG_MAX / sizeof(array)) {
+		array = ERR_PTR(-EMFILE);
+		pr_err("hint %llu\n", *hint);
+		goto out;
+	}
+
+	sz = sizeof(array) * *hint;
+	array = kzalloc(sz, GFP_NOFS);
+	if (unlikely(!array))
+		array = vzalloc(sz);
+	if (unlikely(!array)) {
+		array = ERR_PTR(-ENOMEM);
+		goto out;
+	}
+
+	n = cb(array, *hint, arg);
+	AuDebugOn(n > *hint);
+
+out:
+	*hint = n;
+	return array;
+}
+
+static unsigned long long au_iarray_cb(void *a,
+				       unsigned long long max __maybe_unused,
+				       void *arg)
+{
+	unsigned long long n;
+	struct inode **p, *inode;
+	struct list_head *head;
+
+	n = 0;
+	p = a;
+	head = arg;
+	spin_lock(&inode_sb_list_lock);
+	list_for_each_entry(inode, head, i_sb_list) {
+		if (!is_bad_inode(inode)
+		    && au_ii(inode)->ii_bstart >= 0) {
+			spin_lock(&inode->i_lock);
+			if (atomic_read(&inode->i_count)) {
+				au_igrab(inode);
+				*p++ = inode;
+				n++;
+				AuDebugOn(n > max);
+			}
+			spin_unlock(&inode->i_lock);
+		}
+	}
+	spin_unlock(&inode_sb_list_lock);
+
+	return n;
+}
+
+struct inode **au_iarray_alloc(struct super_block *sb, unsigned long long *max)
+{
+	*max = atomic_long_read(&au_sbi(sb)->si_ninodes);
+	return au_array_alloc(max, au_iarray_cb, &sb->s_inodes);
+}
+
+void au_iarray_free(struct inode **a, unsigned long long max)
+{
+	unsigned long long ull;
+
+	for (ull = 0; ull < max; ull++)
+		iput(a[ull]);
+	au_array_free(a);
 }
 
 /* ---------------------------------------------------------------------- */

@@ -94,6 +94,12 @@ struct au_sbinfo {
 		struct radix_tree_root	tree;
 	} au_si_pid;
 
+	/*
+	 * dirty approach to protect sb->sb_inodes from
+	 * remount.
+	 */
+	atomic_long_t		si_ninodes;
+
 	/* branch management */
 	unsigned int		si_generation;
 
@@ -186,6 +192,12 @@ struct au_sbinfo {
 /* super.c */
 extern struct file_system_type aufs_fs_type;
 struct inode *au_iget_locked(struct super_block *sb, ino_t ino);
+typedef unsigned long long (*au_arraycb_t)(void *array, unsigned long long max,
+					   void *arg);
+void au_array_free(void *array);
+void *au_array_alloc(unsigned long long *hint, au_arraycb_t cb, void *arg);
+struct inode **au_iarray_alloc(struct super_block *sb, unsigned long long *max);
+void au_iarray_free(struct inode **a, unsigned long long max);
 
 /* sbinfo.c */
 void au_si_free(struct kobject *kobj);
@@ -393,6 +405,17 @@ static inline unsigned int au_sigen(struct super_block *sb)
 {
 	SiMustAnyLock(sb);
 	return au_sbi(sb)->si_generation;
+}
+
+static inline void au_ninodes_inc(struct super_block *sb)
+{
+	atomic_long_inc(&au_sbi(sb)->si_ninodes);
+}
+
+static inline void au_ninodes_dec(struct super_block *sb)
+{
+	AuDebugOn(!atomic_long_read(&au_sbi(sb)->si_ninodes));
+	atomic_long_dec(&au_sbi(sb)->si_ninodes);
 }
 
 static inline struct au_branch *au_sbr(struct super_block *sb,

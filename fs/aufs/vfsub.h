@@ -28,6 +28,10 @@
 #include <linux/mount.h>
 #include "debug.h"
 
+/* copied from linux/fs/internal.h */
+/* todo: BAD approach!! */
+extern spinlock_t inode_sb_list_lock;
+
 /* ---------------------------------------------------------------------- */
 
 /* lock subclass for lower inode */
