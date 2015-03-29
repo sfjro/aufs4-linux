@@ -233,8 +233,8 @@ static int do_pri_file(aufs_bindex_t bindex, struct file *file)
 	    && file->f_path.dentry
 	    && au_test_aufs(file->f_path.dentry->d_sb)
 	    && au_fi(file))
-		snprintf(a, sizeof(a), ", gen %d",
-			 au_figen(file));
+		snprintf(a, sizeof(a), ", gen %d, mmapped %d",
+			 au_figen(file), atomic_read(&au_fi(file)->fi_mmapped));
 	dpri("f%d: mode 0x%x, flags 0%o, cnt %ld, v %llu, pos %llu%s\n",
 	     bindex, file->f_mode, file->f_flags, (long)file_count(file),
 	     file->f_version, file->f_pos, a);

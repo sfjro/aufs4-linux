@@ -19,6 +19,8 @@
  * file and vm operations
  */
 
+#include <linux/fs_stack.h>
+#include <linux/mman.h>
 #include "aufs.h"
 
 int au_do_open_nondir(struct file *file, int flags)
@@ -36,6 +38,7 @@ int au_do_open_nondir(struct file *file, int flags)
 	dentry = file->f_path.dentry;
 	finfo = au_fi(file);
 	memset(&finfo->fi_htop, 0, sizeof(finfo->fi_htop));
+	atomic_set(&finfo->fi_mmapped, 0);
 	bindex = au_dbstart(dentry);
 	h_file = au_h_open(dentry, bindex, flags, file);
 	if (IS_ERR(h_file))
@@ -90,9 +93,139 @@ int aufs_release_nondir(struct inode *inode __maybe_unused, struct file *file)
 
 /* ---------------------------------------------------------------------- */
 
+/*
+ * The locking order around current->mmap_sem.
+ * - in most and regular cases
+ *   file I/O syscall -- aufs_read() or something
+ *	-- si_rwsem for read -- mmap_sem
+ *	(Note that [fdi]i_rwsem are released before mmap_sem).
+ * - in mmap case
+ *   mmap(2) -- mmap_sem -- aufs_mmap() -- si_rwsem for read -- [fdi]i_rwsem
+ * This AB-BA order is definitly bad, but is not a problem since "si_rwsem for
+ * read" allows muliple processes to acquire it and [fdi]i_rwsem are not held in
+ * file I/O. Aufs needs to stop lockdep in aufs_mmap() though.
+ * It means that when aufs acquires si_rwsem for write, the process should never
+ * acquire mmap_sem.
+ *
+ * Actually aufs_iterate() holds [fdi]i_rwsem before mmap_sem, but this is not a
+ * problem either since any directory is not able to be mmap-ed.
+ * The similar scenario is applied to aufs_readlink() too.
+ */
+
+#if 0 /* stop calling security_file_mmap() */
+/* cf. linux/include/linux/mman.h: calc_vm_prot_bits() */
+#define AuConv_VM_PROT(f, b)	_calc_vm_trans(f, VM_##b, PROT_##b)
+
+static unsigned long au_arch_prot_conv(unsigned long flags)
+{
+	/* currently ppc64 only */
+#ifdef CONFIG_PPC64
+	/* cf. linux/arch/powerpc/include/asm/mman.h */
+	AuDebugOn(arch_calc_vm_prot_bits(-1) != VM_SAO);
+	return AuConv_VM_PROT(flags, SAO);
+#else
+	AuDebugOn(arch_calc_vm_prot_bits(-1));
+	return 0;
+#endif
+}
+
+static unsigned long au_prot_conv(unsigned long flags)
+{
+	return AuConv_VM_PROT(flags, READ)
+		| AuConv_VM_PROT(flags, WRITE)
+		| AuConv_VM_PROT(flags, EXEC)
+		| au_arch_prot_conv(flags);
+}
+
+/* cf. linux/include/linux/mman.h: calc_vm_flag_bits() */
+#define AuConv_VM_MAP(f, b)	_calc_vm_trans(f, VM_##b, MAP_##b)
+
+static unsigned long au_flag_conv(unsigned long flags)
+{
+	return AuConv_VM_MAP(flags, GROWSDOWN)
+		| AuConv_VM_MAP(flags, DENYWRITE)
+		| AuConv_VM_MAP(flags, LOCKED);
+}
+#endif
+
+static int aufs_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	int err;
+	aufs_bindex_t bstart;
+	const unsigned char wlock
+		= (file->f_mode & FMODE_WRITE) && (vma->vm_flags & VM_SHARED);
+	struct dentry *dentry;
+	struct super_block *sb;
+	struct file *h_file;
+	struct au_branch *br;
+	struct au_pin pin;
+
+	AuDbgVmRegion(file, vma);
+
+	dentry = file->f_path.dentry;
+	sb = dentry->d_sb;
+	lockdep_off();
+	si_read_lock(sb, AuLock_NOPLMW);
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/1);
+	if (unlikely(err))
+		goto out;
+
+	if (wlock) {
+		err = au_ready_to_write(file, -1, &pin);
+		di_write_unlock(dentry);
+		if (unlikely(err)) {
+			fi_write_unlock(file);
+			goto out;
+		}
+		au_unpin(&pin);
+	} else
+		di_write_unlock(dentry);
+
+	bstart = au_fbstart(file);
+	br = au_sbr(sb, bstart);
+	h_file = au_hf_top(file);
+	get_file(h_file);
+	au_set_mmapped(file);
+	fi_write_unlock(file);
+	lockdep_on();
+
+	au_vm_file_reset(vma, h_file);
+	/*
+	 * we cannot call security_mmap_file() here since it may acquire
+	 * mmap_sem or i_mutex.
+	 *
+	 * err = security_mmap_file(h_file, au_prot_conv(vma->vm_flags),
+	 *			 au_flag_conv(vma->vm_flags));
+	 */
+	if (!err)
+		err = h_file->f_op->mmap(h_file, vma);
+	if (unlikely(err))
+		goto out_reset;
+
+	au_vm_prfile_set(vma, file);
+	/* update without lock, I don't think it a problem */
+	fsstack_copy_attr_atime(file_inode(file), file_inode(h_file));
+	goto out_fput; /* success */
+
+out_reset:
+	au_unset_mmapped(file);
+	au_vm_file_reset(vma, file);
+out_fput:
+	fput(h_file);
+	lockdep_off();
+out:
+	si_read_unlock(sb);
+	lockdep_on();
+	AuTraceErr(err);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
 const struct file_operations aufs_file_fop = {
 	.owner		= THIS_MODULE,
 
+	.mmap		= aufs_mmap,
 	.open		= aufs_open_nondir,
 	.release	= aufs_release_nondir
 };
