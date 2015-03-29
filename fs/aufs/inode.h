@@ -167,6 +167,13 @@ int aufs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode);
 int aufs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
 
+/* i_op_del.c */
+int au_wr_dir_need_wh(struct dentry *dentry, int isdir, aufs_bindex_t *bcpup);
+int au_may_del(struct dentry *dentry, aufs_bindex_t bindex,
+	       struct dentry *h_parent, int isdir);
+int aufs_unlink(struct inode *dir, struct dentry *dentry);
+int aufs_rmdir(struct inode *dir, struct dentry *dentry);
+
 /* iinfo.c */
 struct inode *au_h_iptr(struct inode *inode, aufs_bindex_t bindex);
 void au_hiput(struct au_hinode *hinode);
