@@ -105,6 +105,62 @@ out:
 	return err;
 }
 
+/* todo: BAD approach */
+/* copied from linux/fs/dcache.c */
+enum d_walk_ret {
+	D_WALK_CONTINUE,
+	D_WALK_QUIT,
+	D_WALK_NORETRY,
+	D_WALK_SKIP,
+};
+
+extern void d_walk(struct dentry *parent, void *data,
+		   enum d_walk_ret (*enter)(void *, struct dentry *),
+		   void (*finish)(void *));
+
+struct ac_dpages_arg {
+	int err;
+	struct au_dcsub_pages *dpages;
+	struct super_block *sb;
+	au_dpages_test test;
+	void *arg;
+};
+
+static enum d_walk_ret au_call_dpages_append(void *_arg, struct dentry *dentry)
+{
+	enum d_walk_ret ret;
+	struct ac_dpages_arg *arg = _arg;
+
+	ret = D_WALK_CONTINUE;
+	if (dentry->d_sb == arg->sb
+	    && !IS_ROOT(dentry)
+	    && au_dcount(dentry) > 0
+	    && au_di(dentry)
+	    && (!arg->test || arg->test(dentry, arg->arg))) {
+		arg->err = au_dpages_append(arg->dpages, dentry, GFP_ATOMIC);
+		if (unlikely(arg->err))
+			ret = D_WALK_QUIT;
+	}
+
+	return ret;
+}
+
+int au_dcsub_pages(struct au_dcsub_pages *dpages, struct dentry *root,
+		   au_dpages_test test, void *arg)
+{
+	struct ac_dpages_arg args = {
+		.err	= 0,
+		.dpages	= dpages,
+		.sb	= root->d_sb,
+		.test	= test,
+		.arg	= arg
+	};
+
+	d_walk(root, &args, au_call_dpages_append, NULL);
+
+	return args.err;
+}
+
 int au_dcsub_pages_rev(struct au_dcsub_pages *dpages, struct dentry *dentry,
 		       int do_include, au_dpages_test test, void *arg)
 {

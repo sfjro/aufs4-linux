@@ -29,6 +29,7 @@ static void au_br_do_free(struct au_branch *br)
 {
 	int i;
 	struct au_wbr *wbr;
+	struct au_dykey **key;
 
 	if (br->br_xino.xi_file)
 		fput(br->br_xino.xi_file);
@@ -43,6 +44,13 @@ static void au_br_do_free(struct au_branch *br)
 		AuDebugOn(atomic_read(&wbr->wbr_wh_running));
 		AuRwDestroy(&wbr->wbr_wh_rwsem);
 	}
+
+	key = br->br_dykey;
+	for (i = 0; i < AuBrDynOp; i++, key++)
+		if (*key)
+			au_dy_put(*key);
+		else
+			break;
 
 	/* recursive lock, s_umount of branch's */
 	lockdep_off();
@@ -164,7 +172,7 @@ out:
  * plus: success, it is already unified, the caller should ignore it
  * minus: error
  */
-static int test_add(struct super_block *sb, struct au_opt_add *add)
+static int test_add(struct super_block *sb, struct au_opt_add *add, int remount)
 {
 	int err;
 	aufs_bindex_t bend, bindex;
@@ -175,8 +183,11 @@ static int test_add(struct super_block *sb, struct au_opt_add *add)
 	bend = au_sbend(sb);
 	if (unlikely(bend >= 0
 		     && au_find_dbindex(root, add->path.dentry) >= 0)) {
-		err = -EINVAL;
-		pr_err("%s duplicated\n", add->pathname);
+		err = 1;
+		if (!remount) {
+			err = -EINVAL;
+			pr_err("%s duplicated\n", add->pathname);
+		}
 		goto out;
 	}
 
@@ -334,6 +345,8 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	mutex_init(&br->br_xino.xi_nondir_mtx);
 	br->br_perm = add->perm;
 	br->br_path = add->path; /* set first, path_get() later */
+	spin_lock_init(&br->br_dykey_lock);
+	memset(br->br_dykey, 0, sizeof(br->br_dykey));
 	atomic_set(&br->br_count, 0);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
@@ -429,7 +442,7 @@ static void au_br_do_add(struct super_block *sb, struct au_branch *br,
 		      /*flags*/0);
 }
 
-int au_br_add(struct super_block *sb, struct au_opt_add *add)
+int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 {
 	int err;
 	aufs_bindex_t bend, add_bindex;
@@ -440,7 +453,7 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add)
 	root = sb->s_root;
 	root_inode = root->d_inode;
 	IMustLock(root_inode);
-	err = test_add(sb, add);
+	err = test_add(sb, add, remount);
 	if (unlikely(err < 0))
 		goto out;
 	if (err) {
@@ -461,7 +474,13 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add)
 	}
 
 	add_bindex = add->bindex;
-	au_br_do_add(sb, add_branch, add_bindex);
+	if (!remount)
+		au_br_do_add(sb, add_branch, add_bindex);
+	else {
+		sysaufs_brs_del(sb, add_bindex);
+		au_br_do_add(sb, add_branch, add_bindex);
+		sysaufs_brs_add(sb, add_bindex);
+	}
 
 	h_dentry = add->path.dentry;
 	if (!add_bindex) {

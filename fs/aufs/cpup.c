@@ -742,6 +742,15 @@ static int au_cpup_single(struct au_cp_generic *cpg, struct dentry *dst_parent)
 	}
 
 	if (cpg->bdst < old_ibstart) {
+		if (S_ISREG(inode->i_mode)) {
+			err = au_dy_iaop(inode, cpg->bdst, dst_inode);
+			if (unlikely(err)) {
+				/* ignore an error */
+				/* au_pin_hdir_relock(cpg->pin); */
+				mutex_unlock(&dst_inode->i_mutex);
+				goto out_rev;
+			}
+		}
 		au_set_ibstart(inode, cpg->bdst);
 	} else
 		au_set_ibend(inode, cpg->bdst);
@@ -1005,7 +1014,7 @@ static int au_do_cpup_wh(struct au_cp_generic *cpg, struct dentry *wh_dentry,
 	cpg->flags = flags_orig;
 	if (file) {
 		if (!err)
-			err = 0; /* au_reopen_nondir(file); fix later */
+			err = au_reopen_nondir(file);
 		hdp[0 + cpg->bsrc].hd_dentry = h_d_start;
 	}
 	hdp[0 + cpg->bdst].hd_dentry = h_d_dst;

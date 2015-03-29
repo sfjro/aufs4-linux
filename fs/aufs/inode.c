@@ -40,7 +40,7 @@ static void au_refresh_hinode_attr(struct inode *inode, int do_version)
 
 static int au_ii_refresh(struct inode *inode, int *update)
 {
-	int err;
+	int err, e;
 	umode_t type;
 	aufs_bindex_t bindex, new_bindex;
 	struct super_block *sb;
@@ -91,6 +91,9 @@ static int au_ii_refresh(struct inode *inode, int *update)
 		}
 	}
 	au_update_ibrange(inode, /*do_put_zero*/0);
+	e = au_dy_irefresh(inode);
+	if (unlikely(e && !err))
+		err = e;
 
 out:
 	AuTraceErr(err);
@@ -111,7 +114,7 @@ int au_refresh_hinode_self(struct inode *inode)
 
 int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 {
-	int err, update;
+	int err, e, update;
 	unsigned int flags;
 	umode_t mode;
 	aufs_bindex_t bindex, bend;
@@ -156,6 +159,9 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 		update = 1;
 	}
 	au_update_ibrange(inode, /*do_put_zero*/0);
+	e = au_dy_irefresh(inode);
+	if (unlikely(e && !err))
+		err = e;
 	if (!err)
 		au_refresh_hinode_attr(inode, update && isdir);
 
@@ -185,31 +191,28 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		btail = au_dbtail(dentry);
-#if 0 /* re-commit later */
 		inode->i_op = &aufs_iop;
 		inode->i_fop = &aufs_file_fop;
-#endif
+		err = au_dy_iaop(inode, bstart, h_inode);
+		if (unlikely(err))
+			goto out;
 		break;
 	case S_IFDIR:
 		isdir = 1;
 		btail = au_dbtaildir(dentry);
-		/* inode->i_op = &aufs_dir_iop; re-commit later */
+		inode->i_op = &aufs_dir_iop;
 		inode->i_fop = &simple_dir_operations; /* re-commit later */
 		break;
 	case S_IFLNK:
 		btail = au_dbtail(dentry);
-#if 0 /* re-commit later */
 		inode->i_op = &aufs_symlink_iop;
-#endif
 		break;
 	case S_IFBLK:
 	case S_IFCHR:
 	case S_IFIFO:
 	case S_IFSOCK:
 		btail = au_dbtail(dentry);
-#if 0 /* re-commit later */
 		inode->i_op = &aufs_iop;
-#endif
 		init_special_inode(inode, mode, h_inode->i_rdev);
 		break;
 	default:

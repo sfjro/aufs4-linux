@@ -103,6 +103,9 @@ struct au_sbinfo {
 	/* branch management */
 	unsigned int		si_generation;
 
+	/* see AuSi_ flags */
+	unsigned char		au_si_status;
+
 	aufs_bindex_t		si_bend;
 
 	/* dirty trick to keep br_id plus */
@@ -165,6 +168,30 @@ struct au_sbinfo {
 	struct super_block	*si_sb;
 };
 
+/* sbinfo status flags */
+/*
+ * set true when refresh_dirs() failed at remount time.
+ * then try refreshing dirs at access time again.
+ * if it is false, refreshing dirs at access time is unnecesary
+ */
+#define AuSi_FAILED_REFRESH_DIR	1
+
+static inline unsigned char au_do_ftest_si(struct au_sbinfo *sbi,
+					   unsigned int flag)
+{
+	AuRwMustAnyLock(&sbi->si_rwsem);
+	return sbi->au_si_status & flag;
+}
+#define au_ftest_si(sbinfo, name)	au_do_ftest_si(sbinfo, AuSi_##name)
+#define au_fset_si(sbinfo, name) do { \
+	AuRwMustWriteLock(&(sbinfo)->si_rwsem); \
+	(sbinfo)->au_si_status |= AuSi_##name; \
+} while (0)
+#define au_fclr_si(sbinfo, name) do { \
+	AuRwMustWriteLock(&(sbinfo)->si_rwsem); \
+	(sbinfo)->au_si_status &= ~AuSi_##name; \
+} while (0)
+
 /* ---------------------------------------------------------------------- */
 
 /* policy to select one among writable branches */
@@ -178,6 +205,7 @@ struct au_sbinfo {
 #define AuLock_IR		(1 << 1)	/* read-lock inode */
 #define AuLock_IW		(1 << 2)	/* write-lock inode */
 #define AuLock_FLUSH		(1 << 3)	/* wait for 'nowait' tasks */
+#define AuLock_DIR		(1 << 4)	/* target is a dir */
 #define AuLock_NOPLM		(1 << 5)	/* return err in plm mode */
 #define AuLock_NOPLMW		(1 << 6)	/* wait for plm mode ends */
 #define AuLock_GEN		(1 << 7)	/* test digen/iigen */
@@ -213,6 +241,8 @@ int aufs_read_lock(struct dentry *dentry, int flags);
 void aufs_read_unlock(struct dentry *dentry, int flags);
 void aufs_write_lock(struct dentry *dentry);
 void aufs_write_unlock(struct dentry *dentry);
+int aufs_read_and_write_lock2(struct dentry *d1, struct dentry *d2, int flags);
+void aufs_read_and_write_unlock2(struct dentry *d1, struct dentry *d2);
 
 int si_pid_test_slow(struct super_block *sb);
 void si_pid_set_slow(struct super_block *sb);

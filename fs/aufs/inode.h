@@ -128,6 +128,25 @@ int au_test_h_perm(struct inode *h_inode, int mask);
 int au_test_h_perm_sio(struct inode *h_inode, int mask);
 
 /* i_op.c */
+extern struct inode_operations aufs_iop, aufs_symlink_iop, aufs_dir_iop;
+
+/* au_wr_dir flags */
+#define AuWrDir_ADD_ENTRY	1
+#define AuWrDir_ISDIR		(1 << 1)
+#define AuWrDir_TMPFILE		(1 << 2)
+#define au_ftest_wrdir(flags, name)	((flags) & AuWrDir_##name)
+#define au_fset_wrdir(flags, name) \
+	do { (flags) |= AuWrDir_##name; } while (0)
+#define au_fclr_wrdir(flags, name) \
+	do { (flags) &= ~AuWrDir_##name; } while (0)
+
+struct au_wr_dir_args {
+	aufs_bindex_t force_btgt;
+	unsigned char flags;
+};
+int au_wr_dir(struct dentry *dentry, struct dentry *src_dentry,
+	      struct au_wr_dir_args *args);
+
 struct dentry *au_pinned_h_parent(struct au_pin *pin);
 void au_pin_init(struct au_pin *pin, struct dentry *dentry,
 		 aufs_bindex_t bindex, int lsc_di, int lsc_hi,
@@ -136,6 +155,31 @@ int au_pin(struct au_pin *pin, struct dentry *dentry, aufs_bindex_t bindex,
 	   unsigned int udba, unsigned char flags) __must_check;
 int au_do_pin(struct au_pin *pin) __must_check;
 void au_unpin(struct au_pin *pin);
+
+/* i_op_add.c */
+int au_may_add(struct dentry *dentry, aufs_bindex_t bindex,
+	       struct dentry *h_parent, int isdir);
+int aufs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
+	       dev_t dev);
+int aufs_symlink(struct inode *dir, struct dentry *dentry, const char *symname);
+int aufs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
+		bool want_excl);
+int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode);
+int aufs_link(struct dentry *src_dentry, struct inode *dir,
+	      struct dentry *dentry);
+int aufs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
+
+/* i_op_del.c */
+int au_wr_dir_need_wh(struct dentry *dentry, int isdir, aufs_bindex_t *bcpup);
+int au_may_del(struct dentry *dentry, aufs_bindex_t bindex,
+	       struct dentry *h_parent, int isdir);
+int aufs_unlink(struct inode *dir, struct dentry *dentry);
+int aufs_rmdir(struct inode *dir, struct dentry *dentry);
+
+/* i_op_ren.c */
+int au_wbr(struct dentry *dentry, aufs_bindex_t btgt);
+int aufs_rename(struct inode *src_dir, struct dentry *src_dentry,
+		struct inode *dir, struct dentry *dentry);
 
 /* iinfo.c */
 struct inode *au_h_iptr(struct inode *inode, aufs_bindex_t bindex);

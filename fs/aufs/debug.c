@@ -209,9 +209,10 @@ void au_dpri_dentry(struct dentry *dentry)
 	dinfo = au_di(dentry);
 	if (!dinfo)
 		return;
-	dpri("d-1: bstart %d, bend %d, bwh %d, bdiropq %d, gen %d\n",
+	dpri("d-1: bstart %d, bend %d, bwh %d, bdiropq %d, gen %d, tmp %d\n",
 	     dinfo->di_bstart, dinfo->di_bend,
-	     dinfo->di_bwh, dinfo->di_bdiropq, au_digen(dentry));
+	     dinfo->di_bwh, dinfo->di_bdiropq, au_digen(dentry),
+	     dinfo->di_tmpfile);
 	if (dinfo->di_bstart < 0)
 		return;
 	hdp = dinfo->di_hdentry;

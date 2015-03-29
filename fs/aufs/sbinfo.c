@@ -263,6 +263,41 @@ void aufs_write_unlock(struct dentry *dentry)
 	si_write_unlock(dentry->d_sb);
 }
 
+int aufs_read_and_write_lock2(struct dentry *d1, struct dentry *d2, int flags)
+{
+	int err;
+	unsigned int sigen;
+	struct super_block *sb;
+
+	sb = d1->d_sb;
+	err = si_read_lock(sb, flags);
+	if (unlikely(err))
+		goto out;
+
+	di_write_lock2_child(d1, d2, au_ftest_lock(flags, DIR));
+
+	if (au_ftest_lock(flags, GEN)) {
+		sigen = au_sigen(sb);
+		err = au_digen_test(d1, sigen);
+		AuDebugOn(!err && au_dbrange_test(d1));
+		if (!err) {
+			err = au_digen_test(d2, sigen);
+			AuDebugOn(!err && au_dbrange_test(d2));
+		}
+		if (unlikely(err))
+			aufs_read_and_write_unlock2(d1, d2);
+	}
+
+out:
+	return err;
+}
+
+void aufs_read_and_write_unlock2(struct dentry *d1, struct dentry *d2)
+{
+	di_write_unlock2(d1, d2);
+	si_read_unlock(d1->d_sb);
+}
+
 /* ---------------------------------------------------------------------- */
 
 int si_pid_test_slow(struct super_block *sb)

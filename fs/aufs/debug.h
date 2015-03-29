@@ -26,6 +26,7 @@
 
 #include <linux/atomic.h>
 #include <linux/module.h>
+#include <linux/kallsyms.h>
 
 #ifdef CONFIG_AUFS_DEBUG
 #define AuDebugOn(a)		BUG_ON(a)
@@ -74,6 +75,13 @@ AuStubInt0(au_debug_test, void)
 	static unsigned char _c; \
 	if (!_c++) \
 		AuIOErr(fmt, ##__VA_ARGS__); \
+} while (0)
+
+#define AuUnsupportMsg	"This operation is not supported." \
+			" Please report this application to aufs-users ML."
+#define AuUnsupport(fmt, ...) do { \
+	pr_err(AuUnsupportMsg "\n" fmt, ##__VA_ARGS__); \
+	dump_stack(); \
 } while (0)
 
 #define AuTraceErr(e) do { \
@@ -161,6 +169,12 @@ void au_dbg_verify_kthread(void);
 	au_dpri_sb(sb); \
 	mutex_unlock(&au_dbg_mtx); \
 } while (0)
+
+#define AuDbgSym(addr) do {				\
+	char sym[KSYM_SYMBOL_LEN];			\
+	sprint_symbol(sym, (unsigned long)addr);	\
+	AuDbg("%s\n", sym);				\
+} while (0)
 #else
 AuStubVoid(au_dbg_verify_dinode, struct dentry *dentry)
 AuStubVoid(au_dbg_verify_gen, struct dentry *parent, unsigned int sigen)
@@ -173,6 +187,7 @@ AuStubVoid(au_dbg_verify_kthread, void)
 #define AuDbgDentry(d)		do {} while (0)
 #define AuDbgFile(f)		do {} while (0)
 #define AuDbgSb(sb)		do {} while (0)
+#define AuDbgSym(addr)		do {} while (0)
 #endif /* CONFIG_AUFS_DEBUG */
 
 #endif /* __KERNEL__ */
