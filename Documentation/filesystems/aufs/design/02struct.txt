@@ -221,3 +221,12 @@ simply renames the whiteouted name back and returns an error. If all are
 succeeded, aufs registers a function to remove the whiteouted unique
 temporary name completely and asynchronously to the system global
 workqueue.
+
+
+Copy-up
+----------------------------------------------------------------------
+It is a well-known feature or concept.
+When user modifies a file on a readonly branch, aufs operate "copy-up"
+internally and makes change to the new file on the upper writable branch.
+When the trigger systemcall does not update the timestamps of the parent
+dir, aufs reverts it after copy-up.

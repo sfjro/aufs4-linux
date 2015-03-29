@@ -463,8 +463,11 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add)
 	au_br_do_add(sb, add_branch, add_bindex);
 
 	h_dentry = add->path.dentry;
-	if (!add_bindex)
+	if (!add_bindex) {
+		au_cpup_attr_all(root_inode, /*force*/1);
 		sb->s_maxbytes = h_dentry->d_sb->s_maxbytes;
+	} else
+		au_add_nlink(root_inode, h_dentry->d_inode);
 
 	/*
 	 * this test/set prevents aufs from handling unnecesary notify events

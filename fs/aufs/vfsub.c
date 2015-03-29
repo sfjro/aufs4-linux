@@ -198,6 +198,67 @@ int vfsub_iterate_dir(struct file *file, struct dir_context *ctx)
 
 /* ---------------------------------------------------------------------- */
 
+struct notify_change_args {
+	int *errp;
+	struct path *path;
+	struct iattr *ia;
+	struct inode **delegated_inode;
+};
+
+static void call_notify_change(void *args)
+{
+	struct notify_change_args *a = args;
+	struct inode *h_inode;
+
+	h_inode = a->path->dentry->d_inode;
+	IMustLock(h_inode);
+
+	*a->errp = -EPERM;
+	if (!IS_IMMUTABLE(h_inode) && !IS_APPEND(h_inode)) {
+		lockdep_off();
+		*a->errp = notify_change(a->path->dentry, a->ia,
+					 a->delegated_inode);
+		lockdep_on();
+	}
+	AuTraceErr(*a->errp);
+}
+
+int vfsub_notify_change(struct path *path, struct iattr *ia,
+			struct inode **delegated_inode)
+{
+	int err;
+	struct notify_change_args args = {
+		.errp			= &err,
+		.path			= path,
+		.ia			= ia,
+		.delegated_inode	= delegated_inode
+	};
+
+	call_notify_change(&args);
+
+	return err;
+}
+
+int vfsub_sio_notify_change(struct path *path, struct iattr *ia,
+			    struct inode **delegated_inode)
+{
+	int err, wkq_err;
+	struct notify_change_args args = {
+		.errp			= &err,
+		.path			= path,
+		.ia			= ia,
+		.delegated_inode	= delegated_inode
+	};
+
+	wkq_err = au_wkq_wait(call_notify_change, &args);
+	if (unlikely(wkq_err))
+		err = wkq_err;
+
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
 struct unlink_args {
 	int *errp;
 	struct inode *dir;

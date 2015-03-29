@@ -205,6 +205,16 @@ static inline int au_test_fs_no_limit_nlink(struct super_block *sb)
 		|| au_test_ubifs(sb);
 }
 
+/*
+ * filesystems which sets S_NOATIME and S_NOCMTIME.
+ */
+static inline int au_test_fs_notime(struct super_block *sb)
+{
+	return au_test_nfs(sb)
+		|| au_test_ubifs(sb)
+		;
+}
+
 /* ---------------------------------------------------------------------- */
 
 /*

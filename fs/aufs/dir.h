@@ -80,6 +80,8 @@ struct au_vdir {
 /* ---------------------------------------------------------------------- */
 
 /* dir.c */
+void au_add_nlink(struct inode *dir, struct inode *h_dir);
+void au_sub_nlink(struct inode *dir, struct inode *h_dir);
 loff_t au_dir_size(struct file *file, struct dentry *dentry);
 
 /* vdir.c */
