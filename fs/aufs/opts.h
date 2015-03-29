@@ -58,5 +58,9 @@ struct au_opt_xino {
 	struct file	*file;
 };
 
+/* ---------------------------------------------------------------------- */
+
+void au_optstr_br_perm(au_br_perm_str_t *str, int perm);
+
 #endif /* __KERNEL__ */
 #endif /* __AUFS_OPTS_H__ */

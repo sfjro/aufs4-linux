@@ -20,6 +20,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/seq_file.h>
 #include "aufs.h"
 
 void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp)
@@ -80,21 +81,49 @@ MODULE_DESCRIPTION(AUFS_NAME
 	" -- Advanced multi layered unification filesystem");
 MODULE_VERSION(AUFS_VERSION);
 
+/* this module parameter has no meaning when SYSFS is disabled */
+int sysaufs_brs = 1;
+MODULE_PARM_DESC(brs, "use <sysfs>/fs/aufs/si_*/brN");
+module_param_named(brs, sysaufs_brs, int, S_IRUGO);
+
+/* ---------------------------------------------------------------------- */
+
+static char au_esc_chars[0x20 + 3]; /* 0x01-0x20, backslash, del, and NULL */
+
+int au_seq_path(struct seq_file *seq, struct path *path)
+{
+	return seq_path(seq, path, au_esc_chars);
+}
+
 /* ---------------------------------------------------------------------- */
 
 static int __init aufs_init(void)
 {
-	int err;
+	int err, i;
+	char *p;
 
-	err = au_cache_init();
+	p = au_esc_chars;
+	for (i = 1; i <= ' '; i++)
+		*p++ = i;
+	*p++ = '\\';
+	*p++ = '\x7f';
+	*p = 0;
+
+	sysaufs_brs_init();
+	err = sysaufs_init();
 	if (unlikely(err))
 		goto out;
+	err = au_cache_init();
+	if (unlikely(err))
+		goto out_sysaufs;
 
 	/* since we define pr_fmt, call printk directly */
 	printk(KERN_INFO AUFS_NAME " " AUFS_VERSION "\n");
 	goto out; /* success */
 
 	au_cache_fin();
+out_sysaufs:
+	sysaufs_fin();
 out:
 	return err;
 }
@@ -102,6 +131,7 @@ out:
 static void __exit aufs_exit(void)
 {
 	au_cache_fin();
+	sysaufs_fin();
 }
 
 module_init(aufs_init);

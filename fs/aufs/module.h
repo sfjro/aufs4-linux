@@ -26,7 +26,16 @@
 
 #include <linux/slab.h>
 
+struct path;
+struct seq_file;
+
+/* module parameters */
+extern int sysaufs_brs;
+
+/* ---------------------------------------------------------------------- */
+
 void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp);
+int au_seq_path(struct seq_file *seq, struct path *path);
 
 /* kmem cache */
 enum {

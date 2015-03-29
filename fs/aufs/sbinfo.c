@@ -57,6 +57,10 @@ int au_si_alloc(struct super_block *sb)
 	if (unlikely(!sbinfo->si_branch))
 		goto out_sbinfo;
 
+	err = sysaufs_si_init(sbinfo);
+	if (unlikely(err))
+		goto out_br;
+
 	au_rw_init_wlock(&sbinfo->si_rwsem);
 	au_rw_class(&sbinfo->si_rwsem, &aufs_si);
 
@@ -70,9 +74,11 @@ int au_si_alloc(struct super_block *sb)
 	/* leave si_xib_last_pindex and si_xib_next_bit */
 
 	/* leave other members for sysaufs and si_mnt. */
+	sbinfo->si_sb = sb;
 	sb->s_fs_info = sbinfo;
 	return 0; /* success */
 
+out_br:
 	kfree(sbinfo->si_branch);
 out_sbinfo:
 	kfree(sbinfo);

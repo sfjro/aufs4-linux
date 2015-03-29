@@ -218,6 +218,7 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 		}
 	}
 
+	sysaufs_br_init(br);
 	path_get(&br->br_path);
 	goto out; /* success */
 

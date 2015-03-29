@@ -20,6 +20,7 @@
  */
 
 #include <linux/file.h>
+#include <linux/seq_file.h>
 #include <linux/uaccess.h>
 #include "aufs.h"
 
@@ -629,6 +630,26 @@ int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t h_ino,
 		fput(br->br_xino.xi_file);
 		br->br_xino.xi_file = NULL;
 	}
+
+out:
+	return err;
+}
+/* ---------------------------------------------------------------------- */
+
+int au_xino_path(struct seq_file *seq, struct file *file)
+{
+	int err;
+
+	err = au_seq_path(seq, &file->f_path);
+	if (unlikely(err < 0))
+		goto out;
+
+	err = 0;
+#define Deleted "\\040(deleted)"
+	seq->count -= sizeof(Deleted) - 1;
+	AuDebugOn(memcmp(seq->buf + seq->count, Deleted,
+			 sizeof(Deleted) - 1));
+#undef Deleted
 
 out:
 	return err;

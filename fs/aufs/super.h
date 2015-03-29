@@ -73,6 +73,9 @@ struct au_sbinfo {
 	 * but using sysfs is majority.
 	 */
 	struct kobject		si_kobj;
+
+	/* dirty, necessary for unmounting, sysfs and sysrq */
+	struct super_block	*si_sb;
 };
 
 /* ---------------------------------------------------------------------- */

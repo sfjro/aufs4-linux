@@ -8,11 +8,12 @@ ccflags-y += -DDEBUG
 ccflags-y += -include ${srctree}/include/uapi/linux/aufs_type.h
 
 obj-$(CONFIG_AUFS_FS) += aufs.o
-aufs-y := module.o sbinfo.o super.o branch.o xino.o \
+aufs-y := module.o sbinfo.o super.o branch.o xino.o sysaufs.o opts.o \
 	vfsub.o dcsub.o \
 	cpup.o \
 	dinfo.o \
 	iinfo.o inode.o
 
 # all are boolean
+aufs-$(CONFIG_SYSFS) += sysfs.o
 aufs-$(CONFIG_AUFS_DEBUG) += debug.o

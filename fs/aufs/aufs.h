@@ -44,6 +44,7 @@
 #include "opts.h"
 #include "rwsem.h"
 #include "super.h"
+#include "sysaufs.h"
 #include "vfsub.h"
 
 #endif /* __KERNEL__ */

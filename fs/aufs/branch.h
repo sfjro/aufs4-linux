@@ -37,6 +37,18 @@ struct au_xino_file {
 	/* todo: make xino files an array to support huge inode number */
 };
 
+/* sysfs entries */
+struct au_brsysfs {
+	char			name[16];
+	struct attribute	attr;
+};
+
+enum {
+	AuBrSysfs_BR,
+	AuBrSysfs_BRID,
+	AuBrSysfs_Last
+};
+
 /* protected by superblock rwsem */
 struct au_branch {
 	struct au_xino_file	br_xino;
@@ -46,6 +58,11 @@ struct au_branch {
 	int			br_perm;
 	struct path		br_path;
 	atomic_t		br_count;
+
+#ifdef CONFIG_SYSFS
+	/* entries under sysfs per mount-point */
+	struct au_brsysfs	br_sysfs[AuBrSysfs_Last];
+#endif
 };
 
 /* ---------------------------------------------------------------------- */
@@ -91,6 +108,8 @@ int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 		 ino_t *ino);
 int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t hino,
 	       struct file *base_file, int do_test);
+
+int au_xino_path(struct seq_file *seq, struct file *file);
 
 /* ---------------------------------------------------------------------- */
 

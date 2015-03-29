@@ -76,4 +76,16 @@ typedef int16_t aufs_bindex_t;
 #define AUFS_XINO_FNAME		"." AUFS_NAME ".xino"
 #define AUFS_XINO_DEFPATH	"/tmp/" AUFS_XINO_FNAME
 
+/* branch permissions and attributes */
+#define AUFS_BRPERM_RO		"ro"
+
+#define AuBrPerm_RO		(1 << 1)	/* readonly */
+
+/* the longest combination */
+#define AuBrPermStrSz	sizeof(AUFS_BRPERM_RO)
+
+typedef struct {
+	char a[AuBrPermStrSz];
+} au_br_perm_str_t;
+
 #endif /* __AUFS_TYPE_H__ */
