@@ -21,6 +21,7 @@
 
 #include <linux/namei.h>
 #include <linux/security.h>
+#include <linux/splice.h>
 #include <linux/uaccess.h>
 #include "aufs.h"
 
@@ -93,6 +94,9 @@ struct dentry *vfsub_lock_rename(struct dentry *d1, struct au_hinode *hdir1,
 	lockdep_off();
 	d = lock_rename(d1, d2);
 	lockdep_on();
+	au_hn_suspend(hdir1);
+	if (hdir1 != hdir2)
+		au_hn_suspend(hdir2);
 
 	return d;
 }
@@ -100,6 +104,9 @@ struct dentry *vfsub_lock_rename(struct dentry *d1, struct au_hinode *hdir1,
 void vfsub_unlock_rename(struct dentry *d1, struct au_hinode *hdir1,
 			 struct dentry *d2, struct au_hinode *hdir2)
 {
+	au_hn_resume(hdir1);
+	if (hdir1 != hdir2)
+		au_hn_resume(hdir2);
 	lockdep_off();
 	unlock_rename(d1, d2);
 	lockdep_on();
@@ -346,6 +353,23 @@ ssize_t vfsub_write_k(struct file *file, void *kbuf, size_t count, loff_t *ppos)
 	return err;
 }
 
+int vfsub_flush(struct file *file, fl_owner_t id)
+{
+	int err;
+
+	err = 0;
+	if (file->f_op->flush) {
+		if (!au_test_nfs(file->f_path.dentry->d_sb))
+			err = file->f_op->flush(file, id);
+		else {
+			lockdep_off();
+			err = file->f_op->flush(file, id);
+			lockdep_on();
+		}
+	}
+	return err;
+}
+
 int vfsub_iterate_dir(struct file *file, struct dir_context *ctx)
 {
 	int err;
@@ -355,6 +379,75 @@ int vfsub_iterate_dir(struct file *file, struct dir_context *ctx)
 	lockdep_off();
 	err = iterate_dir(file, ctx);
 	lockdep_on();
+	return err;
+}
+
+long vfsub_splice_to(struct file *in, loff_t *ppos,
+		     struct pipe_inode_info *pipe, size_t len,
+		     unsigned int flags)
+{
+	long err;
+
+	lockdep_off();
+	err = do_splice_to(in, ppos, pipe, len, flags);
+	lockdep_on();
+	file_accessed(in);
+	return err;
+}
+
+long vfsub_splice_from(struct pipe_inode_info *pipe, struct file *out,
+		       loff_t *ppos, size_t len, unsigned int flags)
+{
+	long err;
+
+	lockdep_off();
+	err = do_splice_from(pipe, out, ppos, len, flags);
+	lockdep_on();
+	return err;
+}
+
+int vfsub_fsync(struct file *file, struct path *path, int datasync)
+{
+	int err;
+
+	/* file can be NULL */
+	lockdep_off();
+	err = vfs_fsync(file, datasync);
+	lockdep_on();
+	return err;
+}
+
+/* cf. open.c:do_sys_truncate() and do_sys_ftruncate() */
+int vfsub_trunc(struct path *h_path, loff_t length, unsigned int attr,
+		struct file *h_file)
+{
+	int err;
+	struct inode *h_inode;
+	struct super_block *h_sb;
+
+	if (!h_file) {
+		err = vfsub_truncate(h_path, length);
+		goto out;
+	}
+
+	h_inode = h_path->dentry->d_inode;
+	h_sb = h_inode->i_sb;
+	lockdep_off();
+	sb_start_write(h_sb);
+	lockdep_on();
+	err = locks_verify_truncate(h_inode, h_file, length);
+	if (!err)
+		err = security_path_truncate(h_path);
+	if (!err) {
+		lockdep_off();
+		err = do_truncate(h_path->dentry, length, attr, h_file);
+		lockdep_on();
+	}
+	lockdep_off();
+	sb_end_write(h_sb);
+	lockdep_on();
+
+out:
 	return err;
 }
 

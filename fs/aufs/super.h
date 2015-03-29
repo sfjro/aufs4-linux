@@ -76,6 +76,21 @@ static inline int au_plink_hash(ino_t ino)
 	return ino % AuPlink_NHASH;
 }
 
+/* File-based Hierarchical Storage Management */
+struct au_fhsm {
+#ifdef CONFIG_AUFS_FHSM
+	/* allow only one process who can receive the notification */
+	spinlock_t		fhsm_spin;
+	pid_t			fhsm_pid;
+	wait_queue_head_t	fhsm_wqh;
+	atomic_t		fhsm_readable;
+
+	/* these are protected by si_rwsem */
+	unsigned long		fhsm_expire;
+	aufs_bindex_t		fhsm_bottom;
+#endif
+};
+
 struct au_branch;
 struct au_sbinfo {
 	/* nowait tasks in the system-wide workqueue */
@@ -95,10 +110,10 @@ struct au_sbinfo {
 	} au_si_pid;
 
 	/*
-	 * dirty approach to protect sb->sb_inodes from
+	 * dirty approach to protect sb->sb_inodes and ->s_files (gone) from
 	 * remount.
 	 */
-	atomic_long_t		si_ninodes;
+	atomic_long_t		si_ninodes, si_nfiles;
 
 	/* branch management */
 	unsigned int		si_generation;
@@ -125,6 +140,9 @@ struct au_sbinfo {
 	/* most free space */
 	struct au_wbr_mfs	si_wbr_mfs;
 
+	/* File-based Hierarchical Storage Management */
+	struct au_fhsm		si_fhsm;
+
 	/* mount flags */
 	/* include/asm-ia64/siginfo.h defines a macro named si_flags */
 	unsigned int		si_mntflags;
@@ -138,19 +156,38 @@ struct au_sbinfo {
 	unsigned long		si_xib_last_pindex;
 	int			si_xib_next_bit;
 	aufs_bindex_t		si_xino_brid;
+	unsigned long		si_xino_jiffy;
+	unsigned long		si_xino_expire;
 	/* reserved for future use */
 	/* unsigned long long	si_xib_limit; */	/* Max xib file size */
+
+#ifdef CONFIG_AUFS_EXPORT
+	/* i_generation */
+	struct file		*si_xigen;
+	atomic_t		si_xigen_next;
+#endif
 
 	/* vdir parameters */
 	unsigned long		si_rdcache;	/* max cache time in jiffies */
 	unsigned int		si_rdblk;	/* deblk size */
 	unsigned int		si_rdhash;	/* hash size */
 
+	/*
+	 * If the number of whiteouts are larger than si_dirwh, leave all of
+	 * them after au_whtmp_ren to reduce the cost of rmdir(2).
+	 * future fsck.aufs or kernel thread will remove them later.
+	 * Otherwise, remove all whiteouts and the dir in rmdir(2).
+	 */
+	unsigned int		si_dirwh;
+
 	/* pseudo_link list */
 	struct au_sphlhead	si_plink[AuPlink_NHASH];
 	wait_queue_head_t	si_plink_wq;
 	spinlock_t		si_plink_maint_lock;
 	pid_t			si_plink_maint_pid;
+
+	/* file list */
+	struct au_sphlhead	si_files;
 
 	/*
 	 * sysfs and lifetime management.
@@ -159,6 +196,14 @@ struct au_sbinfo {
 	 * but using sysfs is majority.
 	 */
 	struct kobject		si_kobj;
+#ifdef CONFIG_DEBUG_FS
+	struct dentry		 *si_dbgaufs;
+	struct dentry		 *si_dbgaufs_plink;
+	struct dentry		 *si_dbgaufs_xib;
+#ifdef CONFIG_AUFS_EXPORT
+	struct dentry		 *si_dbgaufs_xigen;
+#endif
+#endif
 
 #ifdef CONFIG_AUFS_SBILIST
 	struct list_head	si_list;
@@ -175,6 +220,13 @@ struct au_sbinfo {
  * if it is false, refreshing dirs at access time is unnecesary
  */
 #define AuSi_FAILED_REFRESH_DIR	1
+
+#define AuSi_FHSM		(1 << 1)	/* fhsm is active now */
+
+#ifndef CONFIG_AUFS_FHSM
+#undef AuSi_FHSM
+#define AuSi_FHSM		0
+#endif
 
 static inline unsigned char au_do_ftest_si(struct au_sbinfo *sbi,
 					   unsigned int flag)
@@ -255,12 +307,78 @@ int au_cpdown_dirs(struct dentry *dentry, aufs_bindex_t bdst);
 int au_wbr_nonopq(struct dentry *dentry, aufs_bindex_t bindex);
 int au_wbr_do_copyup_bu(struct dentry *dentry, aufs_bindex_t bstart);
 
+/* mvdown.c */
+int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *arg);
+
+#ifdef CONFIG_AUFS_FHSM
+/* fhsm.c */
+
+static inline pid_t au_fhsm_pid(struct au_fhsm *fhsm)
+{
+	pid_t pid;
+
+	spin_lock(&fhsm->fhsm_spin);
+	pid = fhsm->fhsm_pid;
+	spin_unlock(&fhsm->fhsm_spin);
+
+	return pid;
+}
+
+void au_fhsm_wrote(struct super_block *sb, aufs_bindex_t bindex, int force);
+void au_fhsm_wrote_all(struct super_block *sb, int force);
+int au_fhsm_fd(struct super_block *sb, int oflags);
+int au_fhsm_br_alloc(struct au_branch *br);
+void au_fhsm_set_bottom(struct super_block *sb, aufs_bindex_t bindex);
+void au_fhsm_fin(struct super_block *sb);
+void au_fhsm_init(struct au_sbinfo *sbinfo);
+void au_fhsm_set(struct au_sbinfo *sbinfo, unsigned int sec);
+void au_fhsm_show(struct seq_file *seq, struct au_sbinfo *sbinfo);
+#else
+AuStubVoid(au_fhsm_wrote, struct super_block *sb, aufs_bindex_t bindex,
+	   int force)
+AuStubVoid(au_fhsm_wrote_all, struct super_block *sb, int force)
+AuStub(int, au_fhsm_fd, return -EOPNOTSUPP, struct super_block *sb, int oflags)
+AuStub(pid_t, au_fhsm_pid, return 0, struct au_fhsm *fhsm)
+AuStubInt0(au_fhsm_br_alloc, struct au_branch *br)
+AuStubVoid(au_fhsm_set_bottom, struct super_block *sb, aufs_bindex_t bindex)
+AuStubVoid(au_fhsm_fin, struct super_block *sb)
+AuStubVoid(au_fhsm_init, struct au_sbinfo *sbinfo)
+AuStubVoid(au_fhsm_set, struct au_sbinfo *sbinfo, unsigned int sec)
+AuStubVoid(au_fhsm_show, struct seq_file *seq, struct au_sbinfo *sbinfo)
+#endif
+
 /* ---------------------------------------------------------------------- */
 
 static inline struct au_sbinfo *au_sbi(struct super_block *sb)
 {
 	return sb->s_fs_info;
 }
+
+/* ---------------------------------------------------------------------- */
+
+#ifdef CONFIG_AUFS_EXPORT
+int au_test_nfsd(void);
+void au_export_init(struct super_block *sb);
+void au_xigen_inc(struct inode *inode);
+int au_xigen_new(struct inode *inode);
+int au_xigen_set(struct super_block *sb, struct file *base);
+void au_xigen_clr(struct super_block *sb);
+
+static inline int au_busy_or_stale(void)
+{
+	if (!au_test_nfsd())
+		return -EBUSY;
+	return -ESTALE;
+}
+#else
+AuStubInt0(au_test_nfsd, void)
+AuStubVoid(au_export_init, struct super_block *sb)
+AuStubVoid(au_xigen_inc, struct inode *inode)
+AuStubInt0(au_xigen_new, struct inode *inode)
+AuStubInt0(au_xigen_set, struct super_block *sb, struct file *base)
+AuStubVoid(au_xigen_clr, struct super_block *sb)
+AuStub(int, au_busy_or_stale, return -EBUSY, void)
+#endif /* CONFIG_AUFS_EXPORT */
 
 /* ---------------------------------------------------------------------- */
 
@@ -283,13 +401,49 @@ static inline void au_sbilist_del(struct super_block *sb)
 	au_spl_del(&au_sbi(sb)->si_list, &au_sbilist);
 }
 
+#ifdef CONFIG_AUFS_MAGIC_SYSRQ
+static inline void au_sbilist_lock(void)
+{
+	spin_lock(&au_sbilist.spin);
+}
+
+static inline void au_sbilist_unlock(void)
+{
+	spin_unlock(&au_sbilist.spin);
+}
+#define AuGFP_SBILIST	GFP_ATOMIC
+#else
+AuStubVoid(au_sbilist_lock, void)
+AuStubVoid(au_sbilist_unlock, void)
 #define AuGFP_SBILIST	GFP_NOFS
+#endif /* CONFIG_AUFS_MAGIC_SYSRQ */
 #else
 AuStubVoid(au_sbilist_init, void)
 AuStubVoid(au_sbilist_add, struct super_block *sb)
 AuStubVoid(au_sbilist_del, struct super_block *sb)
+AuStubVoid(au_sbilist_lock, void)
+AuStubVoid(au_sbilist_unlock, void)
 #define AuGFP_SBILIST	GFP_NOFS
 #endif
+
+/* ---------------------------------------------------------------------- */
+
+static inline void dbgaufs_si_null(struct au_sbinfo *sbinfo)
+{
+	/*
+	 * This function is a dynamic '__init' function actually,
+	 * so the tiny check for si_rwsem is unnecessary.
+	 */
+	/* AuRwMustWriteLock(&sbinfo->si_rwsem); */
+#ifdef CONFIG_DEBUG_FS
+	sbinfo->si_dbgaufs = NULL;
+	sbinfo->si_dbgaufs_plink = NULL;
+	sbinfo->si_dbgaufs_xib = NULL;
+#ifdef CONFIG_AUFS_EXPORT
+	sbinfo->si_dbgaufs_xigen = NULL;
+#endif
+#endif
+}
 
 /* ---------------------------------------------------------------------- */
 
@@ -446,6 +600,17 @@ static inline void au_ninodes_dec(struct super_block *sb)
 {
 	AuDebugOn(!atomic_long_read(&au_sbi(sb)->si_ninodes));
 	atomic_long_dec(&au_sbi(sb)->si_ninodes);
+}
+
+static inline void au_nfiles_inc(struct super_block *sb)
+{
+	atomic_long_inc(&au_sbi(sb)->si_nfiles);
+}
+
+static inline void au_nfiles_dec(struct super_block *sb)
+{
+	AuDebugOn(!atomic_long_read(&au_sbi(sb)->si_nfiles));
+	atomic_long_dec(&au_sbi(sb)->si_nfiles);
 }
 
 static inline struct au_branch *au_sbr(struct super_block *sb,

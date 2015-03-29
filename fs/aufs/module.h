@@ -34,6 +34,24 @@ extern int sysaufs_brs;
 
 /* ---------------------------------------------------------------------- */
 
+extern int au_dir_roflags;
+
+enum {
+	AuLcNonDir_FIINFO,
+	AuLcNonDir_DIINFO,
+	AuLcNonDir_IIINFO,
+
+	AuLcDir_FIINFO,
+	AuLcDir_DIINFO,
+	AuLcDir_IIINFO,
+
+	AuLcSymlink_DIINFO,
+	AuLcSymlink_IIINFO,
+
+	AuLcKey_Last
+};
+extern struct lock_class_key au_lc_key[AuLcKey_Last];
+
 void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp);
 int au_seq_path(struct seq_file *seq, struct path *path);
 
@@ -55,6 +73,7 @@ enum {
 	AuCache_FINFO,
 	AuCache_VDIR,
 	AuCache_DEHSTR,
+	AuCache_HNOTIFY, /* must be last */
 	AuCache_Last
 };
 
@@ -77,6 +96,9 @@ AuCacheFuncs(icntnr, ICNTNR);
 AuCacheFuncs(finfo, FINFO);
 AuCacheFuncs(vdir, VDIR);
 AuCacheFuncs(vdir_dehstr, DEHSTR);
+#ifdef CONFIG_AUFS_HNOTIFY
+AuCacheFuncs(hnotify, HNOTIFY);
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_MODULE_H__ */

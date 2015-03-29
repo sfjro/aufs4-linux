@@ -26,6 +26,7 @@
 
 #include <linux/fs.h>
 #include <linux/magic.h>
+#include <linux/romfs_fs.h>
 
 static inline int au_test_aufs(struct super_block *sb)
 {
@@ -35,6 +36,24 @@ static inline int au_test_aufs(struct super_block *sb)
 static inline const char *au_sbtype(struct super_block *sb)
 {
 	return sb->s_type->name;
+}
+
+static inline int au_test_iso9660(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_ISO9660_FS) || defined(CONFIG_ISO9660_FS_MODULE)
+	return sb->s_magic == ISOFS_SUPER_MAGIC;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_romfs(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_ROMFS_FS) || defined(CONFIG_ROMFS_FS_MODULE)
+	return sb->s_magic == ROMFS_MAGIC;
+#else
+	return 0;
+#endif
 }
 
 static inline int au_test_cramfs(struct super_block *sb __maybe_unused)
@@ -122,10 +141,51 @@ static inline int au_test_configfs(struct super_block *sb __maybe_unused)
 #endif
 }
 
+static inline int au_test_minix(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_MINIX_FS) || defined(CONFIG_MINIX_FS_MODULE)
+	return sb->s_magic == MINIX3_SUPER_MAGIC
+		|| sb->s_magic == MINIX2_SUPER_MAGIC
+		|| sb->s_magic == MINIX2_SUPER_MAGIC2
+		|| sb->s_magic == MINIX_SUPER_MAGIC
+		|| sb->s_magic == MINIX_SUPER_MAGIC2;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_fat(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_FAT_FS) || defined(CONFIG_FAT_FS_MODULE)
+	return sb->s_magic == MSDOS_SUPER_MAGIC;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_msdos(struct super_block *sb)
+{
+	return au_test_fat(sb);
+}
+
+static inline int au_test_vfat(struct super_block *sb)
+{
+	return au_test_fat(sb);
+}
+
 static inline int au_test_securityfs(struct super_block *sb __maybe_unused)
 {
 #ifdef CONFIG_SECURITYFS
 	return sb->s_magic == SECURITYFS_MAGIC;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_squashfs(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_SQUASHFS) || defined(CONFIG_SQUASHFS_MODULE)
+	return sb->s_magic == SQUASHFS_MAGIC;
 #else
 	return 0;
 #endif
@@ -206,6 +266,18 @@ static inline int au_test_fs_bad_iattr_size(struct super_block *sb)
 		;
 }
 
+/*
+ * filesystems which don't store the correct value in some of their inode
+ * attributes.
+ */
+static inline int au_test_fs_bad_iattr(struct super_block *sb)
+{
+	return au_test_fs_bad_iattr_size(sb)
+		|| au_test_fat(sb)
+		|| au_test_msdos(sb)
+		|| au_test_vfat(sb);
+}
+
 /* they don't check i_nlink in link(2) */
 static inline int au_test_fs_no_limit_nlink(struct super_block *sb)
 {
@@ -245,6 +317,23 @@ static inline int au_test_fs_bad_xino(struct super_block *sb)
 		|| au_test_aufs(sb)
 		|| au_test_ecryptfs(sb)
 		|| au_test_nilfs(sb);
+}
+
+static inline int au_test_fs_trunc_xino(struct super_block *sb)
+{
+	return au_test_tmpfs(sb)
+		|| au_test_ramfs(sb);
+}
+
+/*
+ * test if the @sb is real-readonly.
+ */
+static inline int au_test_fs_rr(struct super_block *sb)
+{
+	return au_test_squashfs(sb)
+		|| au_test_iso9660(sb)
+		|| au_test_cramfs(sb)
+		|| au_test_romfs(sb);
 }
 
 #endif /* __KERNEL__ */

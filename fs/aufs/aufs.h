@@ -37,6 +37,7 @@
 #include "branch.h"
 #include "cpup.h"
 #include "dcsub.h"
+#include "dbgaufs.h"
 #include "dentry.h"
 #include "dir.h"
 #include "dynop.h"

@@ -470,3 +470,63 @@ void au_plink_clean(struct super_block *sb, int verbose)
 		au_plink_put(sb, verbose);
 	aufs_write_unlock(root);
 }
+
+static int au_plink_do_half_refresh(struct inode *inode, aufs_bindex_t br_id)
+{
+	int do_put;
+	aufs_bindex_t bstart, bend, bindex;
+
+	do_put = 0;
+	bstart = au_ibstart(inode);
+	bend = au_ibend(inode);
+	if (bstart >= 0) {
+		for (bindex = bstart; bindex <= bend; bindex++) {
+			if (!au_h_iptr(inode, bindex)
+			    || au_ii_br_id(inode, bindex) != br_id)
+				continue;
+			au_set_h_iptr(inode, bindex, NULL, 0);
+			do_put = 1;
+			break;
+		}
+		if (do_put)
+			for (bindex = bstart; bindex <= bend; bindex++)
+				if (au_h_iptr(inode, bindex)) {
+					do_put = 0;
+					break;
+				}
+	} else
+		do_put = 1;
+
+	return do_put;
+}
+
+/* free the plinks on a branch specified by @br_id */
+void au_plink_half_refresh(struct super_block *sb, aufs_bindex_t br_id)
+{
+	struct au_sbinfo *sbinfo;
+	struct hlist_head *plink_hlist;
+	struct hlist_node *tmp;
+	struct pseudo_link *plink;
+	struct inode *inode;
+	int i, do_put;
+
+	SiMustWriteLock(sb);
+
+	sbinfo = au_sbi(sb);
+	AuDebugOn(!au_opt_test(au_mntflags(sb), PLINK));
+	AuDebugOn(au_plink_maint(sb, AuLock_NOPLM));
+
+	/* no spin_lock since sbinfo is write-locked */
+	for (i = 0; i < AuPlink_NHASH; i++) {
+		plink_hlist = &sbinfo->si_plink[i].head;
+		hlist_for_each_entry_safe(plink, tmp, plink_hlist, hlist) {
+			inode = au_igrab(plink->inode);
+			ii_write_lock_child(inode);
+			do_put = au_plink_do_half_refresh(inode, br_id);
+			if (do_put)
+				do_put_plink(plink, 1);
+			ii_write_unlock(inode);
+			iput(inode);
+		}
+	}
+}

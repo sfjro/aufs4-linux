@@ -60,6 +60,9 @@ struct au_finfo {
 		atomic_t			fi_mmapped;
 	};
 	struct au_fidir		*fi_hdir;	/* for dir only */
+
+	struct hlist_node	fi_hlist;
+	struct file		*fi_file;	/* very ugly */
 } ____cacheline_aligned_in_smp;
 
 /* ---------------------------------------------------------------------- */
@@ -68,7 +71,7 @@ struct au_finfo {
 extern const struct address_space_operations aufs_aop;
 unsigned int au_file_roflags(unsigned int flags);
 struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
-		       struct file *file);
+		       struct file *file, int force_wr);
 int au_do_open(struct file *file, int (*open)(struct file *file, int flags),
 	       struct au_fidir *fidir);
 int au_reopen_nondir(struct file *file);
@@ -76,6 +79,8 @@ struct au_pin;
 int au_ready_to_write(struct file *file, loff_t len, struct au_pin *pin);
 int au_reval_and_lock_fdi(struct file *file, int (*reopen)(struct file *file),
 			  int wlock);
+int au_do_flush(struct file *file, fl_owner_t id,
+		int (*flush)(struct file *file, fl_owner_t id));
 
 /* f_op.c */
 extern const struct file_operations aufs_file_fop;
@@ -94,6 +99,15 @@ int au_fidir_realloc(struct au_finfo *finfo, int nbr);
 void au_fi_init_once(void *_fi);
 void au_finfo_fin(struct file *file);
 int au_finfo_init(struct file *file, struct au_fidir *fidir);
+
+/* ioctl.c */
+long aufs_ioctl_nondir(struct file *file, unsigned int cmd, unsigned long arg);
+#ifdef CONFIG_COMPAT
+long aufs_compat_ioctl_dir(struct file *file, unsigned int cmd,
+			   unsigned long arg);
+long aufs_compat_ioctl_nondir(struct file *file, unsigned int cmd,
+			      unsigned long arg);
+#endif
 
 /* ---------------------------------------------------------------------- */
 

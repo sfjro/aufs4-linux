@@ -366,6 +366,7 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		aufs_bindex_t bindex;
 		unsigned int flags;
 		struct dentry *dentry;
+		int force_wr;
 		struct file *file;
 		void *label;
 	} *f, file[] = {
@@ -377,6 +378,7 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		{
 			.bindex = cpg->bdst,
 			.flags = O_WRONLY | O_NOATIME | O_LARGEFILE,
+			.force_wr = !!au_ftest_cpup(cpg->flags, RWDST),
 			.label = &&out_src
 		}
 	};
@@ -388,7 +390,7 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 	for (i = 0; i < 2; i++, f++) {
 		f->dentry = au_h_dptr(cpg->dentry, f->bindex);
 		f->file = au_h_open(cpg->dentry, f->bindex, f->flags,
-				    /*file*/NULL);
+				    /*file*/NULL, f->force_wr);
 		err = PTR_ERR(f->file);
 		if (IS_ERR(f->file))
 			goto *f->label;
@@ -588,6 +590,7 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 			if (cpg->len == -1)
 				force = !!i_size_read(h_inode);
 		}
+		au_fhsm_wrote(sb, cpg->bdst, force);
 	}
 
 	if (do_dt)
@@ -598,19 +601,29 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 static int au_do_ren_after_cpup(struct au_cp_generic *cpg, struct path *h_path)
 {
 	int err;
-	struct dentry *dentry, *h_dentry, *h_parent;
+	struct dentry *dentry, *h_dentry, *h_parent, *parent;
 	struct inode *h_dir;
 	aufs_bindex_t bdst;
 
 	dentry = cpg->dentry;
 	bdst = cpg->bdst;
 	h_dentry = au_h_dptr(dentry, bdst);
-	dget(h_dentry);
-	au_set_h_dptr(dentry, bdst, NULL);
-	err = au_lkup_neg(dentry, bdst, /*wh*/0);
-	if (!err)
-		h_path->dentry = dget(au_h_dptr(dentry, bdst));
-	au_set_h_dptr(dentry, bdst, h_dentry);
+	if (!au_ftest_cpup(cpg->flags, OVERWRITE)) {
+		dget(h_dentry);
+		au_set_h_dptr(dentry, bdst, NULL);
+		err = au_lkup_neg(dentry, bdst, /*wh*/0);
+		if (!err)
+			h_path->dentry = dget(au_h_dptr(dentry, bdst));
+		au_set_h_dptr(dentry, bdst, h_dentry);
+	} else {
+		err = 0;
+		parent = dget_parent(dentry);
+		h_parent = au_h_dptr(parent, bdst);
+		dput(parent);
+		h_path->dentry = vfsub_lkup_one(&dentry->d_name, h_parent);
+		if (IS_ERR(h_path->dentry))
+			err = PTR_ERR(h_path->dentry);
+	}
 	if (unlikely(err))
 		goto out;
 
@@ -976,6 +989,12 @@ int au_sio_cpup_simple(struct au_cp_generic *cpg)
 		cpg->bsrc = bsrc;
 	}
 	AuDebugOn(cpg->bsrc <= cpg->bdst);
+	return au_do_sio_cpup_simple(cpg);
+}
+
+int au_sio_cpdown_simple(struct au_cp_generic *cpg)
+{
+	AuDebugOn(cpg->bdst <= cpg->bsrc);
 	return au_do_sio_cpup_simple(cpg);
 }
 

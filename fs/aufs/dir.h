@@ -80,6 +80,7 @@ struct au_vdir {
 /* ---------------------------------------------------------------------- */
 
 /* dir.c */
+extern const struct file_operations aufs_dir_fop;
 void au_add_nlink(struct inode *dir, struct inode *h_dir);
 void au_sub_nlink(struct inode *dir, struct inode *h_dir);
 loff_t au_dir_size(struct file *file, struct dentry *dentry);
@@ -90,12 +91,33 @@ int au_test_empty(struct dentry *dentry, struct au_nhash *whlist);
 unsigned int au_rdhash_est(loff_t sz);
 int au_nhash_alloc(struct au_nhash *nhash, unsigned int num_hash, gfp_t gfp);
 void au_nhash_wh_free(struct au_nhash *whlist);
+int au_nhash_test_longer_wh(struct au_nhash *whlist, aufs_bindex_t btgt,
+			    int limit);
 int au_nhash_test_known_wh(struct au_nhash *whlist, char *name, int nlen);
 int au_nhash_append_wh(struct au_nhash *whlist, char *name, int nlen, ino_t ino,
 		       unsigned int d_type, aufs_bindex_t bindex);
 void au_vdir_free(struct au_vdir *vdir);
 int au_vdir_init(struct file *file);
 int au_vdir_fill_de(struct file *file, struct dir_context *ctx);
+
+/* ioctl.c */
+long aufs_ioctl_dir(struct file *file, unsigned int cmd, unsigned long arg);
+
+#ifdef CONFIG_AUFS_RDU
+/* rdu.c */
+long au_rdu_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+#ifdef CONFIG_COMPAT
+long au_rdu_compat_ioctl(struct file *file, unsigned int cmd,
+			 unsigned long arg);
+#endif
+#else
+AuStub(long, au_rdu_ioctl, return -EINVAL, struct file *file,
+       unsigned int cmd, unsigned long arg)
+#ifdef CONFIG_COMPAT
+AuStub(long, au_rdu_compat_ioctl, return -EINVAL, struct file *file,
+       unsigned int cmd, unsigned long arg)
+#endif
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_DIR_H__ */

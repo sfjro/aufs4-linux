@@ -87,6 +87,7 @@ int au_si_alloc(struct super_block *sb)
 	INIT_RADIX_TREE(&sbinfo->au_si_pid.tree, GFP_ATOMIC | __GFP_NOFAIL);
 
 	atomic_long_set(&sbinfo->si_ninodes, 0);
+	atomic_long_set(&sbinfo->si_nfiles, 0);
 
 	sbinfo->si_bend = -1;
 	sbinfo->si_last_br_id = AUFS_BRANCH_MAX / 2;
@@ -96,8 +97,13 @@ int au_si_alloc(struct super_block *sb)
 	sbinfo->si_wbr_copyup_ops = au_wbr_copyup_ops + sbinfo->si_wbr_copyup;
 	sbinfo->si_wbr_create_ops = au_wbr_create_ops + sbinfo->si_wbr_create;
 
+	au_fhsm_init(sbinfo);
+
 	sbinfo->si_mntflags = au_opts_plink(AuOpt_Def);
 
+	sbinfo->si_xino_jiffy = jiffies;
+	sbinfo->si_xino_expire
+		= msecs_to_jiffies(AUFS_XINO_DEF_SEC * MSEC_PER_SEC);
 	mutex_init(&sbinfo->si_xib_mtx);
 	sbinfo->si_xino_brid = -1;
 	/* leave si_xib_last_pindex and si_xib_next_bit */
@@ -105,11 +111,14 @@ int au_si_alloc(struct super_block *sb)
 	sbinfo->si_rdcache = msecs_to_jiffies(AUFS_RDCACHE_DEF * MSEC_PER_SEC);
 	sbinfo->si_rdblk = AUFS_RDBLK_DEF;
 	sbinfo->si_rdhash = AUFS_RDHASH_DEF;
+	sbinfo->si_dirwh = AUFS_DIRWH_DEF;
 
 	for (i = 0; i < AuPlink_NHASH; i++)
 		au_sphl_init(sbinfo->si_plink + i);
 	init_waitqueue_head(&sbinfo->si_plink_wq);
 	spin_lock_init(&sbinfo->si_plink_maint_lock);
+
+	au_sphl_init(&sbinfo->si_files);
 
 	/* leave other members for sysaufs and si_mnt. */
 	sbinfo->si_sb = sb;

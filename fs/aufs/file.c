@@ -22,7 +22,6 @@
 #ifdef CONFIG_AUFS_DEBUG
 #include <linux/migrate.h>
 #endif
-#include <linux/fsnotify.h>
 #include <linux/pagemap.h>
 #include "aufs.h"
 
@@ -36,7 +35,7 @@ unsigned int au_file_roflags(unsigned int flags)
 
 /* common functions to regular file and dir */
 struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
-		       struct file *file)
+		       struct file *file, int force_wr)
 {
 	struct file *h_file;
 	struct dentry *h_dentry;
@@ -49,7 +48,11 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 	/* a race condition can happen between open and unlink/rmdir */
 	h_file = ERR_PTR(-ENOENT);
 	h_dentry = au_h_dptr(dentry, bindex);
+	if (au_test_nfsd() && !h_dentry)
+		goto out;
 	h_inode = h_dentry->d_inode;
+	if (au_test_nfsd() && !h_inode)
+		goto out;
 	spin_lock(&h_dentry->d_lock);
 	err = (!d_unhashed(dentry) && d_unlinked(h_dentry))
 		|| !h_inode
@@ -67,8 +70,20 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 		goto out;
 
 	/* drop flags for writing */
-	if (au_test_ro(sb, bindex, dentry->d_inode))
+	if (au_test_ro(sb, bindex, dentry->d_inode)) {
+		if (force_wr && !(flags & O_WRONLY))
+			force_wr = 0;
 		flags = au_file_roflags(flags);
+		if (force_wr) {
+			h_file = ERR_PTR(-EROFS);
+			flags = au_file_roflags(flags);
+			if (unlikely(vfsub_native_ro(h_inode)
+				     || IS_APPEND(h_inode)))
+				goto out;
+			flags &= ~O_ACCMODE;
+			flags |= O_WRONLY;
+		}
+	}
 	flags &= ~O_CREAT;
 	atomic_inc(&br->br_count);
 	h_path.dentry = h_dentry;
@@ -94,6 +109,120 @@ out:
 	return h_file;
 }
 
+static int au_cmoo(struct dentry *dentry)
+{
+	int err, cmoo;
+	unsigned int udba;
+	struct path h_path;
+	struct au_pin pin;
+	struct au_cp_generic cpg = {
+		.dentry	= dentry,
+		.bdst	= -1,
+		.bsrc	= -1,
+		.len	= -1,
+		.pin	= &pin,
+		.flags	= AuCpup_DTIME
+	};
+	struct inode *delegated;
+	struct super_block *sb;
+	struct au_sbinfo *sbinfo;
+	struct au_fhsm *fhsm;
+	pid_t pid;
+	struct au_branch *br;
+	struct dentry *parent;
+	struct au_hinode *hdir;
+
+	DiMustWriteLock(dentry);
+	IiMustWriteLock(dentry->d_inode);
+
+	err = 0;
+	if (IS_ROOT(dentry))
+		goto out;
+	cpg.bsrc = au_dbstart(dentry);
+	if (!cpg.bsrc)
+		goto out;
+
+	sb = dentry->d_sb;
+	sbinfo = au_sbi(sb);
+	fhsm = &sbinfo->si_fhsm;
+	pid = au_fhsm_pid(fhsm);
+	if (pid
+	    && (current->pid == pid
+		|| current->real_parent->pid == pid))
+		goto out;
+
+	br = au_sbr(sb, cpg.bsrc);
+	cmoo = au_br_cmoo(br->br_perm);
+	if (!cmoo)
+		goto out;
+	if (!d_is_reg(dentry))
+		cmoo &= AuBrAttr_COO_ALL;
+	if (!cmoo)
+		goto out;
+
+	parent = dget_parent(dentry);
+	di_write_lock_parent(parent);
+	err = au_wbr_do_copyup_bu(dentry, cpg.bsrc - 1);
+	cpg.bdst = err;
+	if (unlikely(err < 0)) {
+		err = 0;	/* there is no upper writable branch */
+		goto out_dgrade;
+	}
+	AuDbg("bsrc %d, bdst %d\n", cpg.bsrc, cpg.bdst);
+
+	/* do not respect the coo attrib for the target branch */
+	err = au_cpup_dirs(dentry, cpg.bdst);
+	if (unlikely(err))
+		goto out_dgrade;
+
+	di_downgrade_lock(parent, AuLock_IR);
+	udba = au_opt_udba(sb);
+	err = au_pin(&pin, dentry, cpg.bdst, udba,
+		     AuPin_DI_LOCKED | AuPin_MNT_WRITE);
+	if (unlikely(err))
+		goto out_parent;
+
+	err = au_sio_cpup_simple(&cpg);
+	au_unpin(&pin);
+	if (unlikely(err))
+		goto out_parent;
+	if (!(cmoo & AuBrWAttr_MOO))
+		goto out_parent; /* success */
+
+	err = au_pin(&pin, dentry, cpg.bsrc, udba,
+		     AuPin_DI_LOCKED | AuPin_MNT_WRITE);
+	if (unlikely(err))
+		goto out_parent;
+
+	h_path.mnt = au_br_mnt(br);
+	h_path.dentry = au_h_dptr(dentry, cpg.bsrc);
+	hdir = au_hi(parent->d_inode, cpg.bsrc);
+	delegated = NULL;
+	err = vfsub_unlink(hdir->hi_inode, &h_path, &delegated, /*force*/1);
+	au_unpin(&pin);
+	/* todo: keep h_dentry or not? */
+	if (unlikely(err == -EWOULDBLOCK)) {
+		pr_warn("cannot retry for NFSv4 delegation"
+			" for an internal unlink\n");
+		iput(delegated);
+	}
+	if (unlikely(err)) {
+		pr_err("unlink %pd after coo failed (%d), ignored\n",
+		       dentry, err);
+		err = 0;
+	}
+	goto out_parent; /* success */
+
+out_dgrade:
+	di_downgrade_lock(parent, AuLock_IR);
+out_parent:
+	di_read_unlock(parent, AuLock_IR);
+	dput(parent);
+out:
+	AuTraceErr(err);
+	return err;
+}
+
 int au_do_open(struct file *file, int (*open)(struct file *file, int flags),
 	       struct au_fidir *fidir)
 {
@@ -106,11 +235,19 @@ int au_do_open(struct file *file, int (*open)(struct file *file, int flags),
 		goto out;
 
 	dentry = file->f_path.dentry;
-	di_read_lock_child(dentry, AuLock_IR);
-	err = open(file, vfsub_file_flags(file));
+	di_write_lock_child(dentry);
+	err = au_cmoo(dentry);
+	di_downgrade_lock(dentry, AuLock_IR);
+	if (!err)
+		err = open(file, vfsub_file_flags(file));
 	di_read_unlock(dentry, AuLock_IR);
 
 	finfo = au_fi(file);
+	if (!err) {
+		finfo->fi_file = file;
+		au_sphl_add(&finfo->fi_hlist,
+			    &au_sbi(file->f_path.dentry->d_sb)->si_files);
+	}
 	fi_write_unlock(file);
 	if (unlikely(err)) {
 		finfo->fi_hdir = NULL;
@@ -153,7 +290,7 @@ int au_reopen_nondir(struct file *file)
 	/* AuDebugOn(au_fbstart(file) < bstart); */
 
 	h_file = au_h_open(dentry, bstart, vfsub_file_flags(file) & ~O_TRUNC,
-			   file);
+			   file, /*force_wr*/0);
 	err = PTR_ERR(h_file);
 	if (IS_ERR(h_file)) {
 		if (h_file_tmp) {
@@ -322,6 +459,30 @@ out_unlock:
 out_dput:
 	dput(parent);
 out:
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int au_do_flush(struct file *file, fl_owner_t id,
+		int (*flush)(struct file *file, fl_owner_t id))
+{
+	int err;
+	struct super_block *sb;
+	struct inode *inode;
+
+	inode = file_inode(file);
+	sb = inode->i_sb;
+	si_noflush_read_lock(sb);
+	fi_read_lock(file);
+	ii_read_lock_child(inode);
+
+	err = flush(file, id);
+	au_cpup_attr_timesizes(inode);
+
+	ii_read_unlock(inode);
+	fi_read_unlock(file);
+	si_read_unlock(sb);
 	return err;
 }
 

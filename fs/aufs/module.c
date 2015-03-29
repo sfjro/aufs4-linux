@@ -69,7 +69,10 @@ static void au_cache_fin(void)
 	 * destroy cache.
 	 */
 	rcu_barrier();
-	for (i = 0; i < AuCache_Last; i++)
+
+	/* excluding AuCache_HNOTIFY */
+	BUILD_BUG_ON(AuCache_HNOTIFY + 1 != AuCache_Last);
+	for (i = 0; i < AuCache_HNOTIFY; i++)
 		if (au_cachep[i]) {
 			kmem_cache_destroy(au_cachep[i]);
 			au_cachep[i] = NULL;
@@ -78,6 +81,8 @@ static void au_cache_fin(void)
 
 /* ---------------------------------------------------------------------- */
 
+int au_dir_roflags;
+
 #ifdef CONFIG_AUFS_SBILIST
 /*
  * iterate_supers_type() doesn't protect us from
@@ -85,6 +90,8 @@ static void au_cache_fin(void)
  */
 struct au_splhead au_sbilist;
 #endif
+
+struct lock_class_key au_lc_key[AuLcKey_Last];
 
 /*
  * functions for module interface.
@@ -124,8 +131,11 @@ static int __init aufs_init(void)
 	*p++ = '\x7f';
 	*p = 0;
 
+	au_dir_roflags = au_file_roflags(O_DIRECTORY | O_LARGEFILE);
+
 	au_sbilist_init();
 	sysaufs_brs_init();
+	au_debug_init();
 	au_dy_init();
 	err = sysaufs_init();
 	if (unlikely(err))
@@ -136,9 +146,15 @@ static int __init aufs_init(void)
 	err = au_wkq_init();
 	if (unlikely(err))
 		goto out_procfs;
-	err = au_cache_init();
+	err = au_hnotify_init();
 	if (unlikely(err))
 		goto out_wkq;
+	err = au_sysrq_init();
+	if (unlikely(err))
+		goto out_hin;
+	err = au_cache_init();
+	if (unlikely(err))
+		goto out_sysrq;
 
 	err = register_filesystem(&aufs_fs_type);
 	if (unlikely(err))
@@ -150,6 +166,10 @@ static int __init aufs_init(void)
 
 out_cache:
 	au_cache_fin();
+out_sysrq:
+	au_sysrq_fin();
+out_hin:
+	au_hnotify_fin();
 out_wkq:
 	au_wkq_fin();
 out_procfs:
@@ -165,6 +185,8 @@ static void __exit aufs_exit(void)
 {
 	unregister_filesystem(&aufs_fs_type);
 	au_cache_fin();
+	au_sysrq_fin();
+	au_hnotify_fin();
 	au_wkq_fin();
 	au_procfs_fin();
 	sysaufs_fin();

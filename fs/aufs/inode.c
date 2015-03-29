@@ -201,7 +201,7 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 		isdir = 1;
 		btail = au_dbtaildir(dentry);
 		inode->i_op = &aufs_dir_iop;
-		inode->i_fop = &simple_dir_operations; /* re-commit later */
+		inode->i_fop = &aufs_dir_fop;
 		break;
 	case S_IFLNK:
 		btail = au_dbtail(dentry);
@@ -370,6 +370,17 @@ new_ino:
 
 	AuDbg("%lx, new %d\n", inode->i_state, !!(inode->i_state & I_NEW));
 	if (inode->i_state & I_NEW) {
+		/* verbose coding for lock class name */
+		if (unlikely(d_is_symlink(h_dentry)))
+			au_rw_class(&au_ii(inode)->ii_rwsem,
+				    au_lc_key + AuLcSymlink_IIINFO);
+		else if (unlikely(d_is_dir(h_dentry)))
+			au_rw_class(&au_ii(inode)->ii_rwsem,
+				    au_lc_key + AuLcDir_IIINFO);
+		else /* likely */
+			au_rw_class(&au_ii(inode)->ii_rwsem,
+				    au_lc_key + AuLcNonDir_IIINFO);
+
 		ii_write_lock_new_child(inode);
 		err = set_inode(inode, dentry);
 		if (!err) {

@@ -345,7 +345,7 @@ static int au_h_verify_dentry(struct dentry *h_dentry, struct dentry *h_parent,
 	if (unlikely(h_d != h_dentry
 		     || h_d->d_inode != h_inode
 		     || (h_inode && au_iattr_test(&ia, h_inode))))
-		err = -EBUSY;
+		err = au_busy_or_stale();
 	dput(h_d);
 
 out:
@@ -1062,8 +1062,10 @@ out:
 
 static void aufs_d_release(struct dentry *dentry)
 {
-	if (au_di(dentry))
+	if (au_di(dentry)) {
 		au_di_fin(dentry);
+		au_hn_di_reinit(dentry);
+	}
 }
 
 const struct dentry_operations aufs_dop = {
