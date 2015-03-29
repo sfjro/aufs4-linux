@@ -114,12 +114,14 @@ typedef int16_t aufs_bindex_t;
 /* branch permissions and attributes */
 #define AUFS_BRPERM_RW		"rw"
 #define AUFS_BRPERM_RO		"ro"
+#define AUFS_BRPERM_RR		"rr"
 #define AUFS_BRRATTR_WH		"wh"
 #define AUFS_BRWATTR_NLWH	"nolwh"
 
 #define AuBrPerm_RW		1		/* writable, hardlinkable wh */
 #define AuBrPerm_RO		(1 << 1)	/* readonly */
-#define AuBrPerm_Mask		(AuBrPerm_RW | AuBrPerm_RO)
+#define AuBrPerm_RR		(1 << 2)	/* natively readonly */
+#define AuBrPerm_Mask		(AuBrPerm_RW | AuBrPerm_RO | AuBrPerm_RR)
 
 #define AuBrRAttr_WH		(1 << 7)	/* whiteout-able */
 #define AuBrRAttr_Mask		AuBrRAttr_WH

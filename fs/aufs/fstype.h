@@ -26,6 +26,7 @@
 
 #include <linux/fs.h>
 #include <linux/magic.h>
+#include <linux/romfs_fs.h>
 
 static inline int au_test_aufs(struct super_block *sb)
 {
@@ -35,6 +36,24 @@ static inline int au_test_aufs(struct super_block *sb)
 static inline const char *au_sbtype(struct super_block *sb)
 {
 	return sb->s_type->name;
+}
+
+static inline int au_test_iso9660(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_ISO9660_FS) || defined(CONFIG_ISO9660_FS_MODULE)
+	return sb->s_magic == ISOFS_SUPER_MAGIC;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_romfs(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_ROMFS_FS) || defined(CONFIG_ROMFS_FS_MODULE)
+	return sb->s_magic == ROMFS_MAGIC;
+#else
+	return 0;
+#endif
 }
 
 static inline int au_test_cramfs(struct super_block *sb __maybe_unused)
@@ -158,6 +177,15 @@ static inline int au_test_securityfs(struct super_block *sb __maybe_unused)
 {
 #ifdef CONFIG_SECURITYFS
 	return sb->s_magic == SECURITYFS_MAGIC;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_squashfs(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_SQUASHFS) || defined(CONFIG_SQUASHFS_MODULE)
+	return sb->s_magic == SQUASHFS_MAGIC;
 #else
 	return 0;
 #endif
@@ -295,6 +323,17 @@ static inline int au_test_fs_trunc_xino(struct super_block *sb)
 {
 	return au_test_tmpfs(sb)
 		|| au_test_ramfs(sb);
+}
+
+/*
+ * test if the @sb is real-readonly.
+ */
+static inline int au_test_fs_rr(struct super_block *sb)
+{
+	return au_test_squashfs(sb)
+		|| au_test_iso9660(sb)
+		|| au_test_cramfs(sb)
+		|| au_test_romfs(sb);
 }
 
 #endif /* __KERNEL__ */
