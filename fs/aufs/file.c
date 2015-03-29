@@ -94,6 +94,33 @@ out:
 	return h_file;
 }
 
+int au_do_open(struct file *file, int (*open)(struct file *file, int flags),
+	       struct au_fidir *fidir)
+{
+	int err;
+	struct dentry *dentry;
+	struct au_finfo *finfo;
+
+	err = au_finfo_init(file, fidir);
+	if (unlikely(err))
+		goto out;
+
+	dentry = file->f_path.dentry;
+	di_read_lock_child(dentry, AuLock_IR);
+	err = open(file, vfsub_file_flags(file));
+	di_read_unlock(dentry, AuLock_IR);
+
+	finfo = au_fi(file);
+	fi_write_unlock(file);
+	if (unlikely(err)) {
+		finfo->fi_hdir = NULL;
+		au_finfo_fin(file);
+	}
+
+out:
+	return err;
+}
+
 /* ---------------------------------------------------------------------- */
 
 static int au_file_refresh_by_inode(struct file *file, int *need_reopen)
