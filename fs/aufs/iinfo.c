@@ -25,7 +25,10 @@ struct inode *au_h_iptr(struct inode *inode, aufs_bindex_t bindex)
 {
 	struct inode *h_inode;
 
+	IiMustAnyLock(inode);
+
 	h_inode = au_ii(inode)->ii_hinode[0 + bindex].hi_inode;
+	AuDebugOn(h_inode && atomic_read(&h_inode->i_count) <= 0);
 	return h_inode;
 }
 
@@ -43,9 +46,8 @@ void au_icntnr_init_once(void *_c)
 	struct au_iinfo *iinfo = &c->iinfo;
 	static struct lock_class_key aufs_ii;
 
-	init_rwsem(&iinfo->ii_rwsem);
-	lockdep_set_class(&iinfo->ii_rwsem, &aufs_ii);
-	down_write(&iinfo->ii_rwsem);
+	au_rw_init(&iinfo->ii_rwsem);
+	au_rw_class(&iinfo->ii_rwsem, &aufs_ii);
 	inode_init_once(&c->vfs_inode);
 }
 
@@ -90,4 +92,5 @@ void au_iinfo_fin(struct inode *inode)
 	}
 	kfree(iinfo->ii_hinode);
 	iinfo->ii_hinode = NULL;
+	AuRwDestroy(&iinfo->ii_rwsem);
 }

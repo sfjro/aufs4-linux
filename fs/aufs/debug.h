@@ -16,20 +16,19 @@
  */
 
 /*
- * all header files
+ * debug print functions
  */
 
-#ifndef __AUFS_H__
-#define __AUFS_H__
+#ifndef __AUFS_DEBUG_H__
+#define __AUFS_DEBUG_H__
 
 #ifdef __KERNEL__
 
-#include "debug.h"
-
-#include "inode.h"
-#include "module.h"
-#include "rwsem.h"
-#include "super.h"
+#ifdef CONFIG_AUFS_DEBUG
+#define AuDebugOn(a)		BUG_ON(a)
+#else
+#define AuDebugOn(a)		do {} while (0)
+#endif /* CONFIG_AUFS_DEBUG */
 
 #endif /* __KERNEL__ */
-#endif /* __AUFS_H__ */
+#endif /* __AUFS_DEBUG_H__ */

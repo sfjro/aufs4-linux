@@ -42,4 +42,10 @@ config AUFS_BRANCH_MAX_32767
 	in a single aufs. The larger value consumes more system
 	resources and has a minor impact to performance.
 endchoice
+
+config AUFS_DEBUG
+	bool "Debug aufs"
+	help
+	Enable this to compile aufs internal debug code.
+	It will have a negative impact to the performance.
 endif
