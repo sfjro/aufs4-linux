@@ -1,0 +1,52 @@
+
+# Copyright (C) 2005-2015 Junjiro R. Okajima
+# 
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+Basic Aufs Internal Structure
+
+Superblock/Inode/Dentry/File Objects
+----------------------------------------------------------------------
+As like an ordinary filesystem, aufs has its own
+superblock/inode/dentry/file objects. All these objects have a
+dynamically allocated array and store the same kind of pointers to the
+lower filesystem, branch.
+For example, when you build a union with one readwrite branch and one
+readonly, mounted /au, /rw and /ro respectively.
+- /au = /rw + /ro
+- /ro/fileA exists but /rw/fileA
+
+Aufs lookup operation finds /ro/fileA and gets dentry for that. These
+pointers are stored in a aufs dentry. The array in aufs dentry will be,
+- [0] = NULL (because /rw/fileA doesn't exist)
+- [1] = /ro/fileA
+
+This style of an array is essentially same to the aufs
+superblock/inode/dentry/file objects.
+
+Because aufs supports manipulating branches, ie. add/delete/change
+branches dynamically, these objects has its own generation. When
+branches are changed, the generation in aufs superblock is
+incremented. And a generation in other object are compared when it is
+accessed. When a generation in other objects are obsoleted, aufs
+refreshes the internal array.
+
+
+Superblock
+----------------------------------------------------------------------
+Additionally aufs superblock has some data for policies to select one
+among multiple writable branches, XIB files, pseudo-links and kobject.
+See below in detail.
+About the policies which supports copy-down a directory, see
+wbr_policy.txt too.
