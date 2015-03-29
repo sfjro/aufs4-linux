@@ -486,7 +486,8 @@ static int cvt_err(int err)
 
 static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 {
-	int err;
+	int err, do_dx;
+	unsigned int mntflags;
 	struct au_opts opts;
 	struct dentry *root;
 	struct inode *inode;
@@ -532,6 +533,12 @@ static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 
 	if (au_ftest_opts(opts.flags, REFRESH))
 		au_remount_refresh(sb);
+
+	if (au_ftest_opts(opts.flags, REFRESH_DYAOP)) {
+		mntflags = au_mntflags(sb);
+		do_dx = !!au_opt_test(mntflags, DIO);
+		au_dy_arefresh(do_dx);
+	}
 
 	aufs_write_unlock(root);
 

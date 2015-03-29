@@ -39,6 +39,7 @@
 #include "dcsub.h"
 #include "dentry.h"
 #include "dir.h"
+#include "dynop.h"
 #include "file.h"
 #include "fstype.h"
 #include "inode.h"

@@ -62,6 +62,7 @@ struct au_finfo {
 /* ---------------------------------------------------------------------- */
 
 /* file.c */
+extern const struct address_space_operations aufs_aop;
 unsigned int au_file_roflags(unsigned int flags);
 struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 		       struct file *file);

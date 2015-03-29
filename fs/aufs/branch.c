@@ -29,6 +29,7 @@ static void au_br_do_free(struct au_branch *br)
 {
 	int i;
 	struct au_wbr *wbr;
+	struct au_dykey **key;
 
 	if (br->br_xino.xi_file)
 		fput(br->br_xino.xi_file);
@@ -43,6 +44,13 @@ static void au_br_do_free(struct au_branch *br)
 		AuDebugOn(atomic_read(&wbr->wbr_wh_running));
 		AuRwDestroy(&wbr->wbr_wh_rwsem);
 	}
+
+	key = br->br_dykey;
+	for (i = 0; i < AuBrDynOp; i++, key++)
+		if (*key)
+			au_dy_put(*key);
+		else
+			break;
 
 	/* recursive lock, s_umount of branch's */
 	lockdep_off();
@@ -337,6 +345,8 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	mutex_init(&br->br_xino.xi_nondir_mtx);
 	br->br_perm = add->perm;
 	br->br_path = add->path; /* set first, path_get() later */
+	spin_lock_init(&br->br_dykey_lock);
+	memset(br->br_dykey, 0, sizeof(br->br_dykey));
 	atomic_set(&br->br_count, 0);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
