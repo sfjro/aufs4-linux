@@ -21,6 +21,7 @@
 
 #include <linux/mm.h>
 #include <linux/seq_file.h>
+#include <linux/statfs.h>
 #include "aufs.h"
 
 /*
@@ -204,6 +205,137 @@ static int au_show_xino(struct seq_file *seq, struct super_block *sb)
 out:
 	return err;
 #endif
+}
+
+/* seq_file will re-call me in case of too long string */
+static int aufs_show_options(struct seq_file *m, struct dentry *dentry)
+{
+	int err;
+	unsigned int mnt_flags, v;
+	struct super_block *sb;
+	struct au_sbinfo *sbinfo;
+
+#define AuBool(name, str) do { \
+	v = au_opt_test(mnt_flags, name); \
+	if (v != au_opt_test(AuOpt_Def, name)) \
+		seq_printf(m, ",%s" #str, v ? "" : "no"); \
+} while (0)
+
+#define AuStr(name, str) do { \
+	v = mnt_flags & AuOptMask_##name; \
+	if (v != (AuOpt_Def & AuOptMask_##name)) \
+		seq_printf(m, "," #str "=%s", au_optstr_##str(v)); \
+} while (0)
+
+#define AuUInt(name, str, val) do { \
+	if (val != AUFS_##name##_DEF) \
+		seq_printf(m, "," #str "=%u", val); \
+} while (0)
+
+	/* lock free root dinfo */
+	sb = dentry->d_sb;
+	si_noflush_read_lock(sb);
+	sbinfo = au_sbi(sb);
+	seq_printf(m, ",si=%lx", sysaufs_si_id(sbinfo));
+
+	mnt_flags = au_mntflags(sb);
+	if (au_opt_test(mnt_flags, XINO)) {
+		err = au_show_xino(m, sb);
+		if (unlikely(err))
+			goto out;
+	} else
+		seq_puts(m, ",noxino");
+
+	AuBool(TRUNC_XINO, trunc_xino);
+	AuStr(UDBA, udba);
+	AuBool(PLINK, plink);
+	AuBool(DIO, dio);
+
+	v = sbinfo->si_wbr_create;
+	if (v != AuWbrCreate_Def)
+		au_show_wbr_create(m, v, sbinfo);
+
+	v = sbinfo->si_wbr_copyup;
+	if (v != AuWbrCopyup_Def)
+		seq_printf(m, ",cpup=%s", au_optstr_wbr_copyup(v));
+
+	v = jiffies_to_msecs(sbinfo->si_rdcache) / MSEC_PER_SEC;
+	AuUInt(RDCACHE, rdcache, v);
+
+	AuUInt(RDBLK, rdblk, sbinfo->si_rdblk);
+	AuUInt(RDHASH, rdhash, sbinfo->si_rdhash);
+
+	AuBool(VERBOSE, verbose);
+
+out:
+	/* be sure to print "br:" last */
+	if (!sysaufs_brs) {
+		seq_puts(m, ",br:");
+		au_show_brs(m, sb);
+	}
+	si_read_unlock(sb);
+	return 0;
+
+#undef AuBool
+#undef AuStr
+#undef AuUInt
+}
+
+/* ---------------------------------------------------------------------- */
+
+static int aufs_statfs(struct dentry *dentry, struct kstatfs *buf)
+{
+	int err;
+	struct path h_path;
+	struct super_block *sb;
+
+	/* lock free root dinfo */
+	sb = dentry->d_sb;
+	si_noflush_read_lock(sb);
+	/* sb->s_root for NFS is unreliable */
+	h_path.mnt = au_sbr_mnt(sb, 0);
+	h_path.dentry = h_path.mnt->mnt_root;
+	err = vfs_statfs(&h_path, buf);
+	si_read_unlock(sb);
+
+	if (!err) {
+		buf->f_type = AUFS_SUPER_MAGIC;
+		buf->f_namelen = AUFS_MAX_NAMELEN;
+		memset(&buf->f_fsid, 0, sizeof(buf->f_fsid));
+	}
+	/* buf->f_bsize = buf->f_blocks = buf->f_bfree = buf->f_bavail = -1; */
+
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+static int aufs_sync_fs(struct super_block *sb, int wait)
+{
+	int err, e;
+	aufs_bindex_t bend, bindex;
+	struct au_branch *br;
+	struct super_block *h_sb;
+
+	err = 0;
+	si_noflush_read_lock(sb);
+	bend = au_sbend(sb);
+	for (bindex = 0; bindex <= bend; bindex++) {
+		br = au_sbr(sb, bindex);
+		if (!au_br_writable(br->br_perm))
+			continue;
+
+		h_sb = au_sbr_sb(sb, bindex);
+		if (h_sb->s_op->sync_fs) {
+			e = h_sb->s_op->sync_fs(h_sb, wait);
+			if (unlikely(e && !err))
+				err = e;
+			/* go on even if an error happens */
+		}
+	}
+	si_read_unlock(sb);
+
+	return err;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -558,7 +690,10 @@ static const struct super_operations aufs_sop = {
 	.destroy_inode	= aufs_destroy_inode,
 	/* always deleting, no clearing */
 	.drop_inode	= generic_delete_inode,
+	.show_options	= aufs_show_options,
+	.statfs		= aufs_statfs,
 	.put_super	= aufs_put_super,
+	.sync_fs	= aufs_sync_fs,
 	.remount_fs	= aufs_remount_fs
 };
 
