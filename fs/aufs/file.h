@@ -71,7 +71,7 @@ struct au_finfo {
 extern const struct address_space_operations aufs_aop;
 unsigned int au_file_roflags(unsigned int flags);
 struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
-		       struct file *file);
+		       struct file *file, int force_wr);
 int au_do_open(struct file *file, int (*open)(struct file *file, int flags),
 	       struct au_fidir *fidir);
 int au_reopen_nondir(struct file *file);

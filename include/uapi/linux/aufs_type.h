@@ -163,6 +163,7 @@ enum {
 
 	AuCtl_WBR_FD,	/* pathconf wrapper */
 	AuCtl_IBUSY,	/* busy inode */
+	AuCtl_MVDOWN,	/* move-down */
 	AuCtl_BR	/* info about branches */
 };
 
@@ -332,6 +333,8 @@ union aufs_brinfo {
 #define AUFS_CTL_WBR_FD		_IOW(AuCtlType, AuCtl_WBR_FD, \
 				     struct aufs_wbr_fd)
 #define AUFS_CTL_IBUSY		_IOWR(AuCtlType, AuCtl_IBUSY, struct aufs_ibusy)
+#define AUFS_CTL_MVDOWN		_IOWR(AuCtlType, AuCtl_MVDOWN, \
+				      struct aufs_mvdown)
 #define AUFS_CTL_BRINFO		_IOW(AuCtlType, AuCtl_BR, union aufs_brinfo)
 
 #endif /* __AUFS_TYPE_H__ */

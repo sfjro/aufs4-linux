@@ -35,7 +35,7 @@ unsigned int au_file_roflags(unsigned int flags)
 
 /* common functions to regular file and dir */
 struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
-		       struct file *file)
+		       struct file *file, int force_wr)
 {
 	struct file *h_file;
 	struct dentry *h_dentry;
@@ -70,8 +70,20 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 		goto out;
 
 	/* drop flags for writing */
-	if (au_test_ro(sb, bindex, dentry->d_inode))
+	if (au_test_ro(sb, bindex, dentry->d_inode)) {
+		if (force_wr && !(flags & O_WRONLY))
+			force_wr = 0;
 		flags = au_file_roflags(flags);
+		if (force_wr) {
+			h_file = ERR_PTR(-EROFS);
+			flags = au_file_roflags(flags);
+			if (unlikely(vfsub_native_ro(h_inode)
+				     || IS_APPEND(h_inode)))
+				goto out;
+			flags &= ~O_ACCMODE;
+			flags |= O_WRONLY;
+		}
+	}
 	flags &= ~O_CREAT;
 	atomic_inc(&br->br_count);
 	h_path.dentry = h_dentry;
@@ -161,7 +173,7 @@ int au_reopen_nondir(struct file *file)
 	/* AuDebugOn(au_fbstart(file) < bstart); */
 
 	h_file = au_h_open(dentry, bstart, vfsub_file_flags(file) & ~O_TRUNC,
-			   file);
+			   file, /*force_wr*/0);
 	err = PTR_ERR(h_file);
 	if (IS_ERR(h_file)) {
 		if (h_file_tmp) {
