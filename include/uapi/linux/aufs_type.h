@@ -120,6 +120,7 @@ typedef int16_t aufs_bindex_t;
 #define AUFS_BRATTR_COO_REG	"coo_reg"
 #define AUFS_BRATTR_COO_ALL	"coo_all"
 #define AUFS_BRATTR_FHSM	"fhsm"
+#define AUFS_BRATTR_UNPIN	"unpin"
 #define AUFS_BRATTR_ICEX	"icex"
 #define AUFS_BRATTR_ICEX_SEC	"icexsec"
 #define AUFS_BRATTR_ICEX_SYS	"icexsys"
@@ -140,6 +141,9 @@ typedef int16_t aufs_bindex_t;
 #define AuBrAttr_COO_Mask	(AuBrAttr_COO_REG | AuBrAttr_COO_ALL)
 
 #define AuBrAttr_FHSM		(1 << 5)	/* file-based hsm */
+#define AuBrAttr_UNPIN		(1 << 6)	/* rename-able top dir of
+						   branch. meaningless since
+						   linux-3.18-rc1 */
 
 /* ignore error in copying XATTR */
 #define AuBrAttr_ICEX_SEC	(1 << 7)
@@ -189,6 +193,7 @@ typedef int16_t aufs_bindex_t;
 #define AuBrPermStrSz	sizeof(AUFS_BRPERM_RW			\
 			       "+" AUFS_BRATTR_COO_REG		\
 			       "+" AUFS_BRATTR_FHSM		\
+			       "+" AUFS_BRATTR_UNPIN		\
 			       "+" AUFS_BRATTR_ICEX_SEC		\
 			       "+" AUFS_BRATTR_ICEX_SYS		\
 			       "+" AUFS_BRATTR_ICEX_USR		\

@@ -115,6 +115,10 @@ static match_table_t options = {
 	{Opt_warn_perm, "warn_perm"},
 	{Opt_nowarn_perm, "nowarn_perm"},
 
+	/* keep them temporary */
+	{Opt_ignore_silent, "nodlgt"},
+	{Opt_ignore_silent, "clean_plink"},
+
 #ifdef CONFIG_AUFS_SHWH
 	{Opt_shwh, "shwh"},
 #endif
@@ -157,6 +161,12 @@ static match_table_t options = {
 
 	/* internal use for the scripts */
 	{Opt_ignore_silent, "si=%s"},
+
+	{Opt_br, "dirs=%s"},
+	{Opt_ignore, "debug=%d"},
+	{Opt_ignore, "delete=whiteout"},
+	{Opt_ignore, "delete=all"},
+	{Opt_ignore, "imap=%s"},
 
 	/* temporary workaround, due to old mount(8)? */
 	{Opt_ignore_silent, "relatime"},
@@ -215,6 +225,8 @@ static match_table_t brattr = {
 	/* general */
 	{AuBrAttr_COO_REG, AUFS_BRATTR_COO_REG},
 	{AuBrAttr_COO_ALL, AUFS_BRATTR_COO_ALL},
+	/* 'unpin' attrib is meaningless since linux-3.18-rc1 */
+	{AuBrAttr_UNPIN, AUFS_BRATTR_UNPIN},
 #ifdef CONFIG_AUFS_FHSM
 	{AuBrAttr_FHSM, AUFS_BRATTR_FHSM},
 #endif
@@ -330,6 +342,17 @@ static int noinline_for_stack br_perm_val(char *perm)
 		val &= ~AuBrRAttr_Mask;
 		break;
 	}
+
+	/*
+	 * 'unpin' attrib becomes meaningless since linux-3.18-rc1, but aufs
+	 * does not treat it as an error, just warning.
+	 * this is a tiny guard for the user operation.
+	 */
+	if (val & AuBrAttr_UNPIN) {
+		bad |= AuBrAttr_UNPIN;
+		val &= ~AuBrAttr_UNPIN;
+	}
+
 	if (unlikely(bad)) {
 		sz = au_do_optstr_br_attr(&attr, bad);
 		AuDebugOn(!sz);
