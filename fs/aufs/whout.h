@@ -31,6 +31,8 @@ struct super_block;
 /* whout.c */
 int au_wh_name_alloc(struct qstr *wh, const struct qstr *name);
 int au_wh_test(struct dentry *h_parent, struct qstr *wh_name, int try_sio);
+int au_wh_unlink_dentry(struct inode *h_dir, struct path *h_path,
+			struct dentry *dentry);
 
 struct au_branch;
 struct dentry *au_wh_lkup(struct dentry *h_parent, struct qstr *base_name,

@@ -90,20 +90,37 @@ typedef int16_t aufs_bindex_t;
 #define AUFS_WH_DIROPQ		AUFS_WH_PFX AUFS_DIROPQ_NAME
 
 /* branch permissions and attributes */
+#define AUFS_BRPERM_RW		"rw"
 #define AUFS_BRPERM_RO		"ro"
 #define AUFS_BRRATTR_WH		"wh"
+#define AUFS_BRWATTR_NLWH	"nolwh"
 
+#define AuBrPerm_RW		1		/* writable, hardlinkable wh */
 #define AuBrPerm_RO		(1 << 1)	/* readonly */
+#define AuBrPerm_Mask		(AuBrPerm_RW | AuBrPerm_RO)
 
 #define AuBrRAttr_WH		(1 << 7)	/* whiteout-able */
 #define AuBrRAttr_Mask		AuBrRAttr_WH
 
+#define AuBrWAttr_NoLinkWH	(1 << 8)	/* un-hardlinkable whiteouts */
+#define AuBrWAttr_Mask		AuBrWAttr_NoLinkWH
+
 /* the longest combination */
 #define AuBrPermStrSz	sizeof(AUFS_BRPERM_RO		\
-			       "+" AUFS_BRRATTR_WH)
+			       "+" AUFS_BRWATTR_NLWH)
 
 typedef struct {
 	char a[AuBrPermStrSz];
 } au_br_perm_str_t;
+
+static inline int au_br_writable(int brperm)
+{
+	return brperm & AuBrPerm_RW;
+}
+
+static inline int au_br_whable(int brperm)
+{
+	return brperm & (AuBrPerm_RW | AuBrRAttr_WH);
+}
 
 #endif /* __AUFS_TYPE_H__ */

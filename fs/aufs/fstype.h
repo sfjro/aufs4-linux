@@ -198,6 +198,13 @@ static inline int au_test_fs_bad_iattr_size(struct super_block *sb)
 		;
 }
 
+/* they don't check i_nlink in link(2) */
+static inline int au_test_fs_no_limit_nlink(struct super_block *sb)
+{
+	return au_test_tmpfs(sb)
+		|| au_test_ubifs(sb);
+}
+
 /* ---------------------------------------------------------------------- */
 
 /*

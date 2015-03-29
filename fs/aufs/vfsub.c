@@ -70,6 +70,68 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+int vfsub_create(struct inode *dir, struct path *path, int mode, bool want_excl)
+{
+	int err;
+	struct dentry *d;
+
+	IMustLock(dir);
+
+	d = path->dentry;
+	path->dentry = d->d_parent;
+	err = security_path_mknod(path, d, mode, 0);
+	path->dentry = d;
+	if (unlikely(err))
+		goto out;
+
+	lockdep_off();
+	err = vfs_create(dir, path->dentry, mode, want_excl);
+	lockdep_on();
+
+out:
+	return err;
+}
+
+static int au_test_nlink(struct inode *inode)
+{
+	const unsigned int link_max = UINT_MAX >> 1; /* rough margin */
+
+	if (!au_test_fs_no_limit_nlink(inode->i_sb)
+	    || inode->i_nlink < link_max)
+		return 0;
+	return -EMLINK;
+}
+
+int vfsub_link(struct dentry *src_dentry, struct inode *dir, struct path *path,
+	       struct inode **delegated_inode)
+{
+	int err;
+	struct dentry *d;
+
+	IMustLock(dir);
+
+	err = au_test_nlink(src_dentry->d_inode);
+	if (unlikely(err))
+		return err;
+
+	/* we don't call may_linkat() */
+	d = path->dentry;
+	path->dentry = d->d_parent;
+	err = security_path_link(src_dentry, path, d);
+	path->dentry = d;
+	if (unlikely(err))
+		goto out;
+
+	lockdep_off();
+	err = vfs_link(src_dentry, dir, path->dentry, delegated_inode);
+	lockdep_on();
+
+out:
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
 struct unlink_args {
 	int *errp;
 	struct inode *dir;

@@ -25,6 +25,7 @@
 #ifdef __KERNEL__
 
 #include <linux/mount.h>
+#include "rwsem.h"
 #include "super.h"
 
 /* ---------------------------------------------------------------------- */
@@ -35,6 +36,17 @@ struct au_xino_file {
 	struct mutex		xi_nondir_mtx;
 
 	/* todo: make xino files an array to support huge inode number */
+};
+
+/* members for writable branch only */
+enum {AuBrWh_BASE, AuBrWh_PLINK, AuBrWh_ORPH, AuBrWh_Last};
+struct au_wbr {
+	struct au_rwsem		wbr_wh_rwsem;
+	struct dentry		*wbr_wh[AuBrWh_Last];
+	atomic_t		wbr_wh_running;
+#define wbr_whbase		wbr_wh[AuBrWh_BASE]	/* whiteout base */
+#define wbr_plink		wbr_wh[AuBrWh_PLINK]	/* pseudo-link dir */
+#define wbr_orph		wbr_wh[AuBrWh_ORPH]	/* dir for orphans */
 };
 
 /* sysfs entries */
@@ -58,6 +70,8 @@ struct au_branch {
 	int			br_perm;
 	struct path		br_path;
 	atomic_t		br_count;
+
+	struct au_wbr		*br_wbr;
 
 #ifdef CONFIG_SYSFS
 	/* entries under sysfs per mount-point */
@@ -130,6 +144,23 @@ static inline int au_sbr_perm(struct super_block *sb, aufs_bindex_t bindex)
 {
 	return au_sbr(sb, bindex)->br_perm;
 }
+
+static inline int au_sbr_whable(struct super_block *sb, aufs_bindex_t bindex)
+{
+	return au_br_whable(au_sbr_perm(sb, bindex));
+}
+
+/* ---------------------------------------------------------------------- */
+
+/*
+ * wbr_wh_read_lock, wbr_wh_write_lock
+ * wbr_wh_read_unlock, wbr_wh_write_unlock, wbr_wh_downgrade_lock
+ */
+AuSimpleRwsemFuncs(wbr_wh, struct au_wbr *wbr, &wbr->wbr_wh_rwsem);
+
+#define WbrWhMustNoWaiters(wbr)	AuRwMustNoWaiters(&wbr->wbr_wh_rwsem)
+#define WbrWhMustAnyLock(wbr)	AuRwMustAnyLock(&wbr->wbr_wh_rwsem)
+#define WbrWhMustWriteLock(wbr)	AuRwMustWriteLock(&wbr->wbr_wh_rwsem)
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_BRANCH_H__ */
