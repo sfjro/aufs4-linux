@@ -19,8 +19,33 @@
  * mount options/flags
  */
 
+#include <linux/namei.h>
+#include <linux/types.h> /* a distribution requires */
 #include <linux/parser.h>
 #include "aufs.h"
+
+/* ---------------------------------------------------------------------- */
+
+enum {
+	Opt_br,
+	Opt_add,
+	Opt_tail, Opt_ignore, Opt_ignore_silent, Opt_err
+};
+
+static match_table_t options = {
+	{Opt_br, "br=%s"},
+	{Opt_br, "br:%s"},
+
+	/* internal use for the scripts */
+	{Opt_ignore_silent, "si=%s"},
+
+	/* temporary workaround, due to old mount(8)? */
+	{Opt_ignore_silent, "relatime"},
+
+	{Opt_err, NULL}
+};
+
+/* ---------------------------------------------------------------------- */
 
 static const char *au_optstr(int *val, match_table_t tbl)
 {
@@ -183,4 +208,363 @@ void au_optstr_br_perm(au_br_perm_str_t *str, int perm)
 	}
 
 	AuDebugOn(strlen(str->a) >= sizeof(str->a));
+}
+
+/* ---------------------------------------------------------------------- */
+
+static const int lkup_dirflags = LOOKUP_FOLLOW | LOOKUP_DIRECTORY;
+
+static void dump_opts(struct au_opts *opts)
+{
+#ifdef CONFIG_AUFS_DEBUG
+	/* reduce stack space */
+	union {
+		struct au_opt_add *add;
+	} u;
+	struct au_opt *opt;
+
+	opt = opts->opt;
+	while (opt->type != Opt_tail) {
+		switch (opt->type) {
+		case Opt_add:
+			u.add = &opt->add;
+			AuDbg("add {b%d, %s, 0x%x, %p}\n",
+				  u.add->bindex, u.add->pathname, u.add->perm,
+				  u.add->path.dentry);
+			break;
+		default:
+			BUG();
+		}
+		opt++;
+	}
+#endif
+}
+
+void au_opts_free(struct au_opts *opts)
+{
+	struct au_opt *opt;
+
+	opt = opts->opt;
+	while (opt->type != Opt_tail) {
+		switch (opt->type) {
+		case Opt_add:
+			path_put(&opt->add.path);
+			break;
+		}
+		opt++;
+	}
+}
+
+static int opt_add(struct au_opt *opt, char *opt_str, unsigned long sb_flags,
+		   aufs_bindex_t bindex)
+{
+	int err;
+	struct au_opt_add *add = &opt->add;
+	char *p;
+
+	add->bindex = bindex;
+	add->perm = AuBrPerm_RO;
+	add->pathname = opt_str;
+	p = strchr(opt_str, '=');
+	if (p) {
+		*p++ = 0;
+		if (*p)
+			add->perm = br_perm_val(p);
+	}
+
+	err = vfsub_kern_path(add->pathname, lkup_dirflags, &add->path);
+	if (!err) {
+		if (!p) {
+			add->perm = AuBrPerm_RO;
+			if (!bindex && !(sb_flags & MS_RDONLY))
+				add->perm = AuBrPerm_RW;
+		}
+		opt->type = Opt_add;
+		goto out;
+	}
+	pr_err("lookup failed %s (%d)\n", add->pathname, err);
+	err = -EINVAL;
+
+out:
+	return err;
+}
+
+/* called without aufs lock */
+int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
+{
+	int err, n, token;
+	aufs_bindex_t bindex;
+	unsigned char skipped;
+	struct dentry *root;
+	struct au_opt *opt, *opt_tail;
+	char *opt_str;
+	/* reduce the stack space */
+	struct {
+		substring_t args[MAX_OPT_ARGS];
+	} *a;
+
+	err = -ENOMEM;
+	a = kmalloc(sizeof(*a), GFP_NOFS);
+	if (unlikely(!a))
+		goto out;
+
+	root = sb->s_root;
+	err = 0;
+	bindex = 0;
+	opt = opts->opt;
+	opt_tail = opt + opts->max_opt - 1;
+	opt->type = Opt_tail;
+	while (!err && (opt_str = strsep(&str, ",")) && *opt_str) {
+		err = -EINVAL;
+		skipped = 0;
+		token = match_token(opt_str, options, a->args);
+		switch (token) {
+		case Opt_br:
+			err = 0;
+			while (!err && (opt_str = strsep(&a->args[0].from, ":"))
+			       && *opt_str) {
+				err = opt_add(opt, opt_str, opts->sb_flags,
+					      bindex++);
+				if (unlikely(!err && ++opt > opt_tail)) {
+					err = -E2BIG;
+					break;
+				}
+				opt->type = Opt_tail;
+				skipped = 1;
+			}
+			break;
+		case Opt_add:
+			if (unlikely(match_int(&a->args[0], &n))) {
+				pr_err("bad integer in %s\n", opt_str);
+				break;
+			}
+			bindex = n;
+			err = opt_add(opt, a->args[1].from, opts->sb_flags,
+				      bindex);
+			if (!err)
+				opt->type = token;
+			break;
+
+		case Opt_ignore:
+			pr_warn("ignored %s\n", opt_str);
+			/*FALLTHROUGH*/
+		case Opt_ignore_silent:
+			skipped = 1;
+			err = 0;
+			break;
+		case Opt_err:
+			pr_err("unknown option %s\n", opt_str);
+			break;
+		}
+
+		if (!err && !skipped) {
+			if (unlikely(++opt > opt_tail)) {
+				err = -E2BIG;
+				opt--;
+				opt->type = Opt_tail;
+				break;
+			}
+			opt->type = Opt_tail;
+		}
+	}
+
+	kfree(a);
+	dump_opts(opts);
+	if (unlikely(err))
+		au_opts_free(opts);
+
+out:
+	return err;
+}
+
+/*
+ * returns,
+ * plus: processed without an error
+ * zero: unprocessed
+ */
+static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
+			 struct au_opts *opts)
+{
+#if 1 /* re-commit later */
+	return 0;
+#else
+	int err;
+	struct au_sbinfo *sbinfo;
+
+	SiMustWriteLock(sb);
+
+	err = 1; /* handled */
+	sbinfo = au_sbi(sb);
+	switch (opt->type) {
+	case Opt_plink:
+		au_opt_set(sbinfo->si_mntflags, PLINK);
+		break;
+	case Opt_noplink:
+		if (au_opt_test(sbinfo->si_mntflags, PLINK))
+			au_plink_put(sb, /*verbose*/1);
+		au_opt_clr(sbinfo->si_mntflags, PLINK);
+		break;
+
+	default:
+		err = 0;
+		break;
+	}
+
+	return err;
+#endif
+}
+
+/*
+ * returns tri-state.
+ * plus: processed without an error
+ * zero: unprocessed
+ * minus: error
+ */
+static int au_opt_br(struct super_block *sb, struct au_opt *opt,
+		     struct au_opts *opts)
+{
+	int err;
+
+	err = 0;
+	switch (opt->type) {
+	case Opt_add:
+		err = au_br_add(sb, &opt->add);
+		if (!err) {
+			err = 1;
+			/* au_fset_opts(opts->flags, REFRESH); re-commit later */
+		}
+		break;
+	}
+
+	return err;
+}
+
+int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
+		   unsigned int pending)
+{
+	int err;
+	aufs_bindex_t bindex, bend;
+	unsigned char do_plink, skip, do_free;
+	struct au_branch *br;
+	struct au_wbr *wbr;
+	struct dentry *root;
+	struct inode *dir, *h_dir;
+	struct au_sbinfo *sbinfo;
+	struct au_hinode *hdir;
+
+	SiMustAnyLock(sb);
+
+	sbinfo = au_sbi(sb);
+
+	if (!(sb_flags & MS_RDONLY)) {
+		if (unlikely(!au_br_writable(au_sbr_perm(sb, 0))))
+			pr_warn("first branch should be rw\n");
+	}
+
+	err = 0;
+	root = sb->s_root;
+	dir = root->d_inode;
+	do_plink = !!au_opt_test(sbinfo->si_mntflags, PLINK);
+	bend = au_sbend(sb);
+	for (bindex = 0; !err && bindex <= bend; bindex++) {
+		skip = 0;
+		h_dir = au_h_iptr(dir, bindex);
+		br = au_sbr(sb, bindex);
+		do_free = 0;
+
+		wbr = br->br_wbr;
+		if (wbr)
+			wbr_wh_read_lock(wbr);
+
+		if (!au_br_writable(br->br_perm)) {
+			do_free = !!wbr;
+			skip = (!wbr
+				|| (!wbr->wbr_whbase
+				    && !wbr->wbr_plink
+				    && !wbr->wbr_orph));
+		} else if (!au_br_wh_linkable(br->br_perm)) {
+			/* skip = (!br->br_whbase && !br->br_orph); */
+			skip = (!wbr || !wbr->wbr_whbase);
+			if (skip && wbr) {
+				if (do_plink)
+					skip = !!wbr->wbr_plink;
+				else
+					skip = !wbr->wbr_plink;
+			}
+		} else {
+			/* skip = (br->br_whbase && br->br_ohph); */
+			skip = (wbr && wbr->wbr_whbase);
+			if (skip) {
+				if (do_plink)
+					skip = !!wbr->wbr_plink;
+				else
+					skip = !wbr->wbr_plink;
+			}
+		}
+		if (wbr)
+			wbr_wh_read_unlock(wbr);
+
+		if (skip)
+			continue;
+
+		hdir = au_hi(dir, bindex);
+		mutex_lock_nested(&hdir->hi_inode->i_mutex, AuLsc_I_PARENT);
+		if (wbr)
+			wbr_wh_write_lock(wbr);
+		err = au_wh_init(br, sb);
+		if (wbr)
+			wbr_wh_write_unlock(wbr);
+		mutex_unlock(&hdir->hi_inode->i_mutex);
+
+		if (!err && do_free) {
+			kfree(wbr);
+			br->br_wbr = NULL;
+		}
+	}
+
+	return err;
+}
+
+int au_opts_mount(struct super_block *sb, struct au_opts *opts)
+{
+	int err;
+	unsigned int tmp;
+	aufs_bindex_t bend;
+	struct au_opt *opt;
+	struct au_sbinfo *sbinfo;
+
+	SiMustWriteLock(sb);
+
+	err = 0;
+	opt = opts->opt;
+	while (err >= 0 && opt->type != Opt_tail)
+		err = au_opt_simple(sb, opt++, opts);
+	if (err > 0)
+		err = 0;
+	else if (unlikely(err < 0))
+		goto out;
+
+	sbinfo = au_sbi(sb);
+	tmp = sbinfo->si_mntflags;
+	opt = opts->opt;
+	while (err >= 0 && opt->type != Opt_tail)
+		err = au_opt_br(sb, opt++, opts);
+	if (err > 0)
+		err = 0;
+	else if (unlikely(err < 0))
+		goto out;
+
+	bend = au_sbend(sb);
+	if (unlikely(bend < 0)) {
+		err = -EINVAL;
+		pr_err("no branches\n");
+		goto out;
+	}
+
+	err = au_opts_verify(sb, sb->s_flags, tmp);
+	if (unlikely(err))
+		goto out;
+
+out:
+	return err;
 }

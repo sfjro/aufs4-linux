@@ -27,6 +27,7 @@
 #include <linux/path.h>
 
 struct file;
+struct super_block;
 
 /* ---------------------------------------------------------------------- */
 
@@ -69,9 +70,29 @@ struct au_opt_xino {
 	struct file	*file;
 };
 
+struct au_opt {
+	int type;
+	union {
+		struct au_opt_add	add;
+	};
+};
+
+struct au_opts {
+	struct au_opt	*opt;
+	int		max_opt;
+
+	unsigned long	sb_flags;
+};
+
 /* ---------------------------------------------------------------------- */
 
+/* opts.c */
 void au_optstr_br_perm(au_br_perm_str_t *str, int perm);
+void au_opts_free(struct au_opts *opts);
+int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts);
+int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
+		   unsigned int pending);
+int au_opts_mount(struct super_block *sb, struct au_opts *opts);
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_OPTS_H__ */

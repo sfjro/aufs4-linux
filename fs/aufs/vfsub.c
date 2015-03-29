@@ -49,6 +49,14 @@ struct file *vfsub_filp_open(const char *path, int oflags, int mode)
 	return file;
 }
 
+int vfsub_kern_path(const char *name, unsigned int flags, struct path *path)
+{
+	int err;
+
+	err = kern_path(name, flags, path);
+	return err;
+}
+
 struct dentry *vfsub_lookup_one_len(const char *name, struct dentry *parent,
 				    int len)
 {
