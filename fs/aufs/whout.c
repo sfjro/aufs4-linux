@@ -98,6 +98,20 @@ out:
 }
 
 /*
+ * test if the @h_dentry sets opaque or not.
+ */
+int au_diropq_test(struct dentry *h_dentry)
+{
+	int err;
+	struct inode *h_dir;
+
+	h_dir = h_dentry->d_inode;
+	err = au_wh_test(h_dentry, &diropq_name,
+			 au_test_h_perm_sio(h_dir, MAY_EXEC));
+	return err;
+}
+
+/*
  * returns a negative dentry whose name is unique and temporary.
  */
 struct dentry *au_whtmp_lkup(struct dentry *h_parent, struct au_branch *br,

@@ -19,7 +19,198 @@
  * lookup and dentry operations
  */
 
+#include <linux/namei.h>
 #include "aufs.h"
+
+#define AuLkup_ALLOW_NEG	1
+#define au_ftest_lkup(flags, name)	((flags) & AuLkup_##name)
+#define au_fset_lkup(flags, name) \
+	do { (flags) |= AuLkup_##name; } while (0)
+#define au_fclr_lkup(flags, name) \
+	do { (flags) &= ~AuLkup_##name; } while (0)
+
+struct au_do_lookup_args {
+	unsigned int		flags;
+	mode_t			type;
+};
+
+/*
+ * returns positive/negative dentry, NULL or an error.
+ * NULL means whiteout-ed or not-found.
+ */
+static struct dentry*
+au_do_lookup(struct dentry *h_parent, struct dentry *dentry,
+	     aufs_bindex_t bindex, struct qstr *wh_name,
+	     struct au_do_lookup_args *args)
+{
+	struct dentry *h_dentry;
+	struct inode *h_inode;
+	struct au_branch *br;
+	int wh_found, opq;
+	unsigned char wh_able;
+	const unsigned char allow_neg = !!au_ftest_lkup(args->flags, ALLOW_NEG);
+
+	wh_found = 0;
+	br = au_sbr(dentry->d_sb, bindex);
+	wh_able = !!au_br_whable(br->br_perm);
+	if (wh_able)
+		wh_found = au_wh_test(h_parent, wh_name, /*try_sio*/0);
+	h_dentry = ERR_PTR(wh_found);
+	if (!wh_found)
+		goto real_lookup;
+	if (unlikely(wh_found < 0))
+		goto out;
+
+	/* We found a whiteout */
+	/* au_set_dbend(dentry, bindex); */
+	au_set_dbwh(dentry, bindex);
+	if (!allow_neg)
+		return NULL; /* success */
+
+real_lookup:
+	h_dentry = vfsub_lkup_one(&dentry->d_name, h_parent);
+	if (IS_ERR(h_dentry)) {
+		if (PTR_ERR(h_dentry) == -ENAMETOOLONG
+		    && !allow_neg)
+			h_dentry = NULL;
+		goto out;
+	}
+
+	h_inode = h_dentry->d_inode;
+	if (!h_inode) {
+		if (!allow_neg)
+			goto out_neg;
+	} else if (wh_found
+		   || (args->type && args->type != (h_inode->i_mode & S_IFMT)))
+		goto out_neg;
+
+	if (au_dbend(dentry) <= bindex)
+		au_set_dbend(dentry, bindex);
+	if (au_dbstart(dentry) < 0 || bindex < au_dbstart(dentry))
+		au_set_dbstart(dentry, bindex);
+	au_set_h_dptr(dentry, bindex, h_dentry);
+
+	if (!d_is_dir(h_dentry)
+	    || !wh_able
+	    || (d_is_positive(dentry) && !d_is_dir(dentry)))
+		goto out; /* success */
+
+	mutex_lock_nested(&h_inode->i_mutex, AuLsc_I_CHILD);
+	opq = au_diropq_test(h_dentry);
+	mutex_unlock(&h_inode->i_mutex);
+	if (opq > 0)
+		au_set_dbdiropq(dentry, bindex);
+	else if (unlikely(opq < 0)) {
+		au_set_h_dptr(dentry, bindex, NULL);
+		h_dentry = ERR_PTR(opq);
+	}
+	goto out;
+
+out_neg:
+	dput(h_dentry);
+	h_dentry = NULL;
+out:
+	return h_dentry;
+}
+
+/*
+ * returns the number of lower positive dentries,
+ * otherwise an error.
+ * can be called at unlinking with @type is zero.
+ */
+int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
+{
+	int npositive, err;
+	aufs_bindex_t bindex, btail, bdiropq;
+	unsigned char isdir;
+	struct qstr whname;
+	struct au_do_lookup_args args = {
+		.flags		= 0,
+		.type		= type
+	};
+	const struct qstr *name = &dentry->d_name;
+	struct dentry *parent;
+	struct inode *inode;
+	struct super_block *sb;
+
+	sb = dentry->d_sb;
+	err = au_wh_name_alloc(&whname, name);
+	if (unlikely(err))
+		goto out;
+
+	inode = dentry->d_inode;
+	isdir = !!d_is_dir(dentry);
+	if (!type)
+		au_fset_lkup(args.flags, ALLOW_NEG);
+
+	npositive = 0;
+	parent = dget_parent(dentry);
+	btail = au_dbtaildir(parent);
+	for (bindex = bstart; bindex <= btail; bindex++) {
+		struct dentry *h_parent, *h_dentry;
+		struct inode *h_inode, *h_dir;
+
+		h_dentry = au_h_dptr(dentry, bindex);
+		if (h_dentry) {
+			if (h_dentry->d_inode)
+				npositive++;
+			if (type != S_IFDIR)
+				break;
+			continue;
+		}
+		h_parent = au_h_dptr(parent, bindex);
+		if (!h_parent || !d_is_dir(h_parent))
+			continue;
+
+		h_dir = h_parent->d_inode;
+		mutex_lock_nested(&h_dir->i_mutex, AuLsc_I_PARENT);
+		h_dentry = au_do_lookup(h_parent, dentry, bindex, &whname,
+					&args);
+		mutex_unlock(&h_dir->i_mutex);
+		err = PTR_ERR(h_dentry);
+		if (IS_ERR(h_dentry))
+			goto out_parent;
+		if (h_dentry)
+			au_fclr_lkup(args.flags, ALLOW_NEG);
+
+		if (au_dbwh(dentry) >= 0)
+			break;
+		if (!h_dentry)
+			continue;
+		h_inode = h_dentry->d_inode;
+		if (!h_inode)
+			continue;
+		npositive++;
+		if (!args.type)
+			args.type = h_inode->i_mode & S_IFMT;
+		if (args.type != S_IFDIR)
+			break;
+		else if (isdir) {
+			/* the type of lower may be different */
+			bdiropq = au_dbdiropq(dentry);
+			if (bdiropq >= 0 && bdiropq <= bindex)
+				break;
+		}
+	}
+
+	if (npositive) {
+		AuLabel(positive);
+		au_update_dbstart(dentry);
+	}
+	err = npositive;
+	if (unlikely(!au_opt_test(au_mntflags(sb), UDBA_NONE)
+		     && au_dbstart(dentry) < 0)) {
+		err = -EIO;
+		AuIOErr("both of real entry and whiteout found, %pd, err %d\n",
+			dentry, err);
+	}
+
+out_parent:
+	dput(parent);
+	kfree(whname.name);
+out:
+	return err;
+}
 
 struct dentry *au_sio_lkup_one(struct qstr *name, struct dentry *parent)
 {
