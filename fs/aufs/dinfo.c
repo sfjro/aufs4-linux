@@ -48,6 +48,7 @@ struct au_dinfo *au_di_alloc(struct super_block *sb, unsigned int lsc)
 		dinfo->di_bstart = -1;
 		dinfo->di_bend = -1;
 		dinfo->di_bwh = -1;
+		dinfo->di_bdiropq = -1;
 		for (i = 0; i < nbr; i++)
 			dinfo->di_hdentry[i].hd_id = -1;
 		goto out;
@@ -240,6 +241,34 @@ struct dentry *au_h_dptr(struct dentry *dentry, aufs_bindex_t bindex)
 	d = au_di(dentry)->di_hdentry[0 + bindex].hd_dentry;
 	AuDebugOn(d && au_dcount(d) <= 0);
 	return d;
+}
+
+aufs_bindex_t au_dbtail(struct dentry *dentry)
+{
+	aufs_bindex_t bend, bwh;
+
+	bend = au_dbend(dentry);
+	if (0 <= bend) {
+		bwh = au_dbwh(dentry);
+		if (!bwh)
+			return bwh;
+		if (0 < bwh && bwh < bend)
+			return bwh - 1;
+	}
+	return bend;
+}
+
+aufs_bindex_t au_dbtaildir(struct dentry *dentry)
+{
+	aufs_bindex_t bend, bopq;
+
+	bend = au_dbtail(dentry);
+	if (0 <= bend) {
+		bopq = au_dbdiropq(dentry);
+		if (0 <= bopq && bopq < bend)
+			bend = bopq;
+	}
+	return bend;
 }
 
 /* ---------------------------------------------------------------------- */

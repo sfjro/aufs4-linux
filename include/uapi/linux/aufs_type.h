@@ -80,6 +80,9 @@ typedef int16_t aufs_bindex_t;
 #define AUFS_XINO_DEFPATH	"/tmp/" AUFS_XINO_FNAME
 #define AUFS_WKQ_NAME		AUFS_NAME "d"
 
+#define AUFS_DIROPQ_NAME	AUFS_WH_PFX ".opq" /* whiteouted doubly */
+#define AUFS_WH_DIROPQ		AUFS_WH_PFX AUFS_DIROPQ_NAME
+
 /* branch permissions and attributes */
 #define AUFS_BRPERM_RO		"ro"
 

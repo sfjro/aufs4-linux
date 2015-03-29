@@ -24,6 +24,13 @@
 #define WH_MASK			S_IRUGO
 
 /*
+ * If a directory contains this file, then it is opaque.  We start with the
+ * .wh. flag so that it is blocked by lookup.
+ */
+static struct qstr diropq_name = QSTR_INIT(AUFS_WH_DIROPQ,
+					   sizeof(AUFS_WH_DIROPQ) - 1);
+
+/*
  * generate whiteout name, which is NOT terminated by NULL.
  * @name: original d_name.name
  * @len: original d_name.len
