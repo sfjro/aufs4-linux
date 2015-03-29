@@ -126,6 +126,8 @@ static int au_cmoo(struct dentry *dentry)
 	struct inode *delegated;
 	struct super_block *sb;
 	struct au_sbinfo *sbinfo;
+	struct au_fhsm *fhsm;
+	pid_t pid;
 	struct au_branch *br;
 	struct dentry *parent;
 	struct au_hinode *hdir;
@@ -142,6 +144,13 @@ static int au_cmoo(struct dentry *dentry)
 
 	sb = dentry->d_sb;
 	sbinfo = au_sbi(sb);
+	fhsm = &sbinfo->si_fhsm;
+	pid = au_fhsm_pid(fhsm);
+	if (pid
+	    && (current->pid == pid
+		|| current->real_parent->pid == pid))
+		goto out;
+
 	br = au_sbr(sb, cpg.bsrc);
 	cmoo = au_br_cmoo(br->br_perm);
 	if (!cmoo)

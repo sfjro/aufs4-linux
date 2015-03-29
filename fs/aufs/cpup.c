@@ -590,6 +590,7 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 			if (cpg->len == -1)
 				force = !!i_size_read(h_inode);
 		}
+		au_fhsm_wrote(sb, cpg->bdst, force);
 	}
 
 	if (do_dt)

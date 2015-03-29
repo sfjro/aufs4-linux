@@ -40,6 +40,7 @@ enum {
 	Opt_udba,
 	Opt_dio, Opt_nodio,
 	Opt_wbr_copyup, Opt_wbr_create,
+	Opt_fhsm_sec,
 	Opt_verbose, Opt_noverbose,
 	Opt_tail, Opt_ignore, Opt_ignore_silent, Opt_err
 };
@@ -93,6 +94,12 @@ static match_table_t options = {
 
 	{Opt_dio, "dio"},
 	{Opt_nodio, "nodio"},
+
+#ifdef CONFIG_AUFS_FHSM
+	{Opt_fhsm_sec, "fhsm_sec=%d"},
+#else
+	{Opt_ignore_silent, "fhsm_sec=%d"},
+#endif
 
 	{Opt_verbose, "verbose"},
 	{Opt_verbose, "v"},
@@ -173,6 +180,9 @@ static match_table_t brattr = {
 	/* general */
 	{AuBrAttr_COO_REG, AUFS_BRATTR_COO_REG},
 	{AuBrAttr_COO_ALL, AUFS_BRATTR_COO_ALL},
+#ifdef CONFIG_AUFS_FHSM
+	{AuBrAttr_FHSM, AUFS_BRATTR_FHSM},
+#endif
 
 	/* ro/rr branch */
 	{AuBrRAttr_WH, AUFS_BRRATTR_WH},
@@ -622,6 +632,9 @@ static void dump_opts(struct au_opts *opts)
 		case Opt_wbr_copyup:
 			AuDbg("copyup %d, %s\n", opt->wbr_copyup,
 				  au_optstr_wbr_copyup(opt->wbr_copyup));
+			break;
+		case Opt_fhsm_sec:
+			AuDbg("fhsm_sec %u\n", opt->fhsm_second);
 			break;
 		default:
 			BUG();
@@ -1088,6 +1101,20 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 				pr_err("wrong value, %s\n", opt_str);
 			break;
 
+		case Opt_fhsm_sec:
+			if (unlikely(match_int(&a->args[0], &n)
+				     || n < 0)) {
+				pr_err("bad integer in %s\n", opt_str);
+				break;
+			}
+			if (sysaufs_brs) {
+				opt->fhsm_second = n;
+				opt->type = token;
+			} else
+				pr_warn("ignored %s\n", opt_str);
+			err = 0;
+			break;
+
 		case Opt_ignore:
 			pr_warn("ignored %s\n", opt_str);
 			/*FALLTHROUGH*/
@@ -1202,6 +1229,10 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 	case Opt_nodio:
 		au_opt_clr(sbinfo->si_mntflags, DIO);
 		au_fset_opts(opts->flags, REFRESH_DYAOP);
+		break;
+
+	case Opt_fhsm_sec:
+		au_fhsm_set(sbinfo, opt->fhsm_second);
 		break;
 
 	case Opt_verbose:
@@ -1371,7 +1402,7 @@ static int au_opt_xino(struct super_block *sb, struct au_opt *opt,
 int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		   unsigned int pending)
 {
-	int err;
+	int err, fhsm;
 	aufs_bindex_t bindex, bend;
 	unsigned char do_plink, skip, do_free;
 	struct au_branch *br;
@@ -1396,6 +1427,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		pr_warn("udba=*notify requires xino\n");
 
 	err = 0;
+	fhsm = 0;
 	root = sb->s_root;
 	dir = root->d_inode;
 	do_plink = !!au_opt_test(sbinfo->si_mntflags, PLINK);
@@ -1438,6 +1470,11 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		if (wbr)
 			wbr_wh_read_unlock(wbr);
 
+		if (au_br_fhsm(br->br_perm)) {
+			fhsm++;
+			AuDebugOn(!br->br_fhsm);
+		}
+
 		if (skip)
 			continue;
 
@@ -1454,6 +1491,20 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 			kfree(wbr);
 			br->br_wbr = NULL;
 		}
+	}
+
+	if (fhsm >= 2) {
+		au_fset_si(sbinfo, FHSM);
+		for (bindex = bend; bindex >= 0; bindex--) {
+			br = au_sbr(sb, bindex);
+			if (au_br_fhsm(br->br_perm)) {
+				au_fhsm_set_bottom(sb, bindex);
+				break;
+			}
+		}
+	} else {
+		au_fclr_si(sbinfo, FHSM);
+		au_fhsm_set_bottom(sb, -1);
 	}
 
 	return err;

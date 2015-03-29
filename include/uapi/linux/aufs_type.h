@@ -93,6 +93,7 @@ typedef int16_t aufs_bindex_t;
 #define AUFS_WKQ_NAME		AUFS_NAME "d"
 #define AUFS_MFS_DEF_SEC	30 /* seconds */
 #define AUFS_MFS_MAX_SEC	3600 /* seconds */
+#define AUFS_FHSM_CACHE_DEF_SEC	30 /* seconds */
 #define AUFS_PLINK_WARN		50 /* number of plinks in a single bucket */
 
 /* pseudo-link maintenace under /proc */
@@ -118,6 +119,7 @@ typedef int16_t aufs_bindex_t;
 #define AUFS_BRPERM_RR		"rr"
 #define AUFS_BRATTR_COO_REG	"coo_reg"
 #define AUFS_BRATTR_COO_ALL	"coo_all"
+#define AUFS_BRATTR_FHSM	"fhsm"
 #define AUFS_BRRATTR_WH		"wh"
 #define AUFS_BRWATTR_NLWH	"nolwh"
 #define AUFS_BRWATTR_MOO	"moo"
@@ -131,6 +133,8 @@ typedef int16_t aufs_bindex_t;
 #define AuBrAttr_COO_ALL	(1 << 4)
 #define AuBrAttr_COO_Mask	(AuBrAttr_COO_REG | AuBrAttr_COO_ALL)
 
+#define AuBrAttr_FHSM		(1 << 5)	/* file-based hsm */
+
 #define AuBrRAttr_WH		(1 << 7)	/* whiteout-able */
 #define AuBrRAttr_Mask		AuBrRAttr_WH
 
@@ -140,9 +144,18 @@ typedef int16_t aufs_bindex_t;
 
 #define AuBrAttr_CMOO_Mask	(AuBrAttr_COO_Mask | AuBrWAttr_MOO)
 
+/* #warning test userspace */
+#ifdef __KERNEL__
+#ifndef CONFIG_AUFS_FHSM
+#undef AuBrAttr_FHSM
+#define AuBrAttr_FHSM		0
+#endif
+#endif
+
 /* the longest combination */
 #define AuBrPermStrSz	sizeof(AUFS_BRPERM_RO		\
 			       "+" AUFS_BRATTR_COO_REG	\
+			       "+" AUFS_BRATTR_FHSM	\
 			       "+" AUFS_BRWATTR_NLWH)
 
 typedef struct {
@@ -169,6 +182,11 @@ static inline int au_br_cmoo(int brperm)
 	return brperm & AuBrAttr_CMOO_Mask;
 }
 
+static inline int au_br_fhsm(int brperm)
+{
+	return brperm & AuBrAttr_FHSM;
+}
+
 /* ---------------------------------------------------------------------- */
 
 /* ioctl */
@@ -180,7 +198,8 @@ enum {
 	AuCtl_WBR_FD,	/* pathconf wrapper */
 	AuCtl_IBUSY,	/* busy inode */
 	AuCtl_MVDOWN,	/* move-down */
-	AuCtl_BR	/* info about branches */
+	AuCtl_BR,	/* info about branches */
+	AuCtl_FHSM_FD	/* connection for fhsm */
 };
 
 /* borrowed from linux/include/linux/kernel.h */
@@ -352,5 +371,6 @@ union aufs_brinfo {
 #define AUFS_CTL_MVDOWN		_IOWR(AuCtlType, AuCtl_MVDOWN, \
 				      struct aufs_mvdown)
 #define AUFS_CTL_BRINFO		_IOW(AuCtlType, AuCtl_BR, union aufs_brinfo)
+#define AUFS_CTL_FHSM_FD	_IOW(AuCtlType, AuCtl_FHSM_FD, int)
 
 #endif /* __AUFS_TYPE_H__ */

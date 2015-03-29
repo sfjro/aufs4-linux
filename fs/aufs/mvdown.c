@@ -74,16 +74,12 @@ static int find_lower_writable(struct au_mvd_args *a)
 	bindex = a->mvd_bsrc;
 	bend = au_sbend(sb);
 	if (a->mvdown.flags & AUFS_MVDOWN_FHSM_LOWER)
-#if 0 /* re-commit later */
 		for (bindex++; bindex <= bend; bindex++) {
 			br = au_sbr(sb, bindex);
 			if (au_br_fhsm(br->br_perm)
 			    && (!(au_br_sb(br)->s_flags & MS_RDONLY)))
 				return bindex;
 		}
-#else
-	;
-#endif
 	else if (!(a->mvdown.flags & AUFS_MVDOWN_ROLOWER))
 		for (bindex++; bindex <= bend; bindex++) {
 			br = au_sbr(sb, bindex);

@@ -25,6 +25,7 @@ aufs-$(CONFIG_DEBUG_FS) += dbgaufs.o
 aufs-$(CONFIG_AUFS_HNOTIFY) += hnotify.o
 aufs-$(CONFIG_AUFS_HFSNOTIFY) += hfsnotify.o
 aufs-$(CONFIG_AUFS_EXPORT) += export.o
+aufs-$(CONFIG_AUFS_FHSM) += fhsm.o
 aufs-$(CONFIG_AUFS_RDU) += rdu.o
 aufs-$(CONFIG_AUFS_DEBUG) += debug.o
 aufs-$(CONFIG_AUFS_MAGIC_SYSRQ) += sysrq.o

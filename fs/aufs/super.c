@@ -269,6 +269,8 @@ static int aufs_show_options(struct seq_file *m, struct dentry *dentry)
 	AuUInt(RDBLK, rdblk, sbinfo->si_rdblk);
 	AuUInt(RDHASH, rdhash, sbinfo->si_rdhash);
 
+	au_fhsm_show(m, sbinfo);
+
 	AuBool(VERBOSE, verbose);
 
 out:
@@ -690,6 +692,7 @@ static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 		au_dy_arefresh(do_dx);
 	}
 
+	au_fhsm_wrote_all(sb, /*force*/1); /* ?? */
 	aufs_write_unlock(root);
 
 out_mtx:
@@ -866,6 +869,7 @@ static void aufs_kill_sb(struct super_block *sb)
 	if (sbinfo) {
 		au_sbilist_del(sb);
 		aufs_write_lock(sb->s_root);
+		au_fhsm_fin(sb);
 		if (sbinfo->si_wbr_create_ops->fin)
 			sbinfo->si_wbr_create_ops->fin(sb);
 		if (au_opt_test(sbinfo->si_mntflags, UDBA_HNOTIFY)) {

@@ -221,6 +221,9 @@ static ssize_t aufs_write(struct file *file, const char __user *ubuf,
 	ii_write_lock_child(inode);
 	au_cpup_attr_timesizes(inode);
 	inode->i_mode = file_inode(h_file)->i_mode;
+	AuDbg("blks %llu, %llu\n", (u64)blks, (u64)h_inode->i_blocks);
+	if (err > 0)
+		au_fhsm_wrote(sb, bstart, /*force*/h_inode->i_blocks > blks);
 	ii_write_unlock(inode);
 	fput(h_file);
 
@@ -347,6 +350,9 @@ static ssize_t aufs_write_iter(struct kiocb *kio, struct iov_iter *iov_iter)
 	ii_write_lock_child(inode);
 	au_cpup_attr_timesizes(inode);
 	inode->i_mode = file_inode(h_file)->i_mode;
+	AuDbg("blks %llu, %llu\n", (u64)blks, (u64)h_inode->i_blocks);
+	if (err > 0)
+		au_fhsm_wrote(sb, bstart, /*force*/h_inode->i_blocks > blks);
 	ii_write_unlock(inode);
 	fput(h_file);
 
@@ -433,6 +439,9 @@ aufs_splice_write(struct pipe_inode_info *pipe, struct file *file, loff_t *ppos,
 	ii_write_lock_child(inode);
 	au_cpup_attr_timesizes(inode);
 	inode->i_mode = file_inode(h_file)->i_mode;
+	AuDbg("blks %llu, %llu\n", (u64)blks, (u64)h_inode->i_blocks);
+	if (err > 0)
+		au_fhsm_wrote(sb, bstart, /*force*/h_inode->i_blocks > blks);
 	ii_write_unlock(inode);
 	fput(h_file);
 
