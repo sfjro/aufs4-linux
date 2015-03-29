@@ -51,8 +51,98 @@ static match_table_t brperm = {
 	{0, NULL}
 };
 
+static match_table_t brattr = {
+	/* ro/rr branch */
+	{AuBrRAttr_WH, AUFS_BRRATTR_WH},
+
+	{0, NULL}
+};
+
+static int br_attr_val(char *str, match_table_t table, substring_t args[])
+{
+	int attr, v;
+	char *p;
+
+	attr = 0;
+	do {
+		p = strchr(str, '+');
+		if (p)
+			*p = 0;
+		v = match_token(str, table, args);
+		if (v)
+			attr |= v;
+		else {
+			if (p)
+				*p = '+';
+			pr_warn("ignored branch attribute %s\n", str);
+			break;
+		}
+		if (p)
+			str = p + 1;
+	} while (p);
+
+	return attr;
+}
+
+static int au_do_optstr_br_attr(au_br_perm_str_t *str, int perm)
+{
+	int sz;
+	const char *p;
+	char *q;
+
+	q = str->a;
+	*q = 0;
+	p = au_optstr(&perm, brattr);
+	if (p) {
+		sz = strlen(p);
+		memcpy(q, p, sz + 1);
+		q += sz;
+	} else
+		goto out;
+
+	do {
+		p = au_optstr(&perm, brattr);
+		if (p) {
+			*q++ = '+';
+			sz = strlen(p);
+			memcpy(q, p, sz + 1);
+			q += sz;
+		}
+	} while (p);
+
+out:
+	return q - str->a;
+}
+
+static int noinline_for_stack br_perm_val(char *perm)
+{
+	int val;
+	char *p;
+	substring_t args[MAX_OPT_ARGS];
+
+	p = strchr(perm, '+');
+	if (p)
+		*p = 0;
+	val = match_token(perm, brperm, args);
+	if (!val) {
+		if (p)
+			*p = '+';
+		pr_warn("ignored branch permission %s\n", perm);
+		val = AuBrPerm_RO;
+		goto out;
+	}
+	if (!p)
+		goto out;
+
+	val |= br_attr_val(p + 1, brattr, args);
+
+out:
+	return val;
+}
+
 void au_optstr_br_perm(au_br_perm_str_t *str, int perm)
 {
+	au_br_perm_str_t attr;
 	const char *p;
 	char *q;
 	int sz;
@@ -63,6 +153,12 @@ void au_optstr_br_perm(au_br_perm_str_t *str, int perm)
 	sz = strlen(p);
 	memcpy(q, p, sz + 1);
 	q += sz;
+
+	sz = au_do_optstr_br_attr(&attr, perm);
+	if (sz) {
+		*q++ = '+';
+		memcpy(q, attr.a, sz + 1);
+	}
 
 	AuDebugOn(strlen(str->a) >= sizeof(str->a));
 }

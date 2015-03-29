@@ -91,11 +91,16 @@ typedef int16_t aufs_bindex_t;
 
 /* branch permissions and attributes */
 #define AUFS_BRPERM_RO		"ro"
+#define AUFS_BRRATTR_WH		"wh"
 
 #define AuBrPerm_RO		(1 << 1)	/* readonly */
 
+#define AuBrRAttr_WH		(1 << 7)	/* whiteout-able */
+#define AuBrRAttr_Mask		AuBrRAttr_WH
+
 /* the longest combination */
-#define AuBrPermStrSz	sizeof(AUFS_BRPERM_RO)
+#define AuBrPermStrSz	sizeof(AUFS_BRPERM_RO		\
+			       "+" AUFS_BRRATTR_WH)
 
 typedef struct {
 	char a[AuBrPermStrSz];
