@@ -40,6 +40,10 @@ struct au_sbinfo {
 	unsigned int		si_generation;
 
 	aufs_bindex_t		si_bend;
+
+	/* dirty trick to keep br_id plus */
+	unsigned int		si_last_br_id :
+				sizeof(aufs_bindex_t) * BITS_PER_BYTE - 1;
 	struct au_branch	**si_branch;
 
 	/*
@@ -71,8 +75,10 @@ struct inode *au_iget_locked(struct super_block *sb, ino_t ino);
 /* sbinfo.c */
 void au_si_free(struct kobject *kobj);
 int au_si_alloc(struct super_block *sb);
+int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr);
 
 unsigned int au_sigen_inc(struct super_block *sb);
+aufs_bindex_t au_new_br_id(struct super_block *sb);
 
 /* ---------------------------------------------------------------------- */
 
@@ -106,6 +112,13 @@ static inline unsigned int au_sigen(struct super_block *sb)
 {
 	SiMustAnyLock(sb);
 	return au_sbi(sb)->si_generation;
+}
+
+static inline struct au_branch *au_sbr(struct super_block *sb,
+				       aufs_bindex_t bindex)
+{
+	SiMustAnyLock(sb);
+	return au_sbi(sb)->si_branch[0 + bindex];
 }
 
 #endif /* __KERNEL__ */

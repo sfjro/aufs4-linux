@@ -50,3 +50,54 @@ among multiple writable branches, XIB files, pseudo-links and kobject.
 See below in detail.
 About the policies which supports copy-down a directory, see
 wbr_policy.txt too.
+
+
+Branch and XINO(External Inode Number Translation Table)
+----------------------------------------------------------------------
+Every branch has its own xino (external inode number translation table)
+file. The xino file is created and unlinked by aufs internally. When two
+members of a union exist on the same filesystem, they share the single
+xino file.
+The struct of a xino file is simple, just a sequence of aufs inode
+numbers which is indexed by the lower inode number.
+In the above sample, assume the inode number of /ro/fileA is i111 and
+aufs assigns the inode number i999 for fileA. Then aufs writes 999 as
+4(8) bytes at 111 * 4(8) bytes offset in the xino file.
+
+When the inode numbers are not contiguous, the xino file will be sparse
+which has a hole in it and doesn't consume as much disk space as it
+might appear. If your branch filesystem consumes disk space for such
+holes, then you should specify 'xino=' option at mounting aufs.
+
+Aufs has a mount option to free the disk blocks for such holes in XINO
+files on tmpfs or ramdisk. But it is not so effective actually. If you
+meet a problem of disk shortage due to XINO files, then you should try
+"tmpfs-ino.patch" (and "vfs-ino.patch" too) in aufs4-standalone.git.
+The patch localizes the assignment inumbers per tmpfs-mount and avoid
+the holes in XINO files.
+
+Also a writable branch has three kinds of "whiteout bases". All these
+are existed when the branch is joined to aufs, and their names are
+whiteout-ed doubly, so that users will never see their names in aufs
+hierarchy.
+1. a regular file which will be hardlinked to all whiteouts.
+2. a directory to store a pseudo-link.
+3. a directory to store an "orphan"-ed file temporary.
+
+1. Whiteout Base
+   When you remove a file on a readonly branch, aufs handles it as a
+   logical deletion and creates a whiteout on the upper writable branch
+   as a hardlink of this file in order not to consume inode on the
+   writable branch.
+2. Pseudo-link Dir
+   See below, Pseudo-link.
+3. Step-Parent Dir
+   When "fileC" exists on the lower readonly branch only and it is
+   opened and removed with its parent dir, and then user writes
+   something into it, then aufs copies-up fileC to this
+   directory. Because there is no other dir to store fileC. After
+   creating a file under this dir, the file is unlinked.
+
+Because aufs supports manipulating branches, ie. add/delete/change
+dynamically, a branch has its own id. When the branch order changes,
+aufs finds the new index by searching the branch id.

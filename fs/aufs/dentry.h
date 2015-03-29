@@ -29,6 +29,7 @@
 
 struct au_hdentry {
 	struct dentry		*hd_dentry;
+	aufs_bindex_t		hd_id;
 };
 
 struct au_dinfo {
@@ -47,6 +48,7 @@ struct au_dinfo *au_di_alloc(struct super_block *sb, unsigned int lsc);
 void au_di_free(struct au_dinfo *dinfo);
 int au_di_init(struct dentry *dentry);
 void au_di_fin(struct dentry *dentry);
+int au_di_realloc(struct au_dinfo *dinfo, int nbr);
 
 void di_read_lock(struct dentry *d, int flags, unsigned int lsc);
 void di_read_unlock(struct dentry *d, int flags);
@@ -56,8 +58,11 @@ void di_write_unlock(struct dentry *d);
 
 struct dentry *au_h_dptr(struct dentry *dentry, aufs_bindex_t bindex);
 
+void au_set_h_dptr(struct dentry *dentry, aufs_bindex_t bindex,
+		   struct dentry *h_dentry);
 int au_digen_test(struct dentry *dentry, unsigned int sigen);
 void au_update_digen(struct dentry *dentry);
+int au_find_dbindex(struct dentry *dentry, struct dentry *h_dentry);
 
 /* ---------------------------------------------------------------------- */
 

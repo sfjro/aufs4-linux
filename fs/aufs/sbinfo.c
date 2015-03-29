@@ -29,6 +29,11 @@ void au_si_free(struct kobject *kobj)
 	struct au_sbinfo *sbinfo;
 
 	sbinfo = container_of(kobj, struct au_sbinfo, si_kobj);
+
+	au_rw_write_lock(&sbinfo->si_rwsem);
+	au_br_free(sbinfo);
+	au_rw_write_unlock(&sbinfo->si_rwsem);
+
 	kfree(sbinfo->si_branch);
 	AuRwDestroy(&sbinfo->si_rwsem);
 
@@ -55,6 +60,7 @@ int au_si_alloc(struct super_block *sb)
 	au_rw_class(&sbinfo->si_rwsem, &aufs_si);
 
 	sbinfo->si_bend = -1;
+	sbinfo->si_last_br_id = AUFS_BRANCH_MAX / 2;
 
 	/* leave other members for sysaufs and si_mnt. */
 	sb->s_fs_info = sbinfo;
@@ -64,6 +70,26 @@ int au_si_alloc(struct super_block *sb)
 out_sbinfo:
 	kfree(sbinfo);
 out:
+	return err;
+}
+
+int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr)
+{
+	int err, sz;
+	struct au_branch **brp;
+
+	AuRwMustWriteLock(&sbinfo->si_rwsem);
+
+	err = -ENOMEM;
+	sz = sizeof(*brp) * (sbinfo->si_bend + 1);
+	if (unlikely(!sz))
+		sz = sizeof(*brp);
+	brp = au_kzrealloc(sbinfo->si_branch, sz, sizeof(*brp) * nbr, GFP_NOFS);
+	if (brp) {
+		sbinfo->si_branch = brp;
+		err = 0;
+	}
+
 	return err;
 }
 
@@ -80,4 +106,23 @@ unsigned int au_sigen_inc(struct super_block *sb)
 	au_update_iigen(sb->s_root->d_inode, /*half*/0);
 	sb->s_root->d_inode->i_version++;
 	return gen;
+}
+
+aufs_bindex_t au_new_br_id(struct super_block *sb)
+{
+	aufs_bindex_t br_id;
+	int i;
+	struct au_sbinfo *sbinfo;
+
+	SiMustWriteLock(sb);
+
+	sbinfo = au_sbi(sb);
+	for (i = 0; i <= AUFS_BRANCH_MAX; i++) {
+		br_id = ++sbinfo->si_last_br_id;
+		AuDebugOn(br_id < 0);
+		if (br_id && au_br_index(sb, br_id) < 0)
+			return br_id;
+	}
+
+	return -1;
 }

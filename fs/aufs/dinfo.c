@@ -33,18 +33,22 @@ void au_di_init_once(void *_dinfo)
 struct au_dinfo *au_di_alloc(struct super_block *sb, unsigned int lsc)
 {
 	struct au_dinfo *dinfo;
-	int nbr;
+	int nbr, i;
 
 	dinfo = au_cache_alloc_dinfo();
 	if (unlikely(!dinfo))
 		goto out;
 
-	nbr = 1; /* re-commit later */
+	nbr = au_sbend(sb) + 1;
+	if (nbr <= 0)
+		nbr = 1;
 	dinfo->di_hdentry = kcalloc(nbr, sizeof(*dinfo->di_hdentry), GFP_NOFS);
 	if (dinfo->di_hdentry) {
 		au_rw_write_lock_nested(&dinfo->di_rwsem, lsc);
 		dinfo->di_bstart = -1;
 		dinfo->di_bend = -1;
+		for (i = 0; i < nbr; i++)
+			dinfo->di_hdentry[i].hd_id = -1;
 		goto out;
 	}
 
@@ -98,6 +102,26 @@ void au_di_fin(struct dentry *dentry)
 	dinfo = au_di(dentry);
 	AuRwDestroy(&dinfo->di_rwsem);
 	au_di_free(dinfo);
+}
+
+int au_di_realloc(struct au_dinfo *dinfo, int nbr)
+{
+	int err, sz;
+	struct au_hdentry *hdp;
+
+	AuRwMustWriteLock(&dinfo->di_rwsem);
+
+	err = -ENOMEM;
+	sz = sizeof(*hdp) * (dinfo->di_bend + 1);
+	if (!sz)
+		sz = sizeof(*hdp);
+	hdp = au_kzrealloc(dinfo->di_hdentry, sz, sizeof(*hdp) * nbr, GFP_NOFS);
+	if (hdp) {
+		dinfo->di_hdentry = hdp;
+		err = 0;
+	}
+
+	return err;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -217,6 +241,24 @@ struct dentry *au_h_dptr(struct dentry *dentry, aufs_bindex_t bindex)
 	return d;
 }
 
+/* ---------------------------------------------------------------------- */
+
+void au_set_h_dptr(struct dentry *dentry, aufs_bindex_t bindex,
+		   struct dentry *h_dentry)
+{
+	struct au_hdentry *hd = au_di(dentry)->di_hdentry + bindex;
+	struct au_branch *br;
+
+	DiMustWriteLock(dentry);
+
+	au_hdput(hd);
+	hd->hd_dentry = h_dentry;
+	if (h_dentry) {
+		br = au_sbr(dentry->d_sb, bindex);
+		hd->hd_id = br->br_id;
+	}
+}
+
 int au_digen_test(struct dentry *dentry, unsigned int sigen)
 {
 	int err;
@@ -233,4 +275,15 @@ void au_update_digen(struct dentry *dentry)
 {
 	atomic_set(&au_di(dentry)->di_generation, au_sigen(dentry->d_sb));
 	/* smp_mb(); */ /* atomic_set */
+}
+
+int au_find_dbindex(struct dentry *dentry, struct dentry *h_dentry)
+{
+	aufs_bindex_t bindex, bend;
+
+	bend = au_dbend(dentry);
+	for (bindex = au_dbstart(dentry); bindex <= bend; bindex++)
+		if (au_h_dptr(dentry, bindex) == h_dentry)
+			return bindex;
+	return -1;
 }

@@ -152,3 +152,17 @@ int au_dcsub_pages_rev_aufs(struct au_dcsub_pages *dpages,
 	return au_dcsub_pages_rev(dpages, dentry, do_include,
 				  au_dcsub_dpages_aufs, dentry->d_sb);
 }
+
+int au_test_subdir(struct dentry *d1, struct dentry *d2)
+{
+	struct path path[2] = {
+		{
+			.dentry = d1
+		},
+		{
+			.dentry = d2
+		}
+	};
+
+	return path_is_under(path + 0, path + 1);
+}
