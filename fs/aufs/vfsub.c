@@ -85,6 +85,28 @@ void vfsub_call_lkup_one(void *args)
 
 /* ---------------------------------------------------------------------- */
 
+struct dentry *vfsub_lock_rename(struct dentry *d1, struct au_hinode *hdir1,
+				 struct dentry *d2, struct au_hinode *hdir2)
+{
+	struct dentry *d;
+
+	lockdep_off();
+	d = lock_rename(d1, d2);
+	lockdep_on();
+
+	return d;
+}
+
+void vfsub_unlock_rename(struct dentry *d1, struct au_hinode *hdir1,
+			 struct dentry *d2, struct au_hinode *hdir2)
+{
+	lockdep_off();
+	unlock_rename(d1, d2);
+	lockdep_on();
+}
+
+/* ---------------------------------------------------------------------- */
+
 int vfsub_create(struct inode *dir, struct path *path, int mode, bool want_excl)
 {
 	int err;

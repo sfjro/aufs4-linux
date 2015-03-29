@@ -70,6 +70,9 @@ void di_read_unlock(struct dentry *d, int flags);
 void di_downgrade_lock(struct dentry *d, int flags);
 void di_write_lock(struct dentry *d, unsigned int lsc);
 void di_write_unlock(struct dentry *d);
+void di_write_lock2_child(struct dentry *d1, struct dentry *d2, int isdir);
+void di_write_lock2_parent(struct dentry *d1, struct dentry *d2, int isdir);
+void di_write_unlock2(struct dentry *d1, struct dentry *d2);
 
 struct dentry *au_h_dptr(struct dentry *dentry, aufs_bindex_t bindex);
 aufs_bindex_t au_dbtail(struct dentry *dentry);

@@ -725,6 +725,8 @@ static void aufs_kill_sb(struct super_block *sb)
 
 struct file_system_type aufs_fs_type = {
 	.name		= AUFS_FSTYPE,
+	/* a race between rename and others */
+	.fs_flags	= FS_RENAME_DOES_D_MOVE,
 	.mount		= aufs_mount,
 	.kill_sb	= aufs_kill_sb,
 	/* no need to __module_get() and module_put(). */

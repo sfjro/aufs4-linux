@@ -265,6 +265,47 @@ void di_write_unlock(struct dentry *d)
 	au_rw_write_unlock(&au_di(d)->di_rwsem);
 }
 
+void di_write_lock2_child(struct dentry *d1, struct dentry *d2, int isdir)
+{
+	AuDebugOn(d1 == d2
+		  || d1->d_inode == d2->d_inode
+		  || d1->d_sb != d2->d_sb);
+
+	if (isdir && au_test_subdir(d1, d2)) {
+		di_write_lock_child(d1);
+		di_write_lock_child2(d2);
+	} else {
+		/* there should be no races */
+		di_write_lock_child(d2);
+		di_write_lock_child2(d1);
+	}
+}
+
+void di_write_lock2_parent(struct dentry *d1, struct dentry *d2, int isdir)
+{
+	AuDebugOn(d1 == d2
+		  || d1->d_inode == d2->d_inode
+		  || d1->d_sb != d2->d_sb);
+
+	if (isdir && au_test_subdir(d1, d2)) {
+		di_write_lock_parent(d1);
+		di_write_lock_parent2(d2);
+	} else {
+		/* there should be no races */
+		di_write_lock_parent(d2);
+		di_write_lock_parent2(d1);
+	}
+}
+
+void di_write_unlock2(struct dentry *d1, struct dentry *d2)
+{
+	di_write_unlock(d1);
+	if (d1->d_inode == d2->d_inode)
+		au_rw_write_unlock(&au_di(d2)->di_rwsem);
+	else
+		di_write_unlock(d2);
+}
+
 /* ---------------------------------------------------------------------- */
 
 struct dentry *au_h_dptr(struct dentry *dentry, aufs_bindex_t bindex)
