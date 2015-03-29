@@ -95,10 +95,10 @@ struct au_sbinfo {
 	} au_si_pid;
 
 	/*
-	 * dirty approach to protect sb->sb_inodes from
+	 * dirty approach to protect sb->sb_inodes and ->s_files (gone) from
 	 * remount.
 	 */
-	atomic_long_t		si_ninodes;
+	atomic_long_t		si_ninodes, si_nfiles;
 
 	/* branch management */
 	unsigned int		si_generation;
@@ -153,6 +153,9 @@ struct au_sbinfo {
 	wait_queue_head_t	si_plink_wq;
 	spinlock_t		si_plink_maint_lock;
 	pid_t			si_plink_maint_pid;
+
+	/* file list */
+	struct au_sphlhead	si_files;
 
 	/*
 	 * sysfs and lifetime management.
@@ -469,6 +472,17 @@ static inline void au_ninodes_dec(struct super_block *sb)
 {
 	AuDebugOn(!atomic_long_read(&au_sbi(sb)->si_ninodes));
 	atomic_long_dec(&au_sbi(sb)->si_ninodes);
+}
+
+static inline void au_nfiles_inc(struct super_block *sb)
+{
+	atomic_long_inc(&au_sbi(sb)->si_nfiles);
+}
+
+static inline void au_nfiles_dec(struct super_block *sb)
+{
+	AuDebugOn(!atomic_long_read(&au_sbi(sb)->si_nfiles));
+	atomic_long_dec(&au_sbi(sb)->si_nfiles);
 }
 
 static inline struct au_branch *au_sbr(struct super_block *sb,

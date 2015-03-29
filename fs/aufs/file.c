@@ -111,6 +111,11 @@ int au_do_open(struct file *file, int (*open)(struct file *file, int flags),
 	di_read_unlock(dentry, AuLock_IR);
 
 	finfo = au_fi(file);
+	if (!err) {
+		finfo->fi_file = file;
+		au_sphl_add(&finfo->fi_hlist,
+			    &au_sbi(file->f_path.dentry->d_sb)->si_files);
+	}
 	fi_write_unlock(file);
 	if (unlikely(err)) {
 		finfo->fi_hdir = NULL;

@@ -87,6 +87,7 @@ int au_si_alloc(struct super_block *sb)
 	INIT_RADIX_TREE(&sbinfo->au_si_pid.tree, GFP_ATOMIC | __GFP_NOFAIL);
 
 	atomic_long_set(&sbinfo->si_ninodes, 0);
+	atomic_long_set(&sbinfo->si_nfiles, 0);
 
 	sbinfo->si_bend = -1;
 	sbinfo->si_last_br_id = AUFS_BRANCH_MAX / 2;
@@ -113,6 +114,8 @@ int au_si_alloc(struct super_block *sb)
 		au_sphl_init(sbinfo->si_plink + i);
 	init_waitqueue_head(&sbinfo->si_plink_wq);
 	spin_lock_init(&sbinfo->si_plink_maint_lock);
+
+	au_sphl_init(&sbinfo->si_files);
 
 	/* leave other members for sysaufs and si_mnt. */
 	sbinfo->si_sb = sb;
