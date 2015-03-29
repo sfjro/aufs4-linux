@@ -75,6 +75,7 @@ void di_write_lock2_parent(struct dentry *d1, struct dentry *d2, int isdir);
 void di_write_unlock2(struct dentry *d1, struct dentry *d2);
 
 struct dentry *au_h_dptr(struct dentry *dentry, aufs_bindex_t bindex);
+struct dentry *au_h_d_alias(struct dentry *dentry, aufs_bindex_t bindex);
 aufs_bindex_t au_dbtail(struct dentry *dentry);
 aufs_bindex_t au_dbtaildir(struct dentry *dentry);
 

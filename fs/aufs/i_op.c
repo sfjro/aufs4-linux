@@ -689,6 +689,7 @@ struct inode_operations aufs_symlink_iop = {
 struct inode_operations aufs_dir_iop = {
 	.create		= aufs_create,
 	.lookup		= aufs_lookup,
+	.link		= aufs_link,
 	.unlink		= aufs_unlink,
 	.symlink	= aufs_symlink,
 	.mkdir		= aufs_mkdir,

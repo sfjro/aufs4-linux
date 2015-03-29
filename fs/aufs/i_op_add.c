@@ -479,6 +479,307 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+struct au_link_args {
+	aufs_bindex_t bdst, bsrc;
+	struct au_pin pin;
+	struct path h_path;
+	struct dentry *src_parent, *parent;
+};
+
+static int au_cpup_before_link(struct dentry *src_dentry,
+			       struct au_link_args *a)
+{
+	int err;
+	struct dentry *h_src_dentry;
+	struct au_cp_generic cpg = {
+		.dentry	= src_dentry,
+		.bdst	= a->bdst,
+		.bsrc	= a->bsrc,
+		.len	= -1,
+		.pin	= &a->pin,
+		.flags	= AuCpup_DTIME /* | AuCpup_KEEPLINO */
+	};
+
+	di_read_lock_parent(a->src_parent, AuLock_IR);
+	err = au_test_and_cpup_dirs(src_dentry, a->bdst);
+	if (unlikely(err))
+		goto out;
+
+	h_src_dentry = au_h_dptr(src_dentry, a->bsrc);
+	err = au_pin(&a->pin, src_dentry, a->bdst,
+		     au_opt_udba(src_dentry->d_sb),
+		     AuPin_DI_LOCKED | AuPin_MNT_WRITE);
+	if (unlikely(err))
+		goto out;
+
+	err = au_sio_cpup_simple(&cpg);
+	au_unpin(&a->pin);
+
+out:
+	di_read_unlock(a->src_parent, AuLock_IR);
+	return err;
+}
+
+static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
+			   struct au_link_args *a)
+{
+	int err;
+	unsigned char plink;
+	aufs_bindex_t bend;
+	struct dentry *h_src_dentry;
+	struct inode *h_inode, *inode, *delegated;
+	struct super_block *sb;
+
+	plink = 0;
+	h_inode = NULL;
+	sb = src_dentry->d_sb;
+	inode = src_dentry->d_inode;
+	if (au_ibstart(inode) <= a->bdst)
+		h_inode = au_h_iptr(inode, a->bdst);
+	if (!h_inode || !h_inode->i_nlink) {
+		/* copyup src_dentry as the name of dentry. */
+		bend = au_dbend(dentry);
+		if (bend < a->bsrc)
+			au_set_dbend(dentry, a->bsrc);
+		au_set_h_dptr(dentry, a->bsrc,
+			      dget(au_h_dptr(src_dentry, a->bsrc)));
+		dget(a->h_path.dentry);
+		au_set_h_dptr(dentry, a->bdst, NULL);
+		AuDbg("temporary d_inode...\n");
+		spin_lock(&dentry->d_lock);
+		dentry->d_inode = src_dentry->d_inode; /* tmp */
+		spin_unlock(&dentry->d_lock);
+		{
+			struct au_cp_generic cpg = {
+				.dentry	= dentry,
+				.bdst	= a->bdst,
+				.bsrc	= -1,
+				.len	= -1,
+				.pin	= &a->pin,
+				.flags	= AuCpup_KEEPLINO
+			};
+			err = au_sio_cpup_simple(&cpg);
+			if (!err) {
+				dput(a->h_path.dentry);
+				a->h_path.dentry = au_h_dptr(dentry, a->bdst);
+			} else
+				au_set_h_dptr(dentry, a->bdst,
+					      a->h_path.dentry);
+		}
+		spin_lock(&dentry->d_lock);
+		dentry->d_inode = NULL; /* restore */
+		spin_unlock(&dentry->d_lock);
+		AuDbg("temporary d_inode...done\n");
+		au_set_h_dptr(dentry, a->bsrc, NULL);
+		au_set_dbend(dentry, bend);
+	} else {
+		/* the inode of src_dentry already exists on a.bdst branch */
+		h_src_dentry = d_find_alias(h_inode);
+		if (!h_src_dentry && au_plink_test(inode)) {
+			plink = 1;
+			h_src_dentry = au_plink_lkup(inode, a->bdst);
+			err = PTR_ERR(h_src_dentry);
+			if (IS_ERR(h_src_dentry))
+				goto out;
+
+			if (unlikely(!h_src_dentry->d_inode)) {
+				dput(h_src_dentry);
+				h_src_dentry = NULL;
+			}
+
+		}
+		if (h_src_dentry) {
+			delegated = NULL;
+			err = vfsub_link(h_src_dentry, au_pinned_h_dir(&a->pin),
+					 &a->h_path, &delegated);
+			if (unlikely(err == -EWOULDBLOCK)) {
+				pr_warn("cannot retry for NFSv4 delegation"
+					" for an internal link\n");
+				iput(delegated);
+			}
+			dput(h_src_dentry);
+		} else {
+			AuIOErr("no dentry found for hi%lu on b%d\n",
+				h_inode->i_ino, a->bdst);
+			err = -EIO;
+		}
+	}
+
+	if (!err && !plink)
+		au_plink_append(inode, a->bdst, a->h_path.dentry);
+
+out:
+	AuTraceErr(err);
+	return err;
+}
+
+int aufs_link(struct dentry *src_dentry, struct inode *dir,
+	      struct dentry *dentry)
+{
+	int err, rerr;
+	struct au_dtime dt;
+	struct au_link_args *a;
+	struct dentry *wh_dentry, *h_src_dentry;
+	struct inode *inode, *delegated;
+	struct super_block *sb;
+	struct au_wr_dir_args wr_dir_args = {
+		/* .force_btgt	= -1, */
+		.flags		= AuWrDir_ADD_ENTRY
+	};
+
+	IMustLock(dir);
+	inode = src_dentry->d_inode;
+	IMustLock(inode);
+
+	err = -ENOMEM;
+	a = kzalloc(sizeof(*a), GFP_NOFS);
+	if (unlikely(!a))
+		goto out;
+
+	a->parent = dentry->d_parent; /* dir inode is locked */
+	err = aufs_read_and_write_lock2(dentry, src_dentry,
+					AuLock_NOPLM | AuLock_GEN);
+	if (unlikely(err))
+		goto out_kfree;
+	err = au_d_linkable(src_dentry);
+	if (unlikely(err))
+		goto out_unlock;
+	err = au_d_may_add(dentry);
+	if (unlikely(err))
+		goto out_unlock;
+
+	a->src_parent = dget_parent(src_dentry);
+	wr_dir_args.force_btgt = au_ibstart(inode);
+
+	di_write_lock_parent(a->parent);
+	wr_dir_args.force_btgt = au_wbr(dentry, wr_dir_args.force_btgt);
+	wh_dentry = lock_hdir_lkup_wh(dentry, &dt, src_dentry, &a->pin,
+				      &wr_dir_args);
+	err = PTR_ERR(wh_dentry);
+	if (IS_ERR(wh_dentry))
+		goto out_parent;
+
+	err = 0;
+	sb = dentry->d_sb;
+	a->bdst = au_dbstart(dentry);
+	a->h_path.dentry = au_h_dptr(dentry, a->bdst);
+	a->h_path.mnt = au_sbr_mnt(sb, a->bdst);
+	a->bsrc = au_ibstart(inode);
+	h_src_dentry = au_h_d_alias(src_dentry, a->bsrc);
+	if (!h_src_dentry && au_di(src_dentry)->di_tmpfile)
+		h_src_dentry = dget(au_hi_wh(inode, a->bsrc));
+	if (!h_src_dentry) {
+		a->bsrc = au_dbstart(src_dentry);
+		h_src_dentry = au_h_d_alias(src_dentry, a->bsrc);
+		AuDebugOn(!h_src_dentry);
+	} else if (IS_ERR(h_src_dentry)) {
+		err = PTR_ERR(h_src_dentry);
+		goto out_parent;
+	}
+
+	if (au_opt_test(au_mntflags(sb), PLINK)) {
+		if (a->bdst < a->bsrc
+		    /* && h_src_dentry->d_sb != a->h_path.dentry->d_sb */)
+			err = au_cpup_or_link(src_dentry, dentry, a);
+		else {
+			delegated = NULL;
+			err = vfsub_link(h_src_dentry, au_pinned_h_dir(&a->pin),
+					 &a->h_path, &delegated);
+			if (unlikely(err == -EWOULDBLOCK)) {
+				pr_warn("cannot retry for NFSv4 delegation"
+					" for an internal link\n");
+				iput(delegated);
+			}
+		}
+		dput(h_src_dentry);
+	} else {
+		/*
+		 * copyup src_dentry to the branch we process,
+		 * and then link(2) to it.
+		 */
+		dput(h_src_dentry);
+		if (a->bdst < a->bsrc
+		    /* && h_src_dentry->d_sb != a->h_path.dentry->d_sb */) {
+			au_unpin(&a->pin);
+			di_write_unlock(a->parent);
+			err = au_cpup_before_link(src_dentry, a);
+			di_write_lock_parent(a->parent);
+			if (!err)
+				err = au_pin(&a->pin, dentry, a->bdst,
+					     au_opt_udba(sb),
+					     AuPin_DI_LOCKED | AuPin_MNT_WRITE);
+			if (unlikely(err))
+				goto out_wh;
+		}
+		if (!err) {
+			h_src_dentry = au_h_dptr(src_dentry, a->bdst);
+			err = -ENOENT;
+			if (h_src_dentry && h_src_dentry->d_inode) {
+				delegated = NULL;
+				err = vfsub_link(h_src_dentry,
+						 au_pinned_h_dir(&a->pin),
+						 &a->h_path, &delegated);
+				if (unlikely(err == -EWOULDBLOCK)) {
+					pr_warn("cannot retry"
+						" for NFSv4 delegation"
+						" for an internal link\n");
+					iput(delegated);
+				}
+			}
+		}
+	}
+	if (unlikely(err))
+		goto out_unpin;
+
+	if (wh_dentry) {
+		a->h_path.dentry = wh_dentry;
+		err = au_wh_unlink_dentry(au_pinned_h_dir(&a->pin), &a->h_path,
+					  dentry);
+		if (unlikely(err))
+			goto out_revert;
+	}
+
+	dir->i_version++;
+	if (au_ibstart(dir) == au_dbstart(dentry))
+		au_cpup_attr_timesizes(dir);
+	inc_nlink(inode);
+	inode->i_ctime = dir->i_ctime;
+	d_instantiate(dentry, au_igrab(inode));
+	if (d_unhashed(a->h_path.dentry))
+		/* some filesystem calls d_drop() */
+		d_drop(dentry);
+	/* some filesystems consume an inode even hardlink */
+	goto out_unpin; /* success */
+
+out_revert:
+	/* no delegation since it is just created */
+	rerr = vfsub_unlink(au_pinned_h_dir(&a->pin), &a->h_path,
+			    /*delegated*/NULL, /*force*/0);
+	if (unlikely(rerr)) {
+		AuIOErr("%pd reverting failed(%d, %d)\n", dentry, err, rerr);
+		err = -EIO;
+	}
+	au_dtime_revert(&dt);
+out_unpin:
+	au_unpin(&a->pin);
+out_wh:
+	dput(wh_dentry);
+out_parent:
+	di_write_unlock(a->parent);
+	dput(a->src_parent);
+out_unlock:
+	if (unlikely(err)) {
+		au_update_dbstart(dentry);
+		d_drop(dentry);
+	}
+	aufs_read_and_write_unlock2(dentry, src_dentry);
+out_kfree:
+	kfree(a);
+out:
+	AuTraceErr(err);
+	return err;
+}
+
 int aufs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
 	int err, rerr;

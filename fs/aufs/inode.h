@@ -165,6 +165,8 @@ int aufs_symlink(struct inode *dir, struct dentry *dentry, const char *symname);
 int aufs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		bool want_excl);
 int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode);
+int aufs_link(struct dentry *src_dentry, struct inode *dir,
+	      struct dentry *dentry);
 int aufs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
 
 /* i_op_del.c */

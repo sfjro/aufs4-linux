@@ -322,6 +322,57 @@ struct dentry *au_h_dptr(struct dentry *dentry, aufs_bindex_t bindex)
 	return d;
 }
 
+/*
+ * extended version of au_h_dptr().
+ * returns a hashed and positive (or linkable) h_dentry in bindex, NULL, or
+ * error.
+ */
+struct dentry *au_h_d_alias(struct dentry *dentry, aufs_bindex_t bindex)
+{
+	struct dentry *h_dentry;
+	struct inode *inode, *h_inode;
+
+	inode = dentry->d_inode;
+	AuDebugOn(!inode);
+
+	h_dentry = NULL;
+	if (au_dbstart(dentry) <= bindex
+	    && bindex <= au_dbend(dentry))
+		h_dentry = au_h_dptr(dentry, bindex);
+	if (h_dentry && !au_d_linkable(h_dentry)) {
+		dget(h_dentry);
+		goto out; /* success */
+	}
+
+	AuDebugOn(bindex < au_ibstart(inode));
+	AuDebugOn(au_ibend(inode) < bindex);
+	h_inode = au_h_iptr(inode, bindex);
+	h_dentry = d_find_alias(h_inode);
+	if (h_dentry) {
+		if (!IS_ERR(h_dentry)) {
+			if (!au_d_linkable(h_dentry))
+				goto out; /* success */
+			dput(h_dentry);
+		} else
+			goto out;
+	}
+
+	if (au_opt_test(au_mntflags(dentry->d_sb), PLINK)) {
+		h_dentry = au_plink_lkup(inode, bindex);
+		AuDebugOn(!h_dentry);
+		if (!IS_ERR(h_dentry)) {
+			if (!au_d_hashed_positive(h_dentry))
+				goto out; /* success */
+			dput(h_dentry);
+			h_dentry = NULL;
+		}
+	}
+
+out:
+	AuDbgDentry(h_dentry);
+	return h_dentry;
+}
+
 aufs_bindex_t au_dbtail(struct dentry *dentry)
 {
 	aufs_bindex_t bend, bwh;
