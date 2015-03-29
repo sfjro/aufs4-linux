@@ -91,6 +91,8 @@ int au_test_empty(struct dentry *dentry, struct au_nhash *whlist);
 unsigned int au_rdhash_est(loff_t sz);
 int au_nhash_alloc(struct au_nhash *nhash, unsigned int num_hash, gfp_t gfp);
 void au_nhash_wh_free(struct au_nhash *whlist);
+int au_nhash_test_longer_wh(struct au_nhash *whlist, aufs_bindex_t btgt,
+			    int limit);
 int au_nhash_test_known_wh(struct au_nhash *whlist, char *name, int nlen);
 int au_nhash_append_wh(struct au_nhash *whlist, char *name, int nlen, ino_t ino,
 		       unsigned int d_type, aufs_bindex_t bindex);

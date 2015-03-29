@@ -109,6 +109,7 @@ int au_si_alloc(struct super_block *sb)
 	sbinfo->si_rdcache = msecs_to_jiffies(AUFS_RDCACHE_DEF * MSEC_PER_SEC);
 	sbinfo->si_rdblk = AUFS_RDBLK_DEF;
 	sbinfo->si_rdhash = AUFS_RDHASH_DEF;
+	sbinfo->si_dirwh = AUFS_DIRWH_DEF;
 
 	for (i = 0; i < AuPlink_NHASH; i++)
 		au_sphl_init(sbinfo->si_plink + i);

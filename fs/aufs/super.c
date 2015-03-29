@@ -261,6 +261,8 @@ static int aufs_show_options(struct seq_file *m, struct dentry *dentry)
 	if (v != AuWbrCopyup_Def)
 		seq_printf(m, ",cpup=%s", au_optstr_wbr_copyup(v));
 
+	AuUInt(DIRWH, dirwh, sbinfo->si_dirwh);
+
 	v = jiffies_to_msecs(sbinfo->si_rdcache) / MSEC_PER_SEC;
 	AuUInt(RDCACHE, rdcache, v);
 

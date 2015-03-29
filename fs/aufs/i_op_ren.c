@@ -229,17 +229,26 @@ static int au_ren_or_cpup(struct au_ren_args *a)
 /* cf. aufs_rmdir() */
 static int au_ren_del_whtmp(struct au_ren_args *a)
 {
+	int err;
 	struct inode *dir;
 
 	dir = a->dst_dir;
 	SiMustAnyLock(dir->i_sb);
-
-	au_nhash_wh_free(&a->thargs->whlist);
-	a->thargs->whlist = a->whlist;
-	a->whlist.nh_num = 0;
-	au_whtmp_kick_rmdir(dir, a->btgt, a->h_dst, a->thargs);
-	dput(a->h_dst);
-	a->thargs = NULL;
+	if (!au_nhash_test_longer_wh(&a->whlist, a->btgt,
+				     au_sbi(dir->i_sb)->si_dirwh)
+	    || au_test_fs_remote(a->h_dst->d_sb)) {
+		err = au_whtmp_rmdir(dir, a->btgt, a->h_dst, &a->whlist);
+		if (unlikely(err))
+			pr_warn("failed removing whtmp dir %pd (%d), "
+				"ignored.\n", a->h_dst, err);
+	} else {
+		au_nhash_wh_free(&a->thargs->whlist);
+		a->thargs->whlist = a->whlist;
+		a->whlist.nh_num = 0;
+		au_whtmp_kick_rmdir(dir, a->btgt, a->h_dst, a->thargs);
+		dput(a->h_dst);
+		a->thargs = NULL;
+	}
 
 	return 0;
 }

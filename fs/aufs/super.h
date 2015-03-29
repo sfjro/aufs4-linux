@@ -154,6 +154,14 @@ struct au_sbinfo {
 	unsigned int		si_rdblk;	/* deblk size */
 	unsigned int		si_rdhash;	/* hash size */
 
+	/*
+	 * If the number of whiteouts are larger than si_dirwh, leave all of
+	 * them after au_whtmp_ren to reduce the cost of rmdir(2).
+	 * future fsck.aufs or kernel thread will remove them later.
+	 * Otherwise, remove all whiteouts and the dir in rmdir(2).
+	 */
+	unsigned int		si_dirwh;
+
 	/* pseudo_link list */
 	struct au_sphlhead	si_plink[AuPlink_NHASH];
 	wait_queue_head_t	si_plink_wq;

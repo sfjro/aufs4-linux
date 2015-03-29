@@ -145,6 +145,7 @@ struct au_opt {
 		struct au_opt_add	add;
 		struct au_opt_del	del;
 		struct au_opt_mod	mod;
+		int			dirwh;
 		int			rdcache;
 		unsigned int		rdblk;
 		unsigned int		rdhash;

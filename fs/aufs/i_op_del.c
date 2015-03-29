@@ -212,7 +212,7 @@ out:
 static int renwh_and_rmdir(struct dentry *dentry, aufs_bindex_t bindex,
 			   struct au_nhash *whlist, struct inode *dir)
 {
-	int err;
+	int rmdir_later, err, dirwh;
 	struct dentry *h_dentry;
 	struct super_block *sb;
 
@@ -225,6 +225,16 @@ static int renwh_and_rmdir(struct dentry *dentry, aufs_bindex_t bindex,
 
 	/* stop monitoring */
 	au_hn_free(au_hi(dentry->d_inode, bindex));
+
+	if (!au_test_fs_remote(h_dentry->d_sb)) {
+		dirwh = au_sbi(sb)->si_dirwh;
+		rmdir_later = (dirwh <= 1);
+		if (!rmdir_later)
+			rmdir_later = au_nhash_test_longer_wh(whlist, bindex,
+							      dirwh);
+		if (rmdir_later)
+			return rmdir_later;
+	}
 
 	err = au_whtmp_rmdir(dir, bindex, h_dentry, whlist);
 	if (unlikely(err)) {
