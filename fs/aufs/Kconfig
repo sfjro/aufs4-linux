@@ -108,6 +108,19 @@ config AUFS_RDU
 	shows better performance in most cases.
 	See detail in aufs.5.
 
+config AUFS_BR_RAMFS
+	bool "Ramfs (initramfs/rootfs) as an aufs branch"
+	help
+	If you want to use ramfs as an aufs branch fs, then enable this
+	option. Generally tmpfs is recommended.
+	Aufs prohibited them to be a branch fs by default, because
+	initramfs becomes unusable after switch_root or something
+	generally. If you sets initramfs as an aufs branch and boot your
+	system by switch_root, you will meet a problem easily since the
+	files in initramfs may be inaccessible.
+	Unless you are going to use ramfs as an aufs branch fs without
+	switch_root or something, leave it N.
+
 config AUFS_BR_HFSPLUS
 	bool "Hfsplus as an aufs branch"
 	depends on HFSPLUS_FS
