@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -37,6 +24,20 @@ struct au_xino_file {
 	struct mutex		xi_nondir_mtx;
 
 	/* todo: make xino files an array to support huge inode number */
+
+#ifdef CONFIG_DEBUG_FS
+	struct dentry		 *xi_dbgaufs;
+#endif
+};
+
+/* File-based Hierarchical Storage Management */
+struct au_br_fhsm {
+#ifdef CONFIG_AUFS_FHSM
+	struct mutex		bf_lock;
+	unsigned long		bf_jiffy;
+	struct aufs_stfs	bf_stfs;
+	int			bf_readable;
+#endif
 };
 
 /* members for writable branch only */
@@ -55,6 +56,13 @@ struct au_wbr {
 
 /* ext2 has 3 types of operations at least, ext3 has 4 */
 #define AuBrDynOp (AuDyLast * 4)
+
+#ifdef CONFIG_AUFS_HFSNOTIFY
+/* support for asynchronous destruction */
+struct au_br_hfsnotify {
+	struct fsnotify_group	*hfsn_group;
+};
+#endif
 
 /* sysfs entries */
 struct au_brsysfs {
@@ -81,6 +89,14 @@ struct au_branch {
 	atomic_t		br_count;
 
 	struct au_wbr		*br_wbr;
+	struct au_br_fhsm	*br_fhsm;
+
+	/* xino truncation */
+	atomic_t		br_xino_running;
+
+#ifdef CONFIG_AUFS_HFSNOTIFY
+	struct au_br_hfsnotify	*br_hfsn;
+#endif
 
 #ifdef CONFIG_SYSFS
 	/* entries under sysfs per mount-point */
@@ -112,6 +128,15 @@ static inline int au_br_rdonly(struct au_branch *br)
 		? -EROFS : 0;
 }
 
+static inline int au_br_hnotifyable(int brperm __maybe_unused)
+{
+#ifdef CONFIG_AUFS_HNOTIFY
+	return !(brperm & AuBrPerm_RR);
+#else
+	return 0;
+#endif
+}
+
 /* ---------------------------------------------------------------------- */
 
 /* branch.c */
@@ -120,10 +145,22 @@ void au_br_free(struct au_sbinfo *sinfo);
 int au_br_index(struct super_block *sb, aufs_bindex_t br_id);
 struct au_opt_add;
 int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount);
+struct au_opt_del;
+int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount);
+long au_ibusy_ioctl(struct file *file, unsigned long arg);
+#ifdef CONFIG_COMPAT
+long au_ibusy_compat_ioctl(struct file *file, unsigned long arg);
+#endif
+struct au_opt_mod;
+int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
+	      int *do_refresh);
+struct aufs_stfs;
+int au_br_stfs(struct au_branch *br, struct aufs_stfs *stfs);
 
 /* xino.c */
 static const loff_t au_loff_max = LLONG_MAX;
 
+int au_xib_trunc(struct super_block *sb);
 ssize_t xino_fread(au_readf_t func, struct file *file, void *buf, size_t size,
 		   loff_t *pos);
 ssize_t xino_fwrite(au_writef_t func, struct file *file, void *buf, size_t size,
@@ -138,6 +175,7 @@ int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 		 ino_t *ino);
 int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t hino,
 	       struct file *base_file, int do_test);
+int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex);
 
 struct au_opt_xino;
 int au_xino_set(struct super_block *sb, struct au_opt_xino *xino, int remount);
@@ -192,6 +230,25 @@ AuSimpleRwsemFuncs(wbr_wh, struct au_wbr *wbr, &wbr->wbr_wh_rwsem);
 #define WbrWhMustNoWaiters(wbr)	AuRwMustNoWaiters(&wbr->wbr_wh_rwsem)
 #define WbrWhMustAnyLock(wbr)	AuRwMustAnyLock(&wbr->wbr_wh_rwsem)
 #define WbrWhMustWriteLock(wbr)	AuRwMustWriteLock(&wbr->wbr_wh_rwsem)
+
+/* ---------------------------------------------------------------------- */
+
+#ifdef CONFIG_AUFS_FHSM
+static inline void au_br_fhsm_init(struct au_br_fhsm *brfhsm)
+{
+	mutex_init(&brfhsm->bf_lock);
+	brfhsm->bf_jiffy = 0;
+	brfhsm->bf_readable = 0;
+}
+
+static inline void au_br_fhsm_fin(struct au_br_fhsm *brfhsm)
+{
+	mutex_destroy(&brfhsm->bf_lock);
+}
+#else
+AuStubVoid(au_br_fhsm_init, struct au_br_fhsm *brfhsm)
+AuStubVoid(au_br_fhsm_fin, struct au_br_fhsm *brfhsm)
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_BRANCH_H__ */

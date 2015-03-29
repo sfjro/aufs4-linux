@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -34,16 +21,38 @@ struct super_block;
 /* mount flags */
 #define AuOpt_XINO		1		/* external inode number bitmap
 						   and translation table */
+#define AuOpt_TRUNC_XINO	(1 << 1)	/* truncate xino files */
 #define AuOpt_UDBA_NONE		(1 << 2)	/* users direct branch access */
 #define AuOpt_UDBA_REVAL	(1 << 3)
+#define AuOpt_UDBA_HNOTIFY	(1 << 4)
+#define AuOpt_SHWH		(1 << 5)	/* show whiteout */
 #define AuOpt_PLINK		(1 << 6)	/* pseudo-link */
+#define AuOpt_DIRPERM1		(1 << 7)	/* ignore the lower dir's perm
+						   bits */
+#define AuOpt_ALWAYS_DIROPQ	(1 << 9)	/* policy to creating diropq */
+#define AuOpt_SUM		(1 << 10)	/* summation for statfs(2) */
+#define AuOpt_SUM_W		(1 << 11)	/* unimplemented */
+#define AuOpt_WARN_PERM		(1 << 12)	/* warn when add-branch */
+#define AuOpt_VERBOSE		(1 << 13)	/* busy inode when del-branch */
 #define AuOpt_DIO		(1 << 14)	/* direct io */
+
+#ifndef CONFIG_AUFS_HNOTIFY
+#undef AuOpt_UDBA_HNOTIFY
+#define AuOpt_UDBA_HNOTIFY	0
+#endif
+#ifndef CONFIG_AUFS_SHWH
+#undef AuOpt_SHWH
+#define AuOpt_SHWH		0
+#endif
 
 #define AuOpt_Def	(AuOpt_XINO \
 			 | AuOpt_UDBA_REVAL \
-			 | AuOpt_PLINK)
+			 | AuOpt_PLINK \
+			 /* | AuOpt_DIRPERM1 */ \
+			 | AuOpt_WARN_PERM)
 #define AuOptMask_UDBA	(AuOpt_UDBA_NONE \
-			 | AuOpt_UDBA_REVAL)
+			 | AuOpt_UDBA_REVAL \
+			 | AuOpt_UDBA_HNOTIFY)
 
 #define au_opt_test(flags, name)	(flags & AuOpt_##name)
 #define au_opt_set(flags, name) do { \
@@ -102,9 +111,24 @@ struct au_opt_add {
 	struct path	path;
 };
 
+struct au_opt_del {
+	char		*pathname;
+	struct path	h_path;
+};
+
+struct au_opt_mod {
+	char		*path;
+	int		perm;
+	struct dentry	*h_root;
+};
+
 struct au_opt_xino {
 	char		*path;
 	struct file	*file;
+};
+
+struct au_opt_xino_itrunc {
+	aufs_bindex_t	bindex;
 };
 
 struct au_opt_wbr_create {
@@ -117,19 +141,25 @@ struct au_opt {
 	int type;
 	union {
 		struct au_opt_xino	xino;
+		struct au_opt_xino_itrunc xino_itrunc;
 		struct au_opt_add	add;
+		struct au_opt_del	del;
+		struct au_opt_mod	mod;
+		int			dirwh;
 		int			rdcache;
 		unsigned int		rdblk;
 		unsigned int		rdhash;
 		int			udba;
 		struct au_opt_wbr_create wbr_create;
 		int			wbr_copyup;
+		unsigned int		fhsm_second;
 	};
 };
 
 /* opts flags */
 #define AuOpts_REMOUNT		1
 #define AuOpts_REFRESH		(1 << 1)
+#define AuOpts_TRUNC_XIB	(1 << 2)
 #define AuOpts_REFRESH_DYAOP	(1 << 3)
 #define au_ftest_opts(flags, name)	((flags) & AuOpts_##name)
 #define au_fset_opts(flags, name) \

@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -105,7 +92,7 @@ void au_dpri_vdir(struct au_vdir *vdir)
 	}
 }
 
-static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode,
+static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode, int hn,
 			struct dentry *wh)
 {
 	char *n = NULL;
@@ -125,12 +112,12 @@ static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode,
 	}
 
 	dpri("i%d: %p, i%lu, %s, cnt %d, nl %u, 0%o, sz %llu, blk %llu,"
-	     " ct %lld, np %lu, st 0x%lx, f 0x%x, v %llu, g %x%s%.*s\n",
+	     " hn %d, ct %lld, np %lu, st 0x%lx, f 0x%x, v %llu, g %x%s%.*s\n",
 	     bindex, inode,
 	     inode->i_ino, inode->i_sb ? au_sbtype(inode->i_sb) : "??",
 	     atomic_read(&inode->i_count), inode->i_nlink, inode->i_mode,
 	     i_size_read(inode), (unsigned long long)inode->i_blocks,
-	     (long long)timespec_to_ns(&inode->i_ctime) & 0x0ffff,
+	     hn, (long long)timespec_to_ns(&inode->i_ctime) & 0x0ffff,
 	     inode->i_mapping ? inode->i_mapping->nrpages : 0,
 	     inode->i_state, inode->i_flags, inode->i_version,
 	     inode->i_generation,
@@ -142,9 +129,9 @@ void au_dpri_inode(struct inode *inode)
 {
 	struct au_iinfo *iinfo;
 	aufs_bindex_t bindex;
-	int err;
+	int err, hn;
 
-	err = do_pri_inode(-1, inode, NULL);
+	err = do_pri_inode(-1, inode, -1, NULL);
 	if (err || !au_test_aufs(inode->i_sb))
 		return;
 
@@ -155,9 +142,12 @@ void au_dpri_inode(struct inode *inode)
 	     iinfo->ii_bstart, iinfo->ii_bend, au_iigen(inode, NULL));
 	if (iinfo->ii_bstart < 0)
 		return;
-	for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend; bindex++)
-		do_pri_inode(bindex, iinfo->ii_hinode[0 + bindex].hi_inode,
+	hn = 0;
+	for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend; bindex++) {
+		hn = !!au_hn(iinfo->ii_hinode + bindex);
+		do_pri_inode(bindex, iinfo->ii_hinode[0 + bindex].hi_inode, hn,
 			     iinfo->ii_hinode[0 + bindex].hi_whdentry);
+	}
 }
 
 void au_dpri_dalias(struct inode *inode)
@@ -173,6 +163,7 @@ void au_dpri_dalias(struct inode *inode)
 static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 {
 	struct dentry *wh = NULL;
+	int hn;
 	struct au_iinfo *iinfo;
 
 	if (!dentry || IS_ERR(dentry)) {
@@ -186,12 +177,15 @@ static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 	     dentry->d_sb ? au_sbtype(dentry->d_sb) : "??",
 	     au_dcount(dentry), dentry->d_flags,
 	     d_unhashed(dentry) ? "un" : "");
+	hn = -1;
 	if (bindex >= 0 && dentry->d_inode && au_test_aufs(dentry->d_sb)) {
 		iinfo = au_ii(dentry->d_inode);
-		if (iinfo)
+		if (iinfo) {
+			hn = !!au_hn(iinfo->ii_hinode + bindex);
 			wh = iinfo->ii_hinode[0 + bindex].hi_whdentry;
+		}
 	}
-	do_pri_inode(bindex, dentry->d_inode, wh);
+	do_pri_inode(bindex, dentry->d_inode, hn, wh);
 	return 0;
 }
 
@@ -233,8 +227,8 @@ static int do_pri_file(aufs_bindex_t bindex, struct file *file)
 	    && file->f_path.dentry
 	    && au_test_aufs(file->f_path.dentry->d_sb)
 	    && au_fi(file))
-		snprintf(a, sizeof(a), ", gen %d",
-			 au_figen(file));
+		snprintf(a, sizeof(a), ", gen %d, mmapped %d",
+			 au_figen(file), atomic_read(&au_fi(file)->fi_mmapped));
 	dpri("f%d: mode 0x%x, flags 0%o, cnt %ld, v %llu, pos %llu%s\n",
 	     bindex, file->f_mode, file->f_flags, (long)file_count(file),
 	     file->f_version, file->f_pos, a);
@@ -401,11 +395,31 @@ void au_dbg_verify_gen(struct dentry *parent, unsigned int sigen)
 void au_dbg_verify_kthread(void)
 {
 	if (au_wkq_test()) {
-		/* au_dbg_blocked(); re-commit later */
+		au_dbg_blocked();
 		/*
 		 * It may be recursive, but udba=notify between two aufs mounts,
 		 * where a single ro branch is shared, is not a problem.
 		 */
 		/* WARN_ON(1); */
 	}
+}
+
+/* ---------------------------------------------------------------------- */
+
+int __init au_debug_init(void)
+{
+	aufs_bindex_t bindex;
+	struct au_vdir_destr destr;
+
+	bindex = -1;
+	AuDebugOn(bindex >= 0);
+
+	destr.len = -1;
+	AuDebugOn(destr.len < NAME_MAX);
+
+#ifdef CONFIG_4KSTACKS
+	pr_warn("CONFIG_4KSTACKS is defined.\n");
+#endif
+
+	return 0;
 }

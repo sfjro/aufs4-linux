@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -107,6 +94,8 @@ void au_finfo_fin(struct file *file)
 {
 	struct au_finfo *finfo;
 
+	au_nfiles_dec(file->f_path.dentry->d_sb);
+
 	finfo = au_fi(file);
 	AuDebugOn(finfo->fi_hdir);
 	AuRwDestroy(&finfo->fi_rwsem);
@@ -135,6 +124,12 @@ int au_finfo_init(struct file *file, struct au_fidir *fidir)
 		goto out;
 
 	err = 0;
+	au_nfiles_inc(dentry->d_sb);
+	/* verbose coding for lock class name */
+	if (!fidir)
+		au_rw_class(&finfo->fi_rwsem, au_lc_key + AuLcNonDir_FIINFO);
+	else
+		au_rw_class(&finfo->fi_rwsem, au_lc_key + AuLcDir_FIINFO);
 	au_rw_write_lock(&finfo->fi_rwsem);
 	finfo->fi_btop = -1;
 	finfo->fi_hdir = fidir;

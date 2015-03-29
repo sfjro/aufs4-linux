@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -52,6 +39,12 @@ struct au_cp_generic {
 #define AuCpup_KEEPLINO		(1 << 1)	/* do not clear the lower xino,
 						   for link(2) */
 #define AuCpup_RENAME		(1 << 2)	/* rename after cpup */
+#define AuCpup_HOPEN		(1 << 3)	/* call h_open_pre/post() in
+						   cpup */
+#define AuCpup_OVERWRITE	(1 << 4)	/* allow overwriting the
+						   existing entry */
+#define AuCpup_RWDST		(1 << 5)	/* force write target even if
+						   the branch is marked as RO */
 
 #define au_ftest_cpup(flags, name)	((flags) & AuCpup_##name)
 #define au_fset_cpup(flags, name) \
@@ -61,6 +54,7 @@ struct au_cp_generic {
 
 int au_copy_file(struct file *dst, struct file *src, loff_t len);
 int au_sio_cpup_simple(struct au_cp_generic *cpg);
+int au_sio_cpdown_simple(struct au_cp_generic *cpg);
 int au_sio_cpup_wh(struct au_cp_generic *cpg, struct file *file);
 
 int au_cp_dirs(struct dentry *dentry, aufs_bindex_t bdst,

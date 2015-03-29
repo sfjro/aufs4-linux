@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -105,9 +92,9 @@ static void au_ren_rev_diropq(int err, struct au_ren_args *a)
 {
 	int rerr;
 
-	mutex_lock_nested(&a->src_hinode->hi_inode->i_mutex, AuLsc_I_CHILD);
+	au_hn_imtx_lock_nested(a->src_hinode, AuLsc_I_CHILD);
 	rerr = au_diropq_remove(a->src_dentry, a->btgt);
-	mutex_unlock(&a->src_hinode->hi_inode->i_mutex);
+	au_hn_imtx_unlock(a->src_hinode);
 	au_set_dbdiropq(a->src_dentry, a->src_bdiropq);
 	if (rerr)
 		RevertFailure("remove diropq %pd", a->src_dentry);
@@ -229,17 +216,26 @@ static int au_ren_or_cpup(struct au_ren_args *a)
 /* cf. aufs_rmdir() */
 static int au_ren_del_whtmp(struct au_ren_args *a)
 {
+	int err;
 	struct inode *dir;
 
 	dir = a->dst_dir;
 	SiMustAnyLock(dir->i_sb);
-
-	au_nhash_wh_free(&a->thargs->whlist);
-	a->thargs->whlist = a->whlist;
-	a->whlist.nh_num = 0;
-	au_whtmp_kick_rmdir(dir, a->btgt, a->h_dst, a->thargs);
-	dput(a->h_dst);
-	a->thargs = NULL;
+	if (!au_nhash_test_longer_wh(&a->whlist, a->btgt,
+				     au_sbi(dir->i_sb)->si_dirwh)
+	    || au_test_fs_remote(a->h_dst->d_sb)) {
+		err = au_whtmp_rmdir(dir, a->btgt, a->h_dst, &a->whlist);
+		if (unlikely(err))
+			pr_warn("failed removing whtmp dir %pd (%d), "
+				"ignored.\n", a->h_dst, err);
+	} else {
+		au_nhash_wh_free(&a->thargs->whlist);
+		a->thargs->whlist = a->whlist;
+		a->whlist.nh_num = 0;
+		au_whtmp_kick_rmdir(dir, a->btgt, a->h_dst, a->thargs);
+		dput(a->h_dst);
+		a->thargs = NULL;
+	}
 
 	return 0;
 }
@@ -253,9 +249,9 @@ static int au_ren_diropq(struct au_ren_args *a)
 	err = 0;
 	a->src_bdiropq = au_dbdiropq(a->src_dentry);
 	a->src_hinode = au_hi(a->src_inode, a->btgt);
-	mutex_lock_nested(&a->src_hinode->hi_inode->i_mutex, AuLsc_I_CHILD);
+	au_hn_imtx_lock_nested(a->src_hinode, AuLsc_I_CHILD);
 	diropq = au_diropq_create(a->src_dentry, a->btgt);
-	mutex_unlock(&a->src_hinode->hi_inode->i_mutex);
+	au_hn_imtx_unlock(a->src_hinode);
 	if (IS_ERR(diropq))
 		err = PTR_ERR(diropq);
 	else
@@ -325,7 +321,8 @@ static int do_rename(struct au_ren_args *a)
 	    && (a->dst_wh_dentry
 		|| au_dbdiropq(d) == a->btgt
 		/* hide the lower to keep xino */
-		|| a->btgt < au_dbend(d)))
+		|| a->btgt < au_dbend(d)
+		|| au_opt_test(au_mntflags(d->d_sb), ALWAYS_DIROPQ)))
 		au_fset_ren(a->flags, DIROPQ);
 	err = au_ren_or_cpup(a);
 	if (unlikely(err))
@@ -342,6 +339,7 @@ static int do_rename(struct au_ren_args *a)
 	/* update target timestamps */
 	AuDebugOn(au_dbstart(a->src_dentry) != a->btgt);
 	a->h_path.dentry = au_h_dptr(a->src_dentry, a->btgt);
+	vfsub_update_h_iattr(&a->h_path, /*did*/NULL); /*ignore*/
 	a->src_inode->i_ctime = a->h_path.dentry->d_inode->i_ctime;
 
 	/* remove whiteout for dentry */
@@ -357,6 +355,7 @@ static int do_rename(struct au_ren_args *a)
 	if (a->thargs)
 		au_ren_del_whtmp(a); /* ignore this error */
 
+	au_fhsm_wrote(a->src_dentry->d_sb, a->btgt, /*force*/0);
 	err = 0;
 	goto out_success;
 
@@ -590,7 +589,7 @@ static int au_ren_lock(struct au_ren_args *a)
 	udba = au_opt_udba(a->src_dentry->d_sb);
 	if (unlikely(a->src_hdir->hi_inode != a->src_h_parent->d_inode
 		     || a->dst_hdir->hi_inode != a->dst_h_parent->d_inode))
-		err = -EBUSY;
+		err = au_busy_or_stale();
 	if (!err && au_dbstart(a->src_dentry) == a->btgt)
 		err = au_h_verify(a->src_h_dentry, udba,
 				  a->src_h_parent->d_inode, a->src_h_parent,
@@ -602,7 +601,7 @@ static int au_ren_lock(struct au_ren_args *a)
 	if (!err)
 		goto out; /* success */
 
-	err = -EBUSY;
+	err = au_busy_or_stale();
 	au_ren_unlock(a);
 
 out:
@@ -927,7 +926,7 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 				.bsrc	= a->src_bstart,
 				.len	= -1,
 				.pin	= &pin,
-				.flags	= AuCpup_DTIME
+				.flags	= AuCpup_DTIME | AuCpup_HOPEN
 			};
 			AuDebugOn(au_dbstart(a->src_dentry) != a->src_bstart);
 			err = au_sio_cpup_simple(&cpg);

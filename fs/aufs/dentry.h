@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -212,6 +199,22 @@ static inline void au_set_dbdiropq(struct dentry *dentry, aufs_bindex_t bindex)
 	DiMustWriteLock(dentry);
 	au_di(dentry)->di_bdiropq = bindex;
 }
+
+/* ---------------------------------------------------------------------- */
+
+#ifdef CONFIG_AUFS_HNOTIFY
+static inline void au_digen_dec(struct dentry *d)
+{
+	atomic_dec(&au_di(d)->di_generation);
+}
+
+static inline void au_hn_di_reinit(struct dentry *dentry)
+{
+	dentry->d_fsdata = NULL;
+}
+#else
+AuStubVoid(au_hn_di_reinit, struct dentry *dentry __maybe_unused)
+#endif /* CONFIG_AUFS_HNOTIFY */
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_DENTRY_H__ */

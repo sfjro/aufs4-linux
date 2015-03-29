@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -126,7 +113,9 @@ int au_may_del(struct dentry *dentry, aufs_bindex_t bindex,
 	 * let's try heavy test.
 	 */
 	err = -EACCES;
-	if (unlikely(au_test_h_perm(h_parent->d_inode, MAY_EXEC | MAY_WRITE)))
+	if (unlikely(!au_opt_test(au_mntflags(dentry->d_sb), DIRPERM1)
+		     && au_test_h_perm(h_parent->d_inode,
+				       MAY_EXEC | MAY_WRITE)))
 		goto out;
 
 	h_latest = au_sio_lkup_one(&dentry->d_name, h_parent);
@@ -212,7 +201,7 @@ out:
 static int renwh_and_rmdir(struct dentry *dentry, aufs_bindex_t bindex,
 			   struct au_nhash *whlist, struct inode *dir)
 {
-	int err;
+	int rmdir_later, err, dirwh;
 	struct dentry *h_dentry;
 	struct super_block *sb;
 
@@ -222,6 +211,19 @@ static int renwh_and_rmdir(struct dentry *dentry, aufs_bindex_t bindex,
 	err = au_whtmp_ren(h_dentry, au_sbr(sb, bindex));
 	if (unlikely(err))
 		goto out;
+
+	/* stop monitoring */
+	au_hn_free(au_hi(dentry->d_inode, bindex));
+
+	if (!au_test_fs_remote(h_dentry->d_sb)) {
+		dirwh = au_sbi(sb)->si_dirwh;
+		rmdir_later = (dirwh <= 1);
+		if (!rmdir_later)
+			rmdir_later = au_nhash_test_longer_wh(whlist, bindex,
+							      dirwh);
+		if (rmdir_later)
+			return rmdir_later;
+	}
 
 	err = au_whtmp_rmdir(dir, bindex, h_dentry, whlist);
 	if (unlikely(err)) {
@@ -346,9 +348,11 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 		epilog(dir, dentry, bindex);
 
 		/* update target timestamps */
-		if (bindex == bstart)
+		if (bindex == bstart) {
+			vfsub_update_h_iattr(&a->h_path, /*did*/NULL);
+			/*ignore*/
 			inode->i_ctime = a->h_path.dentry->d_inode->i_ctime;
-		else
+		} else
 			/* todo: this timestamp may be reverted later */
 			inode->i_ctime = h_dir->i_ctime;
 		goto out_unpin; /* success */
@@ -440,6 +444,9 @@ int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 			err = 0;
 		}
 	} else {
+		/* stop monitoring */
+		au_hn_free(au_hi(inode, bstart));
+
 		/* dir inode is locked */
 		IMustLock(wh_dentry->d_parent->d_inode);
 		err = 0;

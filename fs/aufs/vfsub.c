@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -21,8 +8,30 @@
 
 #include <linux/namei.h>
 #include <linux/security.h>
-#include <linux/uaccess.h>
+#include <linux/splice.h>
 #include "aufs.h"
+
+int vfsub_update_h_iattr(struct path *h_path, int *did)
+{
+	int err;
+	struct kstat st;
+	struct super_block *h_sb;
+
+	/* for remote fs, leave work for its getattr or d_revalidate */
+	/* for bad i_attr fs, handle them in aufs_getattr() */
+	/* still some fs may acquire i_mutex. we need to skip them */
+	err = 0;
+	if (!did)
+		did = &err;
+	h_sb = h_path->dentry->d_sb;
+	*did = (!au_test_fs_remote(h_sb) && au_test_fs_refresh_iattr(h_sb));
+	if (*did)
+		err = vfs_getattr(h_path, &st);
+
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
 
 struct file *vfsub_dentry_open(struct path *path, int flags)
 {
@@ -46,7 +55,11 @@ struct file *vfsub_filp_open(const char *path, int oflags, int mode)
 			 oflags /* | __FMODE_NONOTIFY */,
 			 mode);
 	lockdep_on();
+	if (IS_ERR(file))
+		goto out;
+	vfsub_update_h_iattr(&file->f_path, /*did*/NULL); /*ignore*/
 
+out:
 	return file;
 }
 
@@ -55,6 +68,8 @@ int vfsub_kern_path(const char *name, unsigned int flags, struct path *path)
 	int err;
 
 	err = kern_path(name, flags, path);
+	if (!err && path->dentry->d_inode)
+		vfsub_update_h_iattr(path, /*did*/NULL); /*ignore*/
 	return err;
 }
 
@@ -71,6 +86,8 @@ struct dentry *vfsub_lookup_one_len(const char *name, struct dentry *parent,
 	path.dentry = lookup_one_len(name, parent, len);
 	if (IS_ERR(path.dentry))
 		goto out;
+	if (path.dentry->d_inode)
+		vfsub_update_h_iattr(&path, /*did*/NULL); /*ignore*/
 
 out:
 	AuTraceErrPtr(path.dentry);
@@ -93,6 +110,9 @@ struct dentry *vfsub_lock_rename(struct dentry *d1, struct au_hinode *hdir1,
 	lockdep_off();
 	d = lock_rename(d1, d2);
 	lockdep_on();
+	au_hn_suspend(hdir1);
+	if (hdir1 != hdir2)
+		au_hn_suspend(hdir2);
 
 	return d;
 }
@@ -100,6 +120,9 @@ struct dentry *vfsub_lock_rename(struct dentry *d1, struct au_hinode *hdir1,
 void vfsub_unlock_rename(struct dentry *d1, struct au_hinode *hdir1,
 			 struct dentry *d2, struct au_hinode *hdir2)
 {
+	au_hn_resume(hdir1);
+	if (hdir1 != hdir2)
+		au_hn_resume(hdir2);
 	lockdep_off();
 	unlock_rename(d1, d2);
 	lockdep_on();
@@ -124,6 +147,17 @@ int vfsub_create(struct inode *dir, struct path *path, int mode, bool want_excl)
 	lockdep_off();
 	err = vfs_create(dir, path->dentry, mode, want_excl);
 	lockdep_on();
+	if (!err) {
+		struct path tmp = *path;
+		int did;
+
+		vfsub_update_h_iattr(&tmp, &did);
+		if (did) {
+			tmp.dentry = path->dentry->d_parent;
+			vfsub_update_h_iattr(&tmp, /*did*/NULL);
+		}
+		/*ignore*/
+	}
 
 out:
 	return err;
@@ -146,6 +180,17 @@ int vfsub_symlink(struct inode *dir, struct path *path, const char *symname)
 	lockdep_off();
 	err = vfs_symlink(dir, path->dentry, symname);
 	lockdep_on();
+	if (!err) {
+		struct path tmp = *path;
+		int did;
+
+		vfsub_update_h_iattr(&tmp, &did);
+		if (did) {
+			tmp.dentry = path->dentry->d_parent;
+			vfsub_update_h_iattr(&tmp, /*did*/NULL);
+		}
+		/*ignore*/
+	}
 
 out:
 	return err;
@@ -168,6 +213,17 @@ int vfsub_mknod(struct inode *dir, struct path *path, int mode, dev_t dev)
 	lockdep_off();
 	err = vfs_mknod(dir, path->dentry, mode, dev);
 	lockdep_on();
+	if (!err) {
+		struct path tmp = *path;
+		int did;
+
+		vfsub_update_h_iattr(&tmp, &did);
+		if (did) {
+			tmp.dentry = path->dentry->d_parent;
+			vfsub_update_h_iattr(&tmp, /*did*/NULL);
+		}
+		/*ignore*/
+	}
 
 out:
 	return err;
@@ -206,6 +262,20 @@ int vfsub_link(struct dentry *src_dentry, struct inode *dir, struct path *path,
 	lockdep_off();
 	err = vfs_link(src_dentry, dir, path->dentry, delegated_inode);
 	lockdep_on();
+	if (!err) {
+		struct path tmp = *path;
+		int did;
+
+		/* fuse has different memory inode for the same inumber */
+		vfsub_update_h_iattr(&tmp, &did);
+		if (did) {
+			tmp.dentry = path->dentry->d_parent;
+			vfsub_update_h_iattr(&tmp, /*did*/NULL);
+			tmp.dentry = src_dentry;
+			vfsub_update_h_iattr(&tmp, /*did*/NULL);
+		}
+		/*ignore*/
+	}
 
 out:
 	return err;
@@ -236,6 +306,19 @@ int vfsub_rename(struct inode *src_dir, struct dentry *src_dentry,
 	err = vfs_rename(src_dir, src_dentry, dir, path->dentry,
 			 delegated_inode, /*flags*/0);
 	lockdep_on();
+	if (!err) {
+		int did;
+
+		tmp.dentry = d->d_parent;
+		vfsub_update_h_iattr(&tmp, &did);
+		if (did) {
+			tmp.dentry = src_dentry;
+			vfsub_update_h_iattr(&tmp, /*did*/NULL);
+			tmp.dentry = src_dentry->d_parent;
+			vfsub_update_h_iattr(&tmp, /*did*/NULL);
+		}
+		/*ignore*/
+	}
 
 out:
 	return err;
@@ -258,6 +341,17 @@ int vfsub_mkdir(struct inode *dir, struct path *path, int mode)
 	lockdep_off();
 	err = vfs_mkdir(dir, path->dentry, mode);
 	lockdep_on();
+	if (!err) {
+		struct path tmp = *path;
+		int did;
+
+		vfsub_update_h_iattr(&tmp, &did);
+		if (did) {
+			tmp.dentry = path->dentry->d_parent;
+			vfsub_update_h_iattr(&tmp, /*did*/NULL);
+		}
+		/*ignore*/
+	}
 
 out:
 	return err;
@@ -280,6 +374,14 @@ int vfsub_rmdir(struct inode *dir, struct path *path)
 	lockdep_off();
 	err = vfs_rmdir(dir, path->dentry);
 	lockdep_on();
+	if (!err) {
+		struct path tmp = {
+			.dentry	= path->dentry->d_parent,
+			.mnt	= path->mnt
+		};
+
+		vfsub_update_h_iattr(&tmp, /*did*/NULL); /*ignore*/
+	}
 
 out:
 	return err;
@@ -296,6 +398,8 @@ ssize_t vfsub_read_u(struct file *file, char __user *ubuf, size_t count,
 	lockdep_off();
 	err = vfs_read(file, ubuf, count, ppos);
 	lockdep_on();
+	if (err >= 0)
+		vfsub_update_h_iattr(&file->f_path, /*did*/NULL); /*ignore*/
 	return err;
 }
 
@@ -326,6 +430,8 @@ ssize_t vfsub_write_u(struct file *file, const char __user *ubuf, size_t count,
 	lockdep_off();
 	err = vfs_write(file, ubuf, count, ppos);
 	lockdep_on();
+	if (err >= 0)
+		vfsub_update_h_iattr(&file->f_path, /*did*/NULL); /*ignore*/
 	return err;
 }
 
@@ -346,6 +452,26 @@ ssize_t vfsub_write_k(struct file *file, void *kbuf, size_t count, loff_t *ppos)
 	return err;
 }
 
+int vfsub_flush(struct file *file, fl_owner_t id)
+{
+	int err;
+
+	err = 0;
+	if (file->f_op->flush) {
+		if (!au_test_nfs(file->f_path.dentry->d_sb))
+			err = file->f_op->flush(file, id);
+		else {
+			lockdep_off();
+			err = file->f_op->flush(file, id);
+			lockdep_on();
+		}
+		if (!err)
+			vfsub_update_h_iattr(&file->f_path, /*did*/NULL);
+		/*ignore*/
+	}
+	return err;
+}
+
 int vfsub_iterate_dir(struct file *file, struct dir_context *ctx)
 {
 	int err;
@@ -355,6 +481,88 @@ int vfsub_iterate_dir(struct file *file, struct dir_context *ctx)
 	lockdep_off();
 	err = iterate_dir(file, ctx);
 	lockdep_on();
+	if (err >= 0)
+		vfsub_update_h_iattr(&file->f_path, /*did*/NULL); /*ignore*/
+	return err;
+}
+
+long vfsub_splice_to(struct file *in, loff_t *ppos,
+		     struct pipe_inode_info *pipe, size_t len,
+		     unsigned int flags)
+{
+	long err;
+
+	lockdep_off();
+	err = do_splice_to(in, ppos, pipe, len, flags);
+	lockdep_on();
+	file_accessed(in);
+	if (err >= 0)
+		vfsub_update_h_iattr(&in->f_path, /*did*/NULL); /*ignore*/
+	return err;
+}
+
+long vfsub_splice_from(struct pipe_inode_info *pipe, struct file *out,
+		       loff_t *ppos, size_t len, unsigned int flags)
+{
+	long err;
+
+	lockdep_off();
+	err = do_splice_from(pipe, out, ppos, len, flags);
+	lockdep_on();
+	if (err >= 0)
+		vfsub_update_h_iattr(&out->f_path, /*did*/NULL); /*ignore*/
+	return err;
+}
+
+int vfsub_fsync(struct file *file, struct path *path, int datasync)
+{
+	int err;
+
+	/* file can be NULL */
+	lockdep_off();
+	err = vfs_fsync(file, datasync);
+	lockdep_on();
+	if (!err) {
+		if (!path) {
+			AuDebugOn(!file);
+			path = &file->f_path;
+		}
+		vfsub_update_h_iattr(path, /*did*/NULL); /*ignore*/
+	}
+	return err;
+}
+
+/* cf. open.c:do_sys_truncate() and do_sys_ftruncate() */
+int vfsub_trunc(struct path *h_path, loff_t length, unsigned int attr,
+		struct file *h_file)
+{
+	int err;
+	struct inode *h_inode;
+	struct super_block *h_sb;
+
+	if (!h_file) {
+		err = vfsub_truncate(h_path, length);
+		goto out;
+	}
+
+	h_inode = h_path->dentry->d_inode;
+	h_sb = h_inode->i_sb;
+	lockdep_off();
+	sb_start_write(h_sb);
+	lockdep_on();
+	err = locks_verify_truncate(h_inode, h_file, length);
+	if (!err)
+		err = security_path_truncate(h_path);
+	if (!err) {
+		lockdep_off();
+		err = do_truncate(h_path->dentry, length, attr, h_file);
+		lockdep_on();
+	}
+	lockdep_off();
+	sb_end_write(h_sb);
+	lockdep_on();
+
+out:
 	return err;
 }
 
@@ -455,6 +663,8 @@ static void call_notify_change(void *args)
 		*a->errp = notify_change(a->path->dentry, a->ia,
 					 a->delegated_inode);
 		lockdep_on();
+		if (!*a->errp)
+			vfsub_update_h_iattr(a->path, /*did*/NULL); /*ignore*/
 	}
 	AuTraceErr(*a->errp);
 }
@@ -527,6 +737,13 @@ static void call_unlink(void *args)
 	lockdep_off();
 	*a->errp = vfs_unlink(a->dir, d, a->delegated_inode);
 	lockdep_on();
+	if (!*a->errp) {
+		struct path tmp = {
+			.dentry = d->d_parent,
+			.mnt	= a->path->mnt
+		};
+		vfsub_update_h_iattr(&tmp, /*did*/NULL); /*ignore*/
+	}
 
 	if (!stop_sillyrename)
 		dput(d);

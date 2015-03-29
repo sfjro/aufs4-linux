@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -59,11 +46,18 @@ int sysaufs_si_init(struct au_sbinfo *sbinfo)
 		(&sbinfo->si_kobj, &au_sbi_ktype, /*&sysaufs_kset->kobj*/NULL,
 		 SysaufsSiNamePrefix "%lx", sysaufs_si_id(sbinfo));
 
+	dbgaufs_si_null(sbinfo);
+	if (!err) {
+		err = dbgaufs_si_init(sbinfo);
+		if (unlikely(err))
+			kobject_put(&sbinfo->si_kobj);
+	}
 	return err;
 }
 
 void sysaufs_fin(void)
 {
+	dbgaufs_fin();
 	sysfs_remove_group(&sysaufs_kset->kobj, sysaufs_attr_group);
 	kset_unregister(sysaufs_kset);
 }
@@ -84,9 +78,14 @@ int __init sysaufs_init(void)
 	if (IS_ERR(sysaufs_kset))
 		goto out;
 	err = sysfs_create_group(&sysaufs_kset->kobj, sysaufs_attr_group);
-	if (unlikely(err))
+	if (unlikely(err)) {
 		kset_unregister(sysaufs_kset);
+		goto out;
+	}
 
+	err = dbgaufs_init();
+	if (unlikely(err))
+		sysaufs_fin();
 out:
 	return err;
 }

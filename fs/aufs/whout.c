@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -567,7 +554,7 @@ static void reinit_br_wh(void *arg)
 	h_root = au_h_dptr(a->sb->s_root, bindex);
 	AuDebugOn(h_root != au_br_dentry(a->br));
 
-	mutex_lock_nested(&hdir->hi_inode->i_mutex, AuLsc_I_PARENT);
+	au_hn_imtx_lock_nested(hdir, AuLsc_I_PARENT);
 	wbr_wh_write_lock(wbr);
 	err = au_h_verify(wbr->wbr_whbase, au_opt_udba(a->sb), hdir->hi_inode,
 			  h_root, a->br);
@@ -591,8 +578,10 @@ static void reinit_br_wh(void *arg)
 	if (!err)
 		err = au_wh_init(a->br, a->sb);
 	wbr_wh_write_unlock(wbr);
-	mutex_unlock(&hdir->hi_inode->i_mutex);
+	au_hn_imtx_unlock(hdir);
 	di_read_unlock(a->sb->s_root, AuLock_IR);
+	if (!err)
+		au_fhsm_wrote(a->sb, bindex, /*force*/0);
 
 out:
 	if (wbr)
@@ -680,6 +669,8 @@ static int link_or_create_wh(struct super_block *sb, aufs_bindex_t bindex,
 
 	/* return this error in this context */
 	err = vfsub_create(h_dir, &h_path, WH_MASK, /*want_excl*/true);
+	if (!err)
+		au_fhsm_wrote(sb, bindex, /*force*/0);
 
 out:
 	wbr_wh_read_unlock(wbr);
@@ -804,9 +795,10 @@ struct dentry *au_wh_create(struct dentry *dentry, aufs_bindex_t bindex,
 	wh_dentry = au_wh_lkup(h_parent, &dentry->d_name, au_sbr(sb, bindex));
 	if (!IS_ERR(wh_dentry) && !wh_dentry->d_inode) {
 		err = link_or_create_wh(sb, bindex, wh_dentry);
-		if (!err)
+		if (!err) {
 			au_set_dbwh(dentry, bindex);
-		else {
+			au_fhsm_wrote(sb, bindex, /*force*/0);
+		} else {
 			dput(wh_dentry);
 			wh_dentry = ERR_PTR(err);
 		}
@@ -1017,12 +1009,12 @@ static void call_rmdir_whtmp(void *args)
 	err = vfsub_mnt_want_write(au_br_mnt(a->br));
 	if (unlikely(err))
 		goto out_mnt;
-	mutex_lock_nested(&hdir->hi_inode->i_mutex, AuLsc_I_PARENT);
+	au_hn_imtx_lock_nested(hdir, AuLsc_I_PARENT);
 	err = au_h_verify(a->wh_dentry, au_opt_udba(sb), h_dir, h_parent,
 			  a->br);
 	if (!err)
 		err = au_whtmp_rmdir(a->dir, bindex, a->wh_dentry, &a->whlist);
-	mutex_unlock(&hdir->hi_inode->i_mutex);
+	au_hn_imtx_unlock(hdir);
 	vfsub_mnt_drop_write(au_br_mnt(a->br));
 
 out_mnt:

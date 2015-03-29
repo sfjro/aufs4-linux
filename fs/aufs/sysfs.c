@@ -1,24 +1,12 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
  * sysfs interface
  */
 
+#include <linux/compat.h>
 #include <linux/seq_file.h>
 #include "aufs.h"
 
@@ -192,6 +180,88 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+static int au_brinfo(struct super_block *sb, union aufs_brinfo __user *arg)
+{
+	int err;
+	int16_t brid;
+	aufs_bindex_t bindex, bend;
+	size_t sz;
+	char *buf;
+	struct seq_file *seq;
+	struct au_branch *br;
+
+	si_read_lock(sb, AuLock_FLUSH);
+	bend = au_sbend(sb);
+	err = bend + 1;
+	if (!arg)
+		goto out;
+
+	err = -ENOMEM;
+	buf = (void *)__get_free_page(GFP_NOFS);
+	if (unlikely(!buf))
+		goto out;
+
+	seq = au_seq(buf, PAGE_SIZE);
+	err = PTR_ERR(seq);
+	if (IS_ERR(seq))
+		goto out_buf;
+
+	sz = sizeof(*arg) - offsetof(union aufs_brinfo, path);
+	for (bindex = 0; bindex <= bend; bindex++, arg++) {
+		err = !access_ok(VERIFY_WRITE, arg, sizeof(*arg));
+		if (unlikely(err))
+			break;
+
+		br = au_sbr(sb, bindex);
+		brid = br->br_id;
+		BUILD_BUG_ON(sizeof(brid) != sizeof(arg->id));
+		err = __put_user(brid, &arg->id);
+		if (unlikely(err))
+			break;
+
+		BUILD_BUG_ON(sizeof(br->br_perm) != sizeof(arg->perm));
+		err = __put_user(br->br_perm, &arg->perm);
+		if (unlikely(err))
+			break;
+
+		au_seq_path(seq, &br->br_path);
+		err = seq_putc(seq, '\0');
+		if (!err && seq->count <= sz) {
+			err = copy_to_user(arg->path, seq->buf, seq->count);
+			seq->count = 0;
+			if (unlikely(err))
+				break;
+		} else {
+			err = -E2BIG;
+			goto out_seq;
+		}
+	}
+	if (unlikely(err))
+		err = -EFAULT;
+
+out_seq:
+	kfree(seq);
+out_buf:
+	free_page((unsigned long)buf);
+out:
+	si_read_unlock(sb);
+	return err;
+}
+
+long au_brinfo_ioctl(struct file *file, unsigned long arg)
+{
+	return au_brinfo(file->f_path.dentry->d_sb, (void __user *)arg);
+}
+
+#ifdef CONFIG_COMPAT
+long au_brinfo_compat_ioctl(struct file *file, unsigned long arg)
+{
+	return au_brinfo(file->f_path.dentry->d_sb, compat_ptr(arg));
+}
+#endif
+
+/* ---------------------------------------------------------------------- */
+
 void sysaufs_br_init(struct au_branch *br)
 {
 	int i;
@@ -216,6 +286,8 @@ void sysaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 	int i;
 	aufs_bindex_t bend;
 
+	dbgaufs_brs_del(sb, bindex);
+
 	if (!sysaufs_brs)
 		return;
 
@@ -238,6 +310,8 @@ void sysaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 	struct kobject *kobj;
 	struct au_branch *br;
 	struct au_brsysfs *br_sysfs;
+
+	dbgaufs_brs_add(sb, bindex);
 
 	if (!sysaufs_brs)
 		return;

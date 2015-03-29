@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -23,6 +10,7 @@
 #include "aufs.h"
 
 #define AuLkup_ALLOW_NEG	1
+#define AuLkup_IGNORE_PERM	(1 << 1)
 #define au_ftest_lkup(flags, name)	((flags) & AuLkup_##name)
 #define au_fset_lkup(flags, name) \
 	do { (flags) |= AuLkup_##name; } while (0)
@@ -49,6 +37,8 @@ au_do_lookup(struct dentry *h_parent, struct dentry *dentry,
 	int wh_found, opq;
 	unsigned char wh_able;
 	const unsigned char allow_neg = !!au_ftest_lkup(args->flags, ALLOW_NEG);
+	const unsigned char ignore_perm = !!au_ftest_lkup(args->flags,
+							  IGNORE_PERM);
 
 	wh_found = 0;
 	br = au_sbr(dentry->d_sb, bindex);
@@ -68,7 +58,10 @@ au_do_lookup(struct dentry *h_parent, struct dentry *dentry,
 		return NULL; /* success */
 
 real_lookup:
-	h_dentry = vfsub_lkup_one(&dentry->d_name, h_parent);
+	if (!ignore_perm)
+		h_dentry = vfsub_lkup_one(&dentry->d_name, h_parent);
+	else
+		h_dentry = au_sio_lkup_one(&dentry->d_name, h_parent);
 	if (IS_ERR(h_dentry)) {
 		if (PTR_ERR(h_dentry) == -ENAMETOOLONG
 		    && !allow_neg)
@@ -113,6 +106,14 @@ out:
 	return h_dentry;
 }
 
+static int au_test_shwh(struct super_block *sb, const struct qstr *name)
+{
+	if (unlikely(!au_opt_test(au_mntflags(sb), SHWH)
+		     && !strncmp(name->name, AUFS_WH_PFX, AUFS_WH_PFX_LEN)))
+		return -EPERM;
+	return 0;
+}
+
 /*
  * returns the number of lower positive dentries,
  * otherwise an error.
@@ -122,7 +123,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 {
 	int npositive, err;
 	aufs_bindex_t bindex, btail, bdiropq;
-	unsigned char isdir;
+	unsigned char isdir, dirperm1;
 	struct qstr whname;
 	struct au_do_lookup_args args = {
 		.flags		= 0,
@@ -134,6 +135,10 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 	struct super_block *sb;
 
 	sb = dentry->d_sb;
+	err = au_test_shwh(sb, name);
+	if (unlikely(err))
+		goto out;
+
 	err = au_wh_name_alloc(&whname, name);
 	if (unlikely(err))
 		goto out;
@@ -142,6 +147,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 	isdir = !!d_is_dir(dentry);
 	if (!type)
 		au_fset_lkup(args.flags, ALLOW_NEG);
+	dirperm1 = !!au_opt_test(au_mntflags(sb), DIRPERM1);
 
 	npositive = 0;
 	parent = dget_parent(dentry);
@@ -172,6 +178,8 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 			goto out_parent;
 		if (h_dentry)
 			au_fclr_lkup(args.flags, ALLOW_NEG);
+		if (dirperm1)
+			au_fset_lkup(args.flags, IGNORE_PERM);
 
 		if (au_dbwh(dentry) >= 0)
 			break;
@@ -331,8 +339,9 @@ static int au_h_verify_dentry(struct dentry *h_dentry, struct dentry *h_parent,
 	h_inode = h_dentry->d_inode;
 	if (h_inode)
 		au_iattr_save(&ia, h_inode);
-	else if (au_test_nfs(h_sb))
+	else if (au_test_nfs(h_sb) || au_test_fuse(h_sb))
 		/* nfs d_revalidate may return 0 for negative dentry */
+		/* fuse d_revalidate always return 0 for negative dentry */
 		goto out;
 
 	/* main purpose is namei.c:cached_lookup() and d_revalidate */
@@ -345,7 +354,7 @@ static int au_h_verify_dentry(struct dentry *h_dentry, struct dentry *h_parent,
 	if (unlikely(h_d != h_dentry
 		     || h_d->d_inode != h_inode
 		     || (h_inode && au_iattr_test(&ia, h_inode))))
-		err = -EBUSY;
+		err = au_busy_or_stale();
 	dput(h_d);
 
 out:
@@ -1062,8 +1071,10 @@ out:
 
 static void aufs_d_release(struct dentry *dentry)
 {
-	if (au_di(dentry))
+	if (au_di(dentry)) {
 		au_di_fin(dentry);
+		au_hn_di_reinit(dentry);
+	}
 }
 
 const struct dentry_operations aufs_dop = {

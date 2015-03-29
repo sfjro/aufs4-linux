@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -21,7 +8,6 @@
 
 #include <linux/fs_stack.h>
 #include <linux/mm.h>
-#include <linux/uaccess.h>
 #include "aufs.h"
 
 void au_cpup_attr_flags(struct inode *dst, unsigned int iflags)
@@ -166,15 +152,17 @@ static noinline_for_stack
 int cpup_iattr(struct dentry *dst, aufs_bindex_t bindex, struct dentry *h_src,
 	       struct au_cpup_reg_attr *h_src_attr)
 {
-	int err, sbits;
+	int err, sbits, icex;
 	struct iattr ia;
 	struct path h_path;
 	struct inode *h_isrc, *h_idst;
 	struct kstat *h_st;
+	struct au_branch *br;
 
 	h_path.dentry = au_h_dptr(dst, bindex);
 	h_idst = h_path.dentry->d_inode;
-	h_path.mnt = au_sbr_mnt(dst->d_sb, bindex);
+	br = au_sbr(dst->d_sb, bindex);
+	h_path.mnt = au_br_mnt(br);
 	h_isrc = h_src->d_inode;
 	ia.ia_valid = ATTR_FORCE | ATTR_UID | ATTR_GID
 		| ATTR_ATIME | ATTR_MTIME
@@ -214,6 +202,10 @@ int cpup_iattr(struct dentry *dst, aufs_bindex_t bindex, struct dentry *h_src,
 		ia.ia_mode = h_isrc->i_mode;
 		err = vfsub_notify_change(&h_path, &ia, /*delegated*/NULL);
 	}
+
+	icex = br->br_perm & AuBrAttr_ICEX;
+	if (!err)
+		err = au_cpup_xattr(h_path.dentry, h_src, icex);
 
 	return err;
 }
@@ -366,6 +358,7 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		aufs_bindex_t bindex;
 		unsigned int flags;
 		struct dentry *dentry;
+		int force_wr;
 		struct file *file;
 		void *label;
 	} *f, file[] = {
@@ -377,6 +370,7 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		{
 			.bindex = cpg->bdst,
 			.flags = O_WRONLY | O_NOATIME | O_LARGEFILE,
+			.force_wr = !!au_ftest_cpup(cpg->flags, RWDST),
 			.label = &&out_src
 		}
 	};
@@ -388,7 +382,7 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 	for (i = 0; i < 2; i++, f++) {
 		f->dentry = au_h_dptr(cpg->dentry, f->bindex);
 		f->file = au_h_open(cpg->dentry, f->bindex, f->flags,
-				    /*file*/NULL);
+				    /*file*/NULL, f->force_wr);
 		err = PTR_ERR(f->file);
 		if (IS_ERR(f->file))
 			goto *f->label;
@@ -588,6 +582,7 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 			if (cpg->len == -1)
 				force = !!i_size_read(h_inode);
 		}
+		au_fhsm_wrote(sb, cpg->bdst, force);
 	}
 
 	if (do_dt)
@@ -598,19 +593,29 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 static int au_do_ren_after_cpup(struct au_cp_generic *cpg, struct path *h_path)
 {
 	int err;
-	struct dentry *dentry, *h_dentry, *h_parent;
+	struct dentry *dentry, *h_dentry, *h_parent, *parent;
 	struct inode *h_dir;
 	aufs_bindex_t bdst;
 
 	dentry = cpg->dentry;
 	bdst = cpg->bdst;
 	h_dentry = au_h_dptr(dentry, bdst);
-	dget(h_dentry);
-	au_set_h_dptr(dentry, bdst, NULL);
-	err = au_lkup_neg(dentry, bdst, /*wh*/0);
-	if (!err)
-		h_path->dentry = dget(au_h_dptr(dentry, bdst));
-	au_set_h_dptr(dentry, bdst, h_dentry);
+	if (!au_ftest_cpup(cpg->flags, OVERWRITE)) {
+		dget(h_dentry);
+		au_set_h_dptr(dentry, bdst, NULL);
+		err = au_lkup_neg(dentry, bdst, /*wh*/0);
+		if (!err)
+			h_path->dentry = dget(au_h_dptr(dentry, bdst));
+		au_set_h_dptr(dentry, bdst, h_dentry);
+	} else {
+		err = 0;
+		parent = dget_parent(dentry);
+		h_parent = au_h_dptr(parent, bdst);
+		dput(parent);
+		h_path->dentry = vfsub_lkup_one(&dentry->d_name, h_parent);
+		if (IS_ERR(h_path->dentry))
+			err = PTR_ERR(h_path->dentry);
+	}
 	if (unlikely(err))
 		goto out;
 
@@ -937,6 +942,14 @@ static int au_do_sio_cpup_simple(struct au_cp_generic *cpg)
 
 	dentry = cpg->dentry;
 	h_file = NULL;
+	if (au_ftest_cpup(cpg->flags, HOPEN)) {
+		AuDebugOn(cpg->bsrc < 0);
+		h_file = au_h_open_pre(dentry, cpg->bsrc, /*force_wr*/0);
+		err = PTR_ERR(h_file);
+		if (IS_ERR(h_file))
+			goto out;
+	}
+
 	parent = dget_parent(dentry);
 	h_dir = au_h_iptr(parent->d_inode, cpg->bdst);
 	if (!au_test_h_perm_sio(h_dir, MAY_EXEC | MAY_WRITE)
@@ -953,7 +966,10 @@ static int au_do_sio_cpup_simple(struct au_cp_generic *cpg)
 	}
 
 	dput(parent);
+	if (h_file)
+		au_h_open_post(dentry, cpg->bsrc, h_file);
 
+out:
 	return err;
 }
 
@@ -976,6 +992,12 @@ int au_sio_cpup_simple(struct au_cp_generic *cpg)
 		cpg->bsrc = bsrc;
 	}
 	AuDebugOn(cpg->bsrc <= cpg->bdst);
+	return au_do_sio_cpup_simple(cpg);
+}
+
+int au_sio_cpdown_simple(struct au_cp_generic *cpg)
+{
+	AuDebugOn(cpg->bdst <= cpg->bsrc);
 	return au_do_sio_cpup_simple(cpg);
 }
 
@@ -1116,6 +1138,7 @@ int au_sio_cpup_wh(struct au_cp_generic *cpg, struct file *file)
 		au_set_h_iptr(dir, bdst, au_igrab(h_tmpdir), /*flags*/0);
 
 		mutex_lock_nested(&h_tmpdir->i_mutex, AuLsc_I_PARENT3);
+		/* todo: au_h_open_pre()? */
 
 		pin_orig = cpg->pin;
 		au_pin_init(&wh_pin, dentry, bdst, AuLsc_DI_PARENT,
@@ -1139,6 +1162,7 @@ int au_sio_cpup_wh(struct au_cp_generic *cpg, struct file *file)
 
 	if (h_orph) {
 		mutex_unlock(&h_tmpdir->i_mutex);
+		/* todo: au_h_open_post()? */
 		au_set_h_iptr(dir, bdst, au_igrab(h_dir), /*flags*/0);
 		au_set_h_dptr(parent, bdst, h_parent);
 		AuDebugOn(!pin_orig);

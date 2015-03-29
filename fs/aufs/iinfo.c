@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -35,6 +22,7 @@ struct inode *au_h_iptr(struct inode *inode, aufs_bindex_t bindex)
 /* todo: hard/soft set? */
 void au_hiput(struct au_hinode *hinode)
 {
+	au_hn_free(hinode);
 	dput(hinode->hi_whdentry);
 	iput(hinode->hi_inode);
 }
@@ -47,6 +35,8 @@ unsigned int au_hi_flags(struct inode *inode, int isdir)
 	flags = 0;
 	if (au_opt_test(mnt_flags, XINO))
 		au_fset_hi(flags, XINO);
+	if (isdir && au_opt_test(mnt_flags, UDBA_HNOTIFY))
+		au_fset_hi(flags, HNOTIFY);
 	return flags;
 }
 
@@ -83,6 +73,13 @@ void au_set_h_iptr(struct inode *inode, aufs_bindex_t bindex,
 					    inode->i_ino);
 			if (unlikely(err))
 				AuIOErr1("failed au_xino_write() %d\n", err);
+		}
+
+		if (au_ftest_hi(flags, HNOTIFY)
+		    && au_br_hnotifyable(br->br_perm)) {
+			err = au_hn_alloc(hinode, inode);
+			if (unlikely(err))
+				AuIOErr1("au_hn_alloc() %d\n", err);
 		}
 	}
 }

@@ -1,18 +1,5 @@
 /*
  * Copyright (C) 2005-2015 Junjiro R. Okajima
- *
- * This program, aufs is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /*
@@ -201,7 +188,7 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 		isdir = 1;
 		btail = au_dbtaildir(dentry);
 		inode->i_op = &aufs_dir_iop;
-		inode->i_fop = &simple_dir_operations; /* re-commit later */
+		inode->i_fop = &aufs_dir_fop;
 		break;
 	case S_IFLNK:
 		btail = au_dbtail(dentry);
@@ -223,6 +210,11 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 
 	/* do not set hnotify for whiteouted dirs (SHWH mode) */
 	flags = au_hi_flags(inode, isdir);
+	if (au_opt_test(au_mntflags(dentry->d_sb), SHWH)
+	    && au_ftest_hi(flags, HNOTIFY)
+	    && dentry->d_name.len > AUFS_WH_PFX_LEN
+	    && !memcmp(dentry->d_name.name, AUFS_WH_PFX, AUFS_WH_PFX_LEN))
+		au_fclr_hi(flags, HNOTIFY);
 	iinfo = au_ii(inode);
 	iinfo->ii_bstart = bstart;
 	iinfo->ii_bend = btail;
@@ -233,6 +225,10 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 				      au_igrab(h_dentry->d_inode), flags);
 	}
 	au_cpup_attr_all(inode, /*force*/1);
+	/*
+	 * to force calling aufs_get_acl() every time,
+	 * do not call cache_no_acl() for aufs inode.
+	 */
 
 out:
 	return err;
@@ -370,6 +366,17 @@ new_ino:
 
 	AuDbg("%lx, new %d\n", inode->i_state, !!(inode->i_state & I_NEW));
 	if (inode->i_state & I_NEW) {
+		/* verbose coding for lock class name */
+		if (unlikely(d_is_symlink(h_dentry)))
+			au_rw_class(&au_ii(inode)->ii_rwsem,
+				    au_lc_key + AuLcSymlink_IIINFO);
+		else if (unlikely(d_is_dir(h_dentry)))
+			au_rw_class(&au_ii(inode)->ii_rwsem,
+				    au_lc_key + AuLcDir_IIINFO);
+		else /* likely */
+			au_rw_class(&au_ii(inode)->ii_rwsem,
+				    au_lc_key + AuLcNonDir_IIINFO);
+
 		ii_write_lock_new_child(inode);
 		err = set_inode(inode, dentry);
 		if (!err) {
