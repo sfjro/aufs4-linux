@@ -271,6 +271,7 @@ static int aufs_show_options(struct seq_file *m, struct dentry *dentry)
 
 	au_fhsm_show(m, sbinfo);
 
+	AuBool(WARN_PERM, warn_perm);
 	AuBool(VERBOSE, verbose);
 
 out:

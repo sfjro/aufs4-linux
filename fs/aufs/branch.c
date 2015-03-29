@@ -201,7 +201,7 @@ static int test_add(struct super_block *sb, struct au_opt_add *add, int remount)
 	int err;
 	aufs_bindex_t bend, bindex;
 	struct dentry *root;
-	struct inode *inode;
+	struct inode *inode, *h_inode;
 
 	root = sb->s_root;
 	bend = au_sbend(sb);
@@ -269,6 +269,18 @@ static int test_add(struct super_block *sb, struct au_opt_add *add, int remount)
 		}
 
 	err = 0;
+	if (au_opt_test(au_mntflags(sb), WARN_PERM)) {
+		h_inode = au_h_dptr(root, 0)->d_inode;
+		if ((h_inode->i_mode & S_IALLUGO) != (inode->i_mode & S_IALLUGO)
+		    || !uid_eq(h_inode->i_uid, inode->i_uid)
+		    || !gid_eq(h_inode->i_gid, inode->i_gid))
+			pr_warn("uid/gid/perm %s %u/%u/0%o, %u/%u/0%o\n",
+				add->pathname,
+				i_uid_read(inode), i_gid_read(inode),
+				(inode->i_mode & S_IALLUGO),
+				i_uid_read(h_inode), i_gid_read(h_inode),
+				(h_inode->i_mode & S_IALLUGO));
+	}
 
 out:
 	return err;
