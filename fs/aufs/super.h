@@ -143,6 +143,12 @@ struct au_sbinfo {
 	/* reserved for future use */
 	/* unsigned long long	si_xib_limit; */	/* Max xib file size */
 
+#ifdef CONFIG_AUFS_EXPORT
+	/* i_generation */
+	struct file		*si_xigen;
+	atomic_t		si_xigen_next;
+#endif
+
 	/* vdir parameters */
 	unsigned long		si_rdcache;	/* max cache time in jiffies */
 	unsigned int		si_rdblk;	/* deblk size */
@@ -271,6 +277,32 @@ static inline struct au_sbinfo *au_sbi(struct super_block *sb)
 {
 	return sb->s_fs_info;
 }
+
+/* ---------------------------------------------------------------------- */
+
+#ifdef CONFIG_AUFS_EXPORT
+int au_test_nfsd(void);
+void au_export_init(struct super_block *sb);
+void au_xigen_inc(struct inode *inode);
+int au_xigen_new(struct inode *inode);
+int au_xigen_set(struct super_block *sb, struct file *base);
+void au_xigen_clr(struct super_block *sb);
+
+static inline int au_busy_or_stale(void)
+{
+	if (!au_test_nfsd())
+		return -EBUSY;
+	return -ESTALE;
+}
+#else
+AuStubInt0(au_test_nfsd, void)
+AuStubVoid(au_export_init, struct super_block *sb)
+AuStubVoid(au_xigen_inc, struct inode *inode)
+AuStubInt0(au_xigen_new, struct inode *inode)
+AuStubInt0(au_xigen_set, struct super_block *sb, struct file *base)
+AuStubVoid(au_xigen_clr, struct super_block *sb)
+AuStub(int, au_busy_or_stale, return -EBUSY, void)
+#endif /* CONFIG_AUFS_EXPORT */
 
 /* ---------------------------------------------------------------------- */
 
