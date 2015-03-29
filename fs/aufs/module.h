@@ -34,6 +34,8 @@ extern int sysaufs_brs;
 
 /* ---------------------------------------------------------------------- */
 
+extern int au_dir_roflags;
+
 void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp);
 int au_seq_path(struct seq_file *seq, struct path *path);
 

@@ -100,6 +100,15 @@ void au_fi_init_once(void *_fi);
 void au_finfo_fin(struct file *file);
 int au_finfo_init(struct file *file, struct au_fidir *fidir);
 
+/* ioctl.c */
+long aufs_ioctl_nondir(struct file *file, unsigned int cmd, unsigned long arg);
+#ifdef CONFIG_COMPAT
+long aufs_compat_ioctl_dir(struct file *file, unsigned int cmd,
+			   unsigned long arg);
+long aufs_compat_ioctl_nondir(struct file *file, unsigned int cmd,
+			      unsigned long arg);
+#endif
+
 /* ---------------------------------------------------------------------- */
 
 static inline struct au_finfo *au_fi(struct file *file)

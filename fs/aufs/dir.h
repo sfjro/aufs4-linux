@@ -98,5 +98,8 @@ void au_vdir_free(struct au_vdir *vdir);
 int au_vdir_init(struct file *file);
 int au_vdir_fill_de(struct file *file, struct dir_context *ctx);
 
+/* ioctl.c */
+long aufs_ioctl_dir(struct file *file, unsigned int cmd, unsigned long arg);
+
 #endif /* __KERNEL__ */
 #endif /* __AUFS_DIR_H__ */

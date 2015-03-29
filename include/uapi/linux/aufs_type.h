@@ -152,4 +152,41 @@ static inline int au_br_wh_linkable(int brperm)
 	return !(brperm & AuBrWAttr_NoLinkWH);
 }
 
+/* ---------------------------------------------------------------------- */
+
+/* ioctl */
+enum {
+	AuCtl_WBR_FD	/* pathconf wrapper */
+};
+
+/* borrowed from linux/include/linux/kernel.h */
+#ifndef ALIGN
+#define ALIGN(x, a)		__ALIGN_MASK(x, (typeof(x))(a)-1)
+#define __ALIGN_MASK(x, mask)	(((x)+(mask))&~(mask))
+#endif
+
+/* borrowed from linux/include/linux/compiler-gcc3.h */
+#ifndef __aligned
+#define __aligned(x)			__attribute__((aligned(x)))
+#endif
+
+#ifdef __KERNEL__
+#ifndef __packed
+#define __packed			__attribute__((packed))
+#endif
+#endif
+
+/* ---------------------------------------------------------------------- */
+
+struct aufs_wbr_fd {
+	uint32_t	oflags;
+	int16_t		brid;
+} __aligned(8);
+
+/* ---------------------------------------------------------------------- */
+
+#define AuCtlType		'A'
+#define AUFS_CTL_WBR_FD		_IOW(AuCtlType, AuCtl_WBR_FD, \
+				     struct aufs_wbr_fd)
+
 #endif /* __AUFS_TYPE_H__ */

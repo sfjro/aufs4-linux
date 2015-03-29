@@ -602,6 +602,10 @@ const struct file_operations aufs_dir_fop = {
 	.llseek		= default_llseek,
 	.read		= generic_read_dir,
 	.iterate	= aufs_iterate,
+	.unlocked_ioctl	= aufs_ioctl_dir,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl	= aufs_compat_ioctl_dir,
+#endif
 	.open		= aufs_open_dir,
 	.release	= aufs_release_dir,
 	.flush		= aufs_flush_dir,

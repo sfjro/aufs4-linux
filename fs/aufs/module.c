@@ -78,6 +78,8 @@ static void au_cache_fin(void)
 
 /* ---------------------------------------------------------------------- */
 
+int au_dir_roflags;
+
 #ifdef CONFIG_AUFS_SBILIST
 /*
  * iterate_supers_type() doesn't protect us from
@@ -123,6 +125,8 @@ static int __init aufs_init(void)
 	*p++ = '\\';
 	*p++ = '\x7f';
 	*p = 0;
+
+	au_dir_roflags = au_file_roflags(O_DIRECTORY | O_LARGEFILE);
 
 	au_sbilist_init();
 	sysaufs_brs_init();

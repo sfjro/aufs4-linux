@@ -773,6 +773,10 @@ const struct file_operations aufs_file_fop = {
 	.read_iter	= aufs_read_iter,
 	.write_iter	= aufs_write_iter,
 
+	.unlocked_ioctl	= aufs_ioctl_nondir,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl	= aufs_compat_ioctl_nondir,
+#endif
 	.mmap		= aufs_mmap,
 	.open		= aufs_open_nondir,
 	.flush		= aufs_flush_nondir,
