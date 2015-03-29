@@ -72,6 +72,7 @@ ssize_t sysaufs_si_show(struct kobject *kobj, struct attribute *attr,
 
 void sysaufs_br_init(struct au_branch *br);
 void sysaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex);
+void sysaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex);
 
 #define sysaufs_brs_init()	do {} while (0)
 
@@ -83,6 +84,7 @@ AuStub(ssize_t, sysaufs_si_show, return 0, struct kobject *kobj,
        struct attribute *attr, char *buf)
 AuStubVoid(sysaufs_br_init, struct au_branch *br)
 AuStubVoid(sysaufs_brs_add, struct super_block *sb, aufs_bindex_t bindex)
+AuStubVoid(sysaufs_brs_del, struct super_block *sb, aufs_bindex_t bindex)
 
 static inline void sysaufs_brs_init(void)
 {

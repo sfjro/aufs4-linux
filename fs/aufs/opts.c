@@ -893,10 +893,11 @@ static int au_opt_br(struct super_block *sb, struct au_opt *opt,
 	err = 0;
 	switch (opt->type) {
 	case Opt_add:
-		err = au_br_add(sb, &opt->add);
+		err = au_br_add(sb, &opt->add,
+				au_ftest_opts(opts->flags, REMOUNT));
 		if (!err) {
 			err = 1;
-			/* au_fset_opts(opts->flags, REFRESH); re-commit later */
+			au_fset_opts(opts->flags, REFRESH);
 		}
 		break;
 	}
@@ -915,7 +916,8 @@ static int au_opt_xino(struct super_block *sb, struct au_opt *opt,
 	err = 0;
 	switch (opt->type) {
 	case Opt_xino:
-		err = au_xino_set(sb, &opt->xino);
+		err = au_xino_set(sb, &opt->xino,
+				  !!au_ftest_opts(opts->flags, REMOUNT));
 		if (unlikely(err))
 			break;
 
@@ -1093,7 +1095,7 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 		if (IS_ERR(xino.file))
 			goto out;
 
-		err = au_xino_set(sb, &xino);
+		err = au_xino_set(sb, &xino, /*remount*/0);
 		fput(xino.file);
 		if (unlikely(err))
 			goto out;
@@ -1106,6 +1108,47 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 	bend = au_sbend(sb);
 
 out:
+	return err;
+}
+
+int au_opts_remount(struct super_block *sb, struct au_opts *opts)
+{
+	int err, rerr;
+	struct inode *dir;
+	struct au_opt_xino *opt_xino;
+	struct au_opt *opt;
+	struct au_sbinfo *sbinfo;
+
+	SiMustWriteLock(sb);
+
+	dir = sb->s_root->d_inode;
+	sbinfo = au_sbi(sb);
+	err = 0;
+	opt_xino = NULL;
+	opt = opts->opt;
+	while (err >= 0 && opt->type != Opt_tail) {
+		err = au_opt_simple(sb, opt, opts);
+		if (!err)
+			err = au_opt_br(sb, opt, opts);
+		if (!err)
+			err = au_opt_xino(sb, opt, &opt_xino, opts);
+		opt++;
+	}
+	if (err > 0)
+		err = 0;
+	AuTraceErr(err);
+	/* go on even err */
+
+	rerr = au_opts_verify(sb, opts->sb_flags, /*pending*/0);
+	if (unlikely(rerr && !err))
+		err = rerr;
+
+	/* will be handled by the caller */
+	if (!au_ftest_opts(opts->flags, REFRESH)
+	    && (opts->given_udba || au_opt_test(sbinfo->si_mntflags, XINO)))
+		au_fset_opts(opts->flags, REFRESH);
+
+	AuDbg("status 0x%x\n", opts->flags);
 	return err;
 }
 

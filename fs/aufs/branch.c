@@ -164,7 +164,7 @@ out:
  * plus: success, it is already unified, the caller should ignore it
  * minus: error
  */
-static int test_add(struct super_block *sb, struct au_opt_add *add)
+static int test_add(struct super_block *sb, struct au_opt_add *add, int remount)
 {
 	int err;
 	aufs_bindex_t bend, bindex;
@@ -175,8 +175,11 @@ static int test_add(struct super_block *sb, struct au_opt_add *add)
 	bend = au_sbend(sb);
 	if (unlikely(bend >= 0
 		     && au_find_dbindex(root, add->path.dentry) >= 0)) {
-		err = -EINVAL;
-		pr_err("%s duplicated\n", add->pathname);
+		err = 1;
+		if (!remount) {
+			err = -EINVAL;
+			pr_err("%s duplicated\n", add->pathname);
+		}
 		goto out;
 	}
 
@@ -429,7 +432,7 @@ static void au_br_do_add(struct super_block *sb, struct au_branch *br,
 		      /*flags*/0);
 }
 
-int au_br_add(struct super_block *sb, struct au_opt_add *add)
+int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 {
 	int err;
 	aufs_bindex_t bend, add_bindex;
@@ -440,7 +443,7 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add)
 	root = sb->s_root;
 	root_inode = root->d_inode;
 	IMustLock(root_inode);
-	err = test_add(sb, add);
+	err = test_add(sb, add, remount);
 	if (unlikely(err < 0))
 		goto out;
 	if (err) {
@@ -461,7 +464,13 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add)
 	}
 
 	add_bindex = add->bindex;
-	au_br_do_add(sb, add_branch, add_bindex);
+	if (!remount)
+		au_br_do_add(sb, add_branch, add_bindex);
+	else {
+		sysaufs_brs_del(sb, add_bindex);
+		au_br_do_add(sb, add_branch, add_bindex);
+		sysaufs_brs_add(sb, add_bindex);
+	}
 
 	h_dentry = add->path.dentry;
 	if (!add_bindex) {

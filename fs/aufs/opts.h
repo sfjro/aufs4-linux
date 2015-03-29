@@ -126,6 +126,15 @@ struct au_opt {
 	};
 };
 
+/* opts flags */
+#define AuOpts_REMOUNT		1
+#define AuOpts_REFRESH		(1 << 1)
+#define au_ftest_opts(flags, name)	((flags) & AuOpts_##name)
+#define au_fset_opts(flags, name) \
+	do { (flags) |= AuOpts_##name; } while (0)
+#define au_fclr_opts(flags, name) \
+	do { (flags) &= ~AuOpts_##name; } while (0)
+
 struct au_opts {
 	struct au_opt	*opt;
 	int		max_opt;
@@ -148,6 +157,7 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts);
 int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		   unsigned int pending);
 int au_opts_mount(struct super_block *sb, struct au_opts *opts);
+int au_opts_remount(struct super_block *sb, struct au_opts *opts);
 
 unsigned int au_opt_udba(struct super_block *sb);
 

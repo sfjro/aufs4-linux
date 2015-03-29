@@ -53,6 +53,12 @@ int au_test_subdir(struct dentry *d1, struct dentry *d2);
 
 /* ---------------------------------------------------------------------- */
 
+static inline int au_qstreq(struct qstr *a, struct qstr *b)
+{
+	return a->len == b->len
+		&& !memcmp(a->name, b->name, a->len);
+}
+
 /*
  * by the commit
  * 360f547 2015-01-25 dcache: let the dentry count go down to zero without
