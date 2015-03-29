@@ -54,3 +54,59 @@ static struct kernel_param_ops param_ops_atomic_t = {
 atomic_t aufs_debug = ATOMIC_INIT(0);
 MODULE_PARM_DESC(debug, "debug print");
 module_param_named(debug, aufs_debug, atomic_t, S_IRUGO | S_IWUSR | S_IWGRP);
+
+DEFINE_MUTEX(au_dbg_mtx);	/* just to serialize the dbg msgs */
+char *au_plevel = KERN_DEBUG;
+#define dpri(fmt, ...) do {					\
+	if ((au_plevel						\
+	     && strcmp(au_plevel, KERN_DEBUG))			\
+	    || au_debug_test())					\
+		printk("%s" fmt, au_plevel, ##__VA_ARGS__);	\
+} while (0)
+
+/* ---------------------------------------------------------------------- */
+
+static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode)
+{
+	if (!inode || IS_ERR(inode)) {
+		dpri("i%d: err %ld\n", bindex, PTR_ERR(inode));
+		return -1;
+	}
+
+	/* the type of i_blocks depends upon CONFIG_LBDAF */
+	BUILD_BUG_ON(sizeof(inode->i_blocks) != sizeof(unsigned long)
+		     && sizeof(inode->i_blocks) != sizeof(u64));
+
+	dpri("i%d: %p, i%lu, %s, cnt %d, nl %u, 0%o, sz %llu, blk %llu,"
+	     " ct %lld, np %lu, st 0x%lx, f 0x%x, v %llu, g %x\n",
+	     bindex, inode,
+	     inode->i_ino, inode->i_sb ? au_sbtype(inode->i_sb) : "??",
+	     atomic_read(&inode->i_count), inode->i_nlink, inode->i_mode,
+	     i_size_read(inode), (unsigned long long)inode->i_blocks,
+	     (long long)timespec_to_ns(&inode->i_ctime) & 0x0ffff,
+	     inode->i_mapping ? inode->i_mapping->nrpages : 0,
+	     inode->i_state, inode->i_flags, inode->i_version,
+	     inode->i_generation);
+	return 0;
+}
+
+void au_dpri_inode(struct inode *inode)
+{
+	struct au_iinfo *iinfo;
+	aufs_bindex_t bindex;
+	int err;
+
+	err = do_pri_inode(-1, inode);
+	if (err || !au_test_aufs(inode->i_sb))
+		return;
+
+	iinfo = au_ii(inode);
+	if (!iinfo)
+		return;
+	dpri("i-1: bstart %d, bend %d\n",
+	     iinfo->ii_bstart, iinfo->ii_bend);
+	if (iinfo->ii_bstart < 0)
+		return;
+	for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend; bindex++)
+		do_pri_inode(bindex, iinfo->ii_hinode[0 + bindex].hi_inode);
+}

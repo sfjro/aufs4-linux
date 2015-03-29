@@ -16,29 +16,26 @@
  */
 
 /*
- * all header files
+ * judging filesystem type
  */
 
-#ifndef __AUFS_H__
-#define __AUFS_H__
+#ifndef __AUFS_FSTYPE_H__
+#define __AUFS_FSTYPE_H__
 
 #ifdef __KERNEL__
 
-#define AuStub(type, name, body, ...) \
-	static inline type name(__VA_ARGS__) { body; }
+#include <linux/fs.h>
+#include <linux/magic.h>
 
-#define AuStubVoid(name, ...) \
-	AuStub(void, name, , __VA_ARGS__)
-#define AuStubInt0(name, ...) \
-	AuStub(int, name, return 0, __VA_ARGS__)
+static inline int au_test_aufs(struct super_block *sb)
+{
+	return sb->s_magic == AUFS_SUPER_MAGIC;
+}
 
-#include "debug.h"
-
-#include "fstype.h"
-#include "inode.h"
-#include "module.h"
-#include "rwsem.h"
-#include "super.h"
+static inline const char *au_sbtype(struct super_block *sb)
+{
+	return sb->s_type->name;
+}
 
 #endif /* __KERNEL__ */
-#endif /* __AUFS_H__ */
+#endif /* __AUFS_FSTYPE_H__ */

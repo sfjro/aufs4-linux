@@ -54,5 +54,33 @@ AuStubInt0(au_debug_test, void)
 
 #define param_check_atomic_t(name, p) __param_check(name, p, atomic_t)
 
+/* ---------------------------------------------------------------------- */
+
+/* debug print */
+
+#define AuDbg(fmt, ...) do { \
+	if (au_debug_test()) \
+		pr_debug("DEBUG: " fmt, ##__VA_ARGS__); \
+} while (0)
+
+/* ---------------------------------------------------------------------- */
+
+struct dentry;
+#ifdef CONFIG_AUFS_DEBUG
+extern struct mutex au_dbg_mtx;
+extern char *au_plevel;
+struct inode;
+void au_dpri_inode(struct inode *inode);
+
+#define AuDbgInode(i) do { \
+	mutex_lock(&au_dbg_mtx); \
+	AuDbg(#i "\n"); \
+	au_dpri_inode(i); \
+	mutex_unlock(&au_dbg_mtx); \
+} while (0)
+#else
+#define AuDbgInode(i)		do {} while (0)
+#endif /* CONFIG_AUFS_DEBUG */
+
 #endif /* __KERNEL__ */
 #endif /* __AUFS_DEBUG_H__ */
