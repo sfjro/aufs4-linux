@@ -105,8 +105,12 @@ void au_dpri_vdir(struct au_vdir *vdir)
 	}
 }
 
-static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode)
+static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode,
+			struct dentry *wh)
 {
+	char *n = NULL;
+	int l = 0;
+
 	if (!inode || IS_ERR(inode)) {
 		dpri("i%d: err %ld\n", bindex, PTR_ERR(inode));
 		return -1;
@@ -115,9 +119,13 @@ static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode)
 	/* the type of i_blocks depends upon CONFIG_LBDAF */
 	BUILD_BUG_ON(sizeof(inode->i_blocks) != sizeof(unsigned long)
 		     && sizeof(inode->i_blocks) != sizeof(u64));
+	if (wh) {
+		n = (void *)wh->d_name.name;
+		l = wh->d_name.len;
+	}
 
 	dpri("i%d: %p, i%lu, %s, cnt %d, nl %u, 0%o, sz %llu, blk %llu,"
-	     " ct %lld, np %lu, st 0x%lx, f 0x%x, v %llu, g %x\n",
+	     " ct %lld, np %lu, st 0x%lx, f 0x%x, v %llu, g %x%s%.*s\n",
 	     bindex, inode,
 	     inode->i_ino, inode->i_sb ? au_sbtype(inode->i_sb) : "??",
 	     atomic_read(&inode->i_count), inode->i_nlink, inode->i_mode,
@@ -125,7 +133,8 @@ static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode)
 	     (long long)timespec_to_ns(&inode->i_ctime) & 0x0ffff,
 	     inode->i_mapping ? inode->i_mapping->nrpages : 0,
 	     inode->i_state, inode->i_flags, inode->i_version,
-	     inode->i_generation);
+	     inode->i_generation,
+	     l ? ", wh " : "", l, n);
 	return 0;
 }
 
@@ -135,7 +144,7 @@ void au_dpri_inode(struct inode *inode)
 	aufs_bindex_t bindex;
 	int err;
 
-	err = do_pri_inode(-1, inode);
+	err = do_pri_inode(-1, inode, NULL);
 	if (err || !au_test_aufs(inode->i_sb))
 		return;
 
@@ -147,7 +156,8 @@ void au_dpri_inode(struct inode *inode)
 	if (iinfo->ii_bstart < 0)
 		return;
 	for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend; bindex++)
-		do_pri_inode(bindex, iinfo->ii_hinode[0 + bindex].hi_inode);
+		do_pri_inode(bindex, iinfo->ii_hinode[0 + bindex].hi_inode,
+			     iinfo->ii_hinode[0 + bindex].hi_whdentry);
 }
 
 void au_dpri_dalias(struct inode *inode)
@@ -162,6 +172,9 @@ void au_dpri_dalias(struct inode *inode)
 
 static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 {
+	struct dentry *wh = NULL;
+	struct au_iinfo *iinfo;
+
 	if (!dentry || IS_ERR(dentry)) {
 		dpri("d%d: err %ld\n", bindex, PTR_ERR(dentry));
 		return -1;
@@ -173,7 +186,12 @@ static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 	     dentry->d_sb ? au_sbtype(dentry->d_sb) : "??",
 	     au_dcount(dentry), dentry->d_flags,
 	     d_unhashed(dentry) ? "un" : "");
-	do_pri_inode(bindex, dentry->d_inode);
+	if (bindex >= 0 && dentry->d_inode && au_test_aufs(dentry->d_sb)) {
+		iinfo = au_ii(dentry->d_inode);
+		if (iinfo)
+			wh = iinfo->ii_hinode[0 + bindex].hi_whdentry;
+	}
+	do_pri_inode(bindex, dentry->d_inode, wh);
 	return 0;
 }
 

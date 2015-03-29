@@ -972,6 +972,177 @@ int au_sio_cpup_simple(struct au_cp_generic *cpg)
 /* ---------------------------------------------------------------------- */
 
 /*
+ * copyup the deleted file for writing.
+ */
+static int au_do_cpup_wh(struct au_cp_generic *cpg, struct dentry *wh_dentry,
+			 struct file *file)
+{
+	int err;
+	unsigned int flags_orig;
+	aufs_bindex_t bsrc_orig;
+	struct dentry *h_d_dst, *h_d_start;
+	struct au_dinfo *dinfo;
+	struct au_hdentry *hdp;
+
+	dinfo = au_di(cpg->dentry);
+	AuRwMustWriteLock(&dinfo->di_rwsem);
+
+	bsrc_orig = cpg->bsrc;
+	cpg->bsrc = dinfo->di_bstart;
+	hdp = dinfo->di_hdentry;
+	h_d_dst = hdp[0 + cpg->bdst].hd_dentry;
+	dinfo->di_bstart = cpg->bdst;
+	hdp[0 + cpg->bdst].hd_dentry = wh_dentry;
+	h_d_start = NULL;
+	if (file) {
+		h_d_start = hdp[0 + cpg->bsrc].hd_dentry;
+		hdp[0 + cpg->bsrc].hd_dentry = au_hf_top(file)->f_path.dentry;
+	}
+	flags_orig = cpg->flags;
+	cpg->flags = !AuCpup_DTIME;
+	err = au_cpup_single(cpg, /*h_parent*/NULL);
+	cpg->flags = flags_orig;
+	if (file) {
+		if (!err)
+			err = 0; /* au_reopen_nondir(file); fix later */
+		hdp[0 + cpg->bsrc].hd_dentry = h_d_start;
+	}
+	hdp[0 + cpg->bdst].hd_dentry = h_d_dst;
+	dinfo->di_bstart = cpg->bsrc;
+	cpg->bsrc = bsrc_orig;
+
+	return err;
+}
+
+static int au_cpup_wh(struct au_cp_generic *cpg, struct file *file)
+{
+	int err;
+	aufs_bindex_t bdst;
+	struct au_dtime dt;
+	struct dentry *dentry, *parent, *h_parent, *wh_dentry;
+	struct au_branch *br;
+	struct path h_path;
+
+	dentry = cpg->dentry;
+	bdst = cpg->bdst;
+	br = au_sbr(dentry->d_sb, bdst);
+	parent = dget_parent(dentry);
+	h_parent = au_h_dptr(parent, bdst);
+	wh_dentry = au_whtmp_lkup(h_parent, br, &dentry->d_name);
+	err = PTR_ERR(wh_dentry);
+	if (IS_ERR(wh_dentry))
+		goto out;
+
+	h_path.dentry = h_parent;
+	h_path.mnt = au_br_mnt(br);
+	au_dtime_store(&dt, parent, &h_path);
+	err = au_do_cpup_wh(cpg, wh_dentry, file);
+	if (unlikely(err))
+		goto out_wh;
+
+	dget(wh_dentry);
+	h_path.dentry = wh_dentry;
+	if (!d_is_dir(wh_dentry)) {
+		/* no delegation since it is just created */
+		err = vfsub_unlink(h_parent->d_inode, &h_path,
+				   /*delegated*/NULL, /*force*/0);
+	} else
+		err = vfsub_rmdir(h_parent->d_inode, &h_path);
+	if (unlikely(err)) {
+		AuIOErr("failed remove copied-up tmp file %pd(%d)\n",
+			wh_dentry, err);
+		err = -EIO;
+	}
+	au_dtime_revert(&dt);
+	au_set_hi_wh(dentry->d_inode, bdst, wh_dentry);
+
+out_wh:
+	dput(wh_dentry);
+out:
+	dput(parent);
+	return err;
+}
+
+struct au_cpup_wh_args {
+	int *errp;
+	struct au_cp_generic *cpg;
+	struct file *file;
+};
+
+static void au_call_cpup_wh(void *args)
+{
+	struct au_cpup_wh_args *a = args;
+
+	au_pin_hdir_acquire_nest(a->cpg->pin);
+	*a->errp = au_cpup_wh(a->cpg, a->file);
+	au_pin_hdir_release(a->cpg->pin);
+}
+
+int au_sio_cpup_wh(struct au_cp_generic *cpg, struct file *file)
+{
+	int err, wkq_err;
+	aufs_bindex_t bdst;
+	struct dentry *dentry, *parent, *h_orph, *h_parent;
+	struct inode *dir, *h_dir, *h_tmpdir;
+	struct au_wbr *wbr;
+	struct au_pin wh_pin, *pin_orig;
+
+	dentry = cpg->dentry;
+	bdst = cpg->bdst;
+	parent = dget_parent(dentry);
+	dir = parent->d_inode;
+	h_orph = NULL;
+	h_parent = NULL;
+	h_dir = au_igrab(au_h_iptr(dir, bdst));
+	h_tmpdir = h_dir;
+	pin_orig = NULL;
+	if (!h_dir->i_nlink) {
+		wbr = au_sbr(dentry->d_sb, bdst)->br_wbr;
+		h_orph = wbr->wbr_orph;
+
+		h_parent = dget(au_h_dptr(parent, bdst));
+		au_set_h_dptr(parent, bdst, dget(h_orph));
+		h_tmpdir = h_orph->d_inode;
+		au_set_h_iptr(dir, bdst, au_igrab(h_tmpdir), /*flags*/0);
+
+		mutex_lock_nested(&h_tmpdir->i_mutex, AuLsc_I_PARENT3);
+
+		pin_orig = cpg->pin;
+		au_pin_init(&wh_pin, dentry, bdst, AuLsc_DI_PARENT,
+			    AuLsc_I_PARENT3, cpg->pin->udba, AuPin_DI_LOCKED);
+		cpg->pin = &wh_pin;
+	}
+
+	if (!au_test_h_perm_sio(h_tmpdir, MAY_EXEC | MAY_WRITE)
+	    && !au_cpup_sio_test(cpg->pin, dentry->d_inode->i_mode))
+		err = au_cpup_wh(cpg, file);
+	else {
+		struct au_cpup_wh_args args = {
+			.errp	= &err,
+			.cpg	= cpg,
+			.file	= file
+		};
+		wkq_err = au_wkq_wait(au_call_cpup_wh, &args);
+		if (unlikely(wkq_err))
+			err = wkq_err;
+	}
+
+	if (h_orph) {
+		mutex_unlock(&h_tmpdir->i_mutex);
+		au_set_h_iptr(dir, bdst, au_igrab(h_dir), /*flags*/0);
+		au_set_h_dptr(parent, bdst, h_parent);
+		AuDebugOn(!pin_orig);
+		cpg->pin = pin_orig;
+	}
+	iput(h_dir);
+	dput(parent);
+
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/*
  * generic routine for both of copy-up and copy-down.
  */
 /* cf. revalidate function in file.c */
