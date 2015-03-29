@@ -379,8 +379,25 @@ static int aufs_iterate(struct file *file, struct dir_context *ctx)
 		goto out_unlock;
 
 	h_inode = au_h_iptr(inode, au_ibstart(inode));
-	err = au_vdir_fill_de(file, ctx);
-	fsstack_copy_attr_atime(inode, h_inode);
+	if (!au_test_nfsd()) {
+		err = au_vdir_fill_de(file, ctx);
+		fsstack_copy_attr_atime(inode, h_inode);
+	} else {
+		/*
+		 * nfsd filldir may call lookup_one_len(), vfs_getattr(),
+		 * encode_fh() and others.
+		 */
+		atomic_inc(&h_inode->i_count);
+		di_read_unlock(dentry, AuLock_IR);
+		si_read_unlock(sb);
+		err = au_vdir_fill_de(file, ctx);
+		fsstack_copy_attr_atime(inode, h_inode);
+		fi_write_unlock(file);
+		iput(h_inode);
+
+		AuTraceErr(err);
+		return err;
+	}
 
 out_unlock:
 	di_read_unlock(dentry, AuLock_IR);

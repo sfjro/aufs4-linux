@@ -304,6 +304,56 @@ void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 
 /* ---------------------------------------------------------------------- */
 
+#ifdef CONFIG_AUFS_EXPORT
+static int dbgaufs_xigen_open(struct inode *inode, struct file *file)
+{
+	int err;
+	struct au_sbinfo *sbinfo;
+	struct super_block *sb;
+
+	sbinfo = inode->i_private;
+	sb = sbinfo->si_sb;
+	si_noflush_read_lock(sb);
+	err = dbgaufs_xi_open(sbinfo->si_xigen, file, /*do_fcnt*/0);
+	si_read_unlock(sb);
+	return err;
+}
+
+static const struct file_operations dbgaufs_xigen_fop = {
+	.owner		= THIS_MODULE,
+	.open		= dbgaufs_xigen_open,
+	.release	= dbgaufs_xi_release,
+	.read		= dbgaufs_xi_read
+};
+
+static int dbgaufs_xigen_init(struct au_sbinfo *sbinfo)
+{
+	int err;
+
+	/*
+	 * This function is a dynamic '__init' function actually,
+	 * so the tiny check for si_rwsem is unnecessary.
+	 */
+	/* AuRwMustWriteLock(&sbinfo->si_rwsem); */
+
+	err = -EIO;
+	sbinfo->si_dbgaufs_xigen = debugfs_create_file
+		("xigen", dbgaufs_mode, sbinfo->si_dbgaufs, sbinfo,
+		 &dbgaufs_xigen_fop);
+	if (sbinfo->si_dbgaufs_xigen)
+		err = 0;
+
+	return err;
+}
+#else
+static int dbgaufs_xigen_init(struct au_sbinfo *sbinfo)
+{
+	return 0;
+}
+#endif /* CONFIG_AUFS_EXPORT */
+
+/* ---------------------------------------------------------------------- */
+
 void dbgaufs_si_fin(struct au_sbinfo *sbinfo)
 {
 	/*
@@ -353,8 +403,9 @@ int dbgaufs_si_init(struct au_sbinfo *sbinfo)
 	if (unlikely(!sbinfo->si_dbgaufs_plink))
 		goto out_dir;
 
-	err = 0;
-	goto out; /* success */
+	err = dbgaufs_xigen_init(sbinfo);
+	if (!err)
+		goto out; /* success */
 
 out_dir:
 	dbgaufs_si_fin(sbinfo);

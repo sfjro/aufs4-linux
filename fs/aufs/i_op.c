@@ -105,7 +105,7 @@ static int aufs_permission(struct inode *inode, int mask)
 
 	if (!isdir
 	    || write_mask) {
-		err = -EBUSY;
+		err = au_busy_or_stale();
 		h_inode = au_h_iptr(inode, au_ibstart(inode));
 		if (unlikely(!h_inode
 			     || (h_inode->i_mode & S_IFMT)
@@ -136,7 +136,7 @@ static int aufs_permission(struct inode *inode, int mask)
 	for (bindex = au_ibstart(inode); !err && bindex <= bend; bindex++) {
 		h_inode = au_h_iptr(inode, bindex);
 		if (h_inode) {
-			err = -EBUSY;
+			err = au_busy_or_stale();
 			if (unlikely(!S_ISDIR(h_inode->i_mode)))
 				break;
 
@@ -558,7 +558,7 @@ int au_do_pin(struct au_pin *p)
 
 out_err:
 	pr_err("err %d\n", err);
-	err = -EBUSY;
+	err = au_busy_or_stale();
 out:
 	return err;
 }

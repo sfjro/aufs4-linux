@@ -174,6 +174,9 @@ struct au_sbinfo {
 	struct dentry		 *si_dbgaufs;
 	struct dentry		 *si_dbgaufs_plink;
 	struct dentry		 *si_dbgaufs_xib;
+#ifdef CONFIG_AUFS_EXPORT
+	struct dentry		 *si_dbgaufs_xigen;
+#endif
 #endif
 
 #ifdef CONFIG_AUFS_SBILIST
@@ -346,6 +349,9 @@ static inline void dbgaufs_si_null(struct au_sbinfo *sbinfo)
 	sbinfo->si_dbgaufs = NULL;
 	sbinfo->si_dbgaufs_plink = NULL;
 	sbinfo->si_dbgaufs_xib = NULL;
+#ifdef CONFIG_AUFS_EXPORT
+	sbinfo->si_dbgaufs_xigen = NULL;
+#endif
 #endif
 }
 

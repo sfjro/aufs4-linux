@@ -590,7 +590,7 @@ static int au_ren_lock(struct au_ren_args *a)
 	udba = au_opt_udba(a->src_dentry->d_sb);
 	if (unlikely(a->src_hdir->hi_inode != a->src_h_parent->d_inode
 		     || a->dst_hdir->hi_inode != a->dst_h_parent->d_inode))
-		err = -EBUSY;
+		err = au_busy_or_stale();
 	if (!err && au_dbstart(a->src_dentry) == a->btgt)
 		err = au_h_verify(a->src_h_dentry, udba,
 				  a->src_h_parent->d_inode, a->src_h_parent,
@@ -602,7 +602,7 @@ static int au_ren_lock(struct au_ren_args *a)
 	if (!err)
 		goto out; /* success */
 
-	err = -EBUSY;
+	err = au_busy_or_stale();
 	au_ren_unlock(a);
 
 out:

@@ -584,8 +584,10 @@ void au_xino_delete_inode(struct inode *inode, const int unlinked)
 	    || inode->i_ino == AUFS_ROOT_INO)
 		return;
 
-	if (unlinked)
+	if (unlinked) {
+		au_xigen_inc(inode);
 		au_xib_clear_bit(inode);
+	}
 
 	iinfo = au_ii(inode);
 	if (!iinfo)
@@ -1174,6 +1176,7 @@ void au_xino_clr(struct super_block *sb)
 {
 	struct au_sbinfo *sbinfo;
 
+	au_xigen_clr(sb);
 	xino_clear_xib(sb);
 	xino_clear_br(sb);
 	sbinfo = au_sbi(sb);
@@ -1216,6 +1219,8 @@ int au_xino_set(struct super_block *sb, struct au_opt_xino *xino, int remount)
 	/* mnt_want_write() is unnecessary here */
 	err = au_xino_set_xib(sb, xino->file);
 	if (!err)
+		err = au_xigen_set(sb, xino->file);
+	if (!err)
 		err = au_xino_set_br(sb, xino->file);
 	mutex_unlock(&dir->i_mutex);
 	if (!err)
@@ -1223,6 +1228,7 @@ int au_xino_set(struct super_block *sb, struct au_opt_xino *xino, int remount)
 
 	/* reset all */
 	AuIOErr("failed creating xino(%d).\n", err);
+	au_xigen_clr(sb);
 	xino_clear_xib(sb);
 
 out:
