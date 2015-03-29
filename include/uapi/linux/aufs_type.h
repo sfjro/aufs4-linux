@@ -157,6 +157,10 @@ static inline int au_br_wh_linkable(int brperm)
 
 /* ioctl */
 enum {
+	/* readdir in userspace */
+	AuCtl_RDU,
+	AuCtl_RDU_INO,
+
 	AuCtl_WBR_FD,	/* pathconf wrapper */
 	AuCtl_BR	/* info about branches */
 };
@@ -177,6 +181,61 @@ enum {
 #define __packed			__attribute__((packed))
 #endif
 #endif
+
+struct au_rdu_cookie {
+	uint64_t	h_pos;
+	int16_t		bindex;
+	uint8_t		flags;
+	uint8_t		pad;
+	uint32_t	generation;
+} __aligned(8);
+
+struct au_rdu_ent {
+	uint64_t	ino;
+	int16_t		bindex;
+	uint8_t		type;
+	uint8_t		nlen;
+	uint8_t		wh;
+	char		name[0];
+} __aligned(8);
+
+static inline int au_rdu_len(int nlen)
+{
+	/* include the terminating NULL */
+	return ALIGN(sizeof(struct au_rdu_ent) + nlen + 1,
+		     sizeof(uint64_t));
+}
+
+union au_rdu_ent_ul {
+	struct au_rdu_ent __user	*e;
+	uint64_t			ul;
+};
+
+enum {
+	AufsCtlRduV_SZ,
+	AufsCtlRduV_End
+};
+
+struct aufs_rdu {
+	/* input */
+	union {
+		uint64_t	sz;	/* AuCtl_RDU */
+		uint64_t	nent;	/* AuCtl_RDU_INO */
+	};
+	union au_rdu_ent_ul	ent;
+	uint16_t		verify[AufsCtlRduV_End];
+
+	/* input/output */
+	uint32_t		blk;
+
+	/* output */
+	union au_rdu_ent_ul	tail;
+	/* number of entries which were added in a single call */
+	uint64_t		rent;
+	uint8_t			full;
+
+	struct au_rdu_cookie	cookie;
+} __aligned(8);
 
 /* ---------------------------------------------------------------------- */
 
@@ -200,6 +259,8 @@ union aufs_brinfo {
 /* ---------------------------------------------------------------------- */
 
 #define AuCtlType		'A'
+#define AUFS_CTL_RDU		_IOWR(AuCtlType, AuCtl_RDU, struct aufs_rdu)
+#define AUFS_CTL_RDU_INO	_IOWR(AuCtlType, AuCtl_RDU_INO, struct aufs_rdu)
 #define AUFS_CTL_WBR_FD		_IOW(AuCtlType, AuCtl_WBR_FD, \
 				     struct aufs_wbr_fd)
 #define AUFS_CTL_BRINFO		_IOW(AuCtlType, AuCtl_BR, union aufs_brinfo)

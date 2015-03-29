@@ -87,6 +87,18 @@ config AUFS_INO_T_64
 	/* typedef unsigned long/int __kernel_ino_t */
 	/* alpha and s390x are int */
 
+config AUFS_RDU
+	bool "Readdir in userspace"
+	help
+	Aufs has two methods to provide a merged view for a directory,
+	by a user-space library and by kernel-space natively. The latter
+	is always enabled but sometimes large and slow.
+	If you enable this option, install the library in aufs2-util
+	package, and set some environment variables for your readdir(3),
+	then the work will be handled in user-space which generally
+	shows better performance in most cases.
+	See detail in aufs.5.
+
 config AUFS_DEBUG
 	bool "Debug aufs"
 	help

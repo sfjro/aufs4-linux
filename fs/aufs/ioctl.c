@@ -124,6 +124,11 @@ long aufs_ioctl_dir(struct file *file, unsigned int cmd, unsigned long arg)
 	long err;
 
 	switch (cmd) {
+	case AUFS_CTL_RDU:
+	case AUFS_CTL_RDU_INO:
+		err = au_rdu_ioctl(file, cmd, arg);
+		break;
+
 	case AUFS_CTL_WBR_FD:
 		err = au_wbr_fd(&file->f_path, (void __user *)arg);
 		break;
@@ -168,6 +173,11 @@ long aufs_compat_ioctl_dir(struct file *file, unsigned int cmd,
 	long err;
 
 	switch (cmd) {
+	case AUFS_CTL_RDU:
+	case AUFS_CTL_RDU_INO:
+		err = au_rdu_compat_ioctl(file, cmd, arg);
+		break;
+
 	case AUFS_CTL_BRINFO:
 		err = au_brinfo_compat_ioctl(file, arg);
 		break;
