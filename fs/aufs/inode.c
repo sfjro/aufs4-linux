@@ -191,8 +191,8 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		btail = au_dbtail(dentry);
-#if 0 /* re-commit later */
 		inode->i_op = &aufs_iop;
+#if 0 /* re-commit later */
 		inode->i_fop = &aufs_file_fop;
 #endif
 		err = au_dy_iaop(inode, bstart, h_inode);
@@ -202,23 +202,19 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 	case S_IFDIR:
 		isdir = 1;
 		btail = au_dbtaildir(dentry);
-		/* inode->i_op = &aufs_dir_iop; re-commit later */
+		inode->i_op = &aufs_dir_iop;
 		inode->i_fop = &simple_dir_operations; /* re-commit later */
 		break;
 	case S_IFLNK:
 		btail = au_dbtail(dentry);
-#if 0 /* re-commit later */
 		inode->i_op = &aufs_symlink_iop;
-#endif
 		break;
 	case S_IFBLK:
 	case S_IFCHR:
 	case S_IFIFO:
 	case S_IFSOCK:
 		btail = au_dbtail(dentry);
-#if 0 /* re-commit later */
 		inode->i_op = &aufs_iop;
-#endif
 		init_special_inode(inode, mode, h_inode->i_rdev);
 		break;
 	default:
