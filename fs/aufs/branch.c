@@ -560,6 +560,12 @@ static void au_farray_free(struct file **a, unsigned long long max)
  * delete a branch
  */
 
+/* to show the line number, do not make it inlined function */
+#define AuVerbose(do_info, fmt, ...) do { \
+	if (do_info) \
+		pr_info(fmt, ##__VA_ARGS__); \
+} while (0)
+
 static int au_test_ibusy(struct inode *inode, aufs_bindex_t bstart,
 			 aufs_bindex_t bend)
 {
@@ -576,7 +582,7 @@ static int au_test_dbusy(struct dentry *dentry, aufs_bindex_t bstart,
  * test if the branch is deletable or not.
  */
 static int test_dentry_busy(struct dentry *root, aufs_bindex_t bindex,
-			    unsigned int sigen)
+			    unsigned int sigen, const unsigned int verbose)
 {
 	int err, i, j, ndentry;
 	aufs_bindex_t bstart, bend;
@@ -626,6 +632,7 @@ static int test_dentry_busy(struct dentry *root, aufs_bindex_t bindex,
 			    && au_h_dptr(d, bindex)
 			    && au_test_dbusy(d, bstart, bend)) {
 				err = -EBUSY;
+				AuVerbose(verbose, "busy %pd\n", d);
 				AuDbgDentry(d);
 			}
 			di_read_unlock(d, AuLock_IR);
@@ -639,7 +646,7 @@ out:
 }
 
 static int test_inode_busy(struct super_block *sb, aufs_bindex_t bindex,
-			   unsigned int sigen)
+			   unsigned int sigen, const unsigned int verbose)
 {
 	int err;
 	unsigned long long max, ull;
@@ -682,6 +689,7 @@ static int test_inode_busy(struct super_block *sb, aufs_bindex_t bindex,
 		    && au_h_iptr(i, bindex)
 		    && au_test_ibusy(i, bstart, bend)) {
 			err = -EBUSY;
+			AuVerbose(verbose, "busy i%lu\n", i->i_ino);
 			AuDbgInode(i);
 		}
 		ii_read_unlock(i);
@@ -692,7 +700,8 @@ out:
 	return err;
 }
 
-static int test_children_busy(struct dentry *root, aufs_bindex_t bindex)
+static int test_children_busy(struct dentry *root, aufs_bindex_t bindex,
+			      const unsigned int verbose)
 {
 	int err;
 	unsigned int sigen;
@@ -701,9 +710,9 @@ static int test_children_busy(struct dentry *root, aufs_bindex_t bindex)
 	DiMustNoWaiters(root);
 	IiMustNoWaiters(root->d_inode);
 	di_write_unlock(root);
-	err = test_dentry_busy(root, bindex, sigen);
+	err = test_dentry_busy(root, bindex, sigen, verbose);
 	if (!err)
-		err = test_inode_busy(root->d_sb, bindex, sigen);
+		err = test_inode_busy(root->d_sb, bindex, sigen, verbose);
 	di_write_lock_child(root); /* aufs_write_lock() calls ..._child() */
 
 	return err;
@@ -939,7 +948,7 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 	unsigned long long opened;
 	unsigned int mnt_flags;
 	aufs_bindex_t bindex, bend, br_id;
-	unsigned char do_wh;
+	unsigned char do_wh, verbose;
 	struct au_branch *br;
 	struct au_wbr *wbr;
 	struct dentry *root;
@@ -961,9 +970,12 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 
 	err = -EBUSY;
 	mnt_flags = au_mntflags(sb);
+	verbose = !!au_opt_test(mnt_flags, VERBOSE);
 	bend = au_sbend(sb);
-	if (unlikely(!bend))
+	if (unlikely(!bend)) {
+		AuVerbose(verbose, "no more branches left\n");
 		goto out;
+	}
 	br = au_sbr(sb, bindex);
 	AuDebugOn(!path_equal(&br->br_path, &del->h_path));
 
@@ -976,8 +988,10 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 			goto out;
 
 		err = test_file_busy(sb, br_id, to_free, opened);
-		if (unlikely(err))
+		if (unlikely(err)) {
+			AuVerbose(verbose, "%llu file(s) opened\n", opened);
 			goto out;
+		}
 	}
 
 	wbr = br->br_wbr;
@@ -991,7 +1005,7 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 		}
 	}
 
-	err = test_children_busy(root, bindex);
+	err = test_children_busy(root, bindex, verbose);
 	if (unlikely(err)) {
 		if (do_wh)
 			goto out_wh;

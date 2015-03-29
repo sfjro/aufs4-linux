@@ -130,6 +130,7 @@ struct au_opt {
 		struct au_opt_xino	xino;
 		struct au_opt_xino_itrunc xino_itrunc;
 		struct au_opt_add	add;
+		struct au_opt_del	del;
 		int			rdcache;
 		unsigned int		rdblk;
 		unsigned int		rdhash;
