@@ -174,6 +174,11 @@ int au_may_del(struct dentry *dentry, aufs_bindex_t bindex,
 int aufs_unlink(struct inode *dir, struct dentry *dentry);
 int aufs_rmdir(struct inode *dir, struct dentry *dentry);
 
+/* i_op_ren.c */
+int au_wbr(struct dentry *dentry, aufs_bindex_t btgt);
+int aufs_rename(struct inode *src_dir, struct dentry *src_dentry,
+		struct inode *dir, struct dentry *dentry);
+
 /* iinfo.c */
 struct inode *au_h_iptr(struct inode *inode, aufs_bindex_t bindex);
 void au_hiput(struct au_hinode *hinode);
