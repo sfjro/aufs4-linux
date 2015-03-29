@@ -27,6 +27,7 @@
 #include <linux/fs.h>
 #include <linux/kobject.h>
 #include "rwsem.h"
+#include "wkq.h"
 
 typedef ssize_t (*au_readf_t)(struct file *, char __user *, size_t, loff_t *);
 typedef ssize_t (*au_writef_t)(struct file *, const char __user *, size_t,
@@ -34,6 +35,9 @@ typedef ssize_t (*au_writef_t)(struct file *, const char __user *, size_t,
 
 struct au_branch;
 struct au_sbinfo {
+	/* nowait tasks in the system-wide workqueue */
+	struct au_nowait_tasks	si_nowait;
+
 	/*
 	 * tried sb->s_umount, but failed due to the dependecy between i_mutex.
 	 * rwsem for au_sbinfo is necessary.
@@ -84,6 +88,7 @@ struct au_sbinfo {
 #define AuLock_DW		1		/* write-lock dentry */
 #define AuLock_IR		(1 << 1)	/* read-lock inode */
 #define AuLock_IW		(1 << 2)	/* write-lock inode */
+#define AuLock_FLUSH		(1 << 3)	/* wait for 'nowait' tasks */
 #define au_ftest_lock(flags, name)	((flags) & AuLock_##name)
 #define au_fset_lock(flags, name) \
 	do { (flags) |= AuLock_##name; } while (0)
@@ -103,6 +108,9 @@ int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr);
 unsigned int au_sigen_inc(struct super_block *sb);
 aufs_bindex_t au_new_br_id(struct super_block *sb);
 
+int si_read_lock(struct super_block *sb, int flags);
+int si_write_lock(struct super_block *sb, int flags);
+
 /* ---------------------------------------------------------------------- */
 
 static inline struct au_sbinfo *au_sbi(struct super_block *sb)
@@ -114,14 +122,69 @@ static inline struct au_sbinfo *au_sbi(struct super_block *sb)
 
 /* lock superblock. mainly for entry point functions */
 /*
- * si_read_lock, si_write_lock,
- * si_read_unlock, si_write_unlock, si_downgrade_lock
+ * __si_read_lock, __si_write_lock,
+ * __si_read_unlock, __si_write_unlock, __si_downgrade_lock
  */
-AuSimpleRwsemFuncs(si, struct super_block *sb, &au_sbi(sb)->si_rwsem);
+AuSimpleRwsemFuncs(__si, struct super_block *sb, &au_sbi(sb)->si_rwsem);
 
 #define SiMustNoWaiters(sb)	AuRwMustNoWaiters(&au_sbi(sb)->si_rwsem)
 #define SiMustAnyLock(sb)	AuRwMustAnyLock(&au_sbi(sb)->si_rwsem)
 #define SiMustWriteLock(sb)	AuRwMustWriteLock(&au_sbi(sb)->si_rwsem)
+
+static inline void si_noflush_read_lock(struct super_block *sb)
+{
+	__si_read_lock(sb);
+}
+
+static inline int si_noflush_read_trylock(struct super_block *sb)
+{
+	return __si_read_trylock(sb);
+}
+
+static inline void si_noflush_write_lock(struct super_block *sb)
+{
+	__si_write_lock(sb);
+}
+
+static inline int si_noflush_write_trylock(struct super_block *sb)
+{
+	return __si_write_trylock(sb);
+}
+
+#if 0 /* reserved */
+static inline int si_read_trylock(struct super_block *sb, int flags)
+{
+	if (au_ftest_lock(flags, FLUSH))
+		au_nwt_flush(&au_sbi(sb)->si_nowait);
+	return si_noflush_read_trylock(sb);
+}
+#endif
+
+static inline void si_read_unlock(struct super_block *sb)
+{
+	__si_read_unlock(sb);
+}
+
+#if 0 /* reserved */
+static inline int si_write_trylock(struct super_block *sb, int flags)
+{
+	if (au_ftest_lock(flags, FLUSH))
+		au_nwt_flush(&au_sbi(sb)->si_nowait);
+	return si_noflush_write_trylock(sb);
+}
+#endif
+
+static inline void si_write_unlock(struct super_block *sb)
+{
+	__si_write_unlock(sb);
+}
+
+#if 0 /* reserved */
+static inline void si_downgrade_lock(struct super_block *sb)
+{
+	__si_downgrade_lock(sb);
+}
+#endif
 
 /* ---------------------------------------------------------------------- */
 

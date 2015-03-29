@@ -113,15 +113,20 @@ static int __init aufs_init(void)
 	err = sysaufs_init();
 	if (unlikely(err))
 		goto out;
-	err = au_cache_init();
+	err = au_wkq_init();
 	if (unlikely(err))
 		goto out_sysaufs;
+	err = au_cache_init();
+	if (unlikely(err))
+		goto out_wkq;
 
 	/* since we define pr_fmt, call printk directly */
 	printk(KERN_INFO AUFS_NAME " " AUFS_VERSION "\n");
 	goto out; /* success */
 
 	au_cache_fin();
+out_wkq:
+	au_wkq_fin();
 out_sysaufs:
 	sysaufs_fin();
 out:
@@ -131,6 +136,7 @@ out:
 static void __exit aufs_exit(void)
 {
 	au_cache_fin();
+	au_wkq_fin();
 	sysaufs_fin();
 }
 

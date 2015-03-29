@@ -46,6 +46,7 @@
 #include "super.h"
 #include "sysaufs.h"
 #include "vfsub.h"
+#include "wkq.h"
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_H__ */

@@ -126,7 +126,15 @@ int vfsub_unlink(struct inode *dir, struct path *path,
 		.delegated_inode	= delegated_inode
 	};
 
-	call_unlink(&args);
+	if (!force)
+		call_unlink(&args);
+	else {
+		int wkq_err;
+
+		wkq_err = au_wkq_wait(call_unlink, &args);
+		if (unlikely(wkq_err))
+			err = wkq_err;
+	}
 
 	return err;
 }

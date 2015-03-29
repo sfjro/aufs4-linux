@@ -75,6 +75,7 @@ typedef int16_t aufs_bindex_t;
 
 #define AUFS_XINO_FNAME		"." AUFS_NAME ".xino"
 #define AUFS_XINO_DEFPATH	"/tmp/" AUFS_XINO_FNAME
+#define AUFS_WKQ_NAME		AUFS_NAME "d"
 
 /* branch permissions and attributes */
 #define AUFS_BRPERM_RO		"ro"

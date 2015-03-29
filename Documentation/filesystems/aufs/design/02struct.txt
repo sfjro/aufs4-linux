@@ -114,3 +114,31 @@ To reduce the file I/O, aufs prepares a single memory page to cache xib.
 
 As well as XINO files, aufs has a feature to truncate/refresh XIB to
 reduce the number of consumed disk blocks for these files.
+
+
+Workqueue
+----------------------------------------------------------------------
+Aufs sometimes requires privilege access to a branch. For instance,
+in copy-up/down operation. When a user process is going to make changes
+to a file which exists in the lower readonly branch only, and the mode
+of one of ancestor directories may not be writable by a user
+process. Here aufs copy-up the file with its ancestors and they may
+require privilege to set its owner/group/mode/etc.
+This is a typical case of a application character of aufs (see
+Introduction).
+
+Aufs uses workqueue synchronously for this case. It creates its own
+workqueue. The workqueue is a kernel thread and has privilege. Aufs
+passes the request to call mkdir or write (for example), and wait for
+its completion. This approach solves a problem of a signal handler
+simply.
+If aufs didn't adopt the workqueue and changed the privilege of the
+process, then the process may receive the unexpected SIGXFSZ or other
+signals.
+
+Also aufs uses the system global workqueue ("events" kernel thread) too
+for asynchronous tasks, such like handling inotify/fsnotify, re-creating a
+whiteout base and etc. This is unrelated to a privilege.
+Most of aufs operation tries acquiring a rw_semaphore for aufs
+superblock at the beginning, at the same time waits for the completion
+of all queued asynchronous tasks.

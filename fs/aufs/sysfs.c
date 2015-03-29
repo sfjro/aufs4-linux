@@ -137,7 +137,7 @@ ssize_t sysaufs_si_show(struct kobject *kobj, struct attribute *attr,
 	 * simply we gave up processing read here.
 	 */
 	err = -EBUSY;
-	if (unlikely(!si_read_trylock(sb)))
+	if (unlikely(!si_noflush_read_trylock(sb)))
 		goto out;
 
 	seq = au_seq(buf, PAGE_SIZE);

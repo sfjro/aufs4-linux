@@ -29,6 +29,7 @@ void au_si_free(struct kobject *kobj)
 	struct au_sbinfo *sbinfo;
 
 	sbinfo = container_of(kobj, struct au_sbinfo, si_kobj);
+	AuDebugOn(atomic_read(&sbinfo->si_nowait.nw_len));
 
 	au_rw_write_lock(&sbinfo->si_rwsem);
 	au_br_free(sbinfo);
@@ -61,6 +62,7 @@ int au_si_alloc(struct super_block *sb)
 	if (unlikely(err))
 		goto out_br;
 
+	au_nwt_init(&sbinfo->si_nowait);
 	au_rw_init_wlock(&sbinfo->si_rwsem);
 	au_rw_class(&sbinfo->si_rwsem, &aufs_si);
 
@@ -138,4 +140,26 @@ aufs_bindex_t au_new_br_id(struct super_block *sb)
 	}
 
 	return -1;
+}
+/* ---------------------------------------------------------------------- */
+
+/* it is ok that new 'nwt' tasks are appended while we are sleeping */
+int si_read_lock(struct super_block *sb, int flags)
+{
+	if (au_ftest_lock(flags, FLUSH))
+		au_nwt_flush(&au_sbi(sb)->si_nowait);
+
+	si_noflush_read_lock(sb);
+
+	return 0;
+}
+
+int si_write_lock(struct super_block *sb, int flags)
+{
+	if (au_ftest_lock(flags, FLUSH))
+		au_nwt_flush(&au_sbi(sb)->si_nowait);
+
+	si_noflush_write_lock(sb);
+
+	return 0;
 }
