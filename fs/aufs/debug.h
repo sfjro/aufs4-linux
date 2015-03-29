@@ -71,6 +71,11 @@ extern struct mutex au_dbg_mtx;
 extern char *au_plevel;
 struct inode;
 void au_dpri_inode(struct inode *inode);
+void au_dpri_dalias(struct inode *inode);
+void au_dpri_dentry(struct dentry *dentry);
+
+#define au_dbg_verify_dinode(d) __au_dbg_verify_dinode(d, __func__, __LINE__)
+void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line);
 
 #define AuDbgInode(i) do { \
 	mutex_lock(&au_dbg_mtx); \
@@ -78,8 +83,26 @@ void au_dpri_inode(struct inode *inode);
 	au_dpri_inode(i); \
 	mutex_unlock(&au_dbg_mtx); \
 } while (0)
+
+#define AuDbgDAlias(i) do { \
+	mutex_lock(&au_dbg_mtx); \
+	AuDbg(#i "\n"); \
+	au_dpri_dalias(i); \
+	mutex_unlock(&au_dbg_mtx); \
+} while (0)
+
+#define AuDbgDentry(d) do { \
+	mutex_lock(&au_dbg_mtx); \
+	AuDbg(#d "\n"); \
+	au_dpri_dentry(d); \
+	mutex_unlock(&au_dbg_mtx); \
+} while (0)
 #else
+AuStubVoid(au_dbg_verify_dinode, struct dentry *dentry)
+
 #define AuDbgInode(i)		do {} while (0)
+#define AuDbgDAlias(i)		do {} while (0)
+#define AuDbgDentry(d)		do {} while (0)
 #endif /* CONFIG_AUFS_DEBUG */
 
 #endif /* __KERNEL__ */

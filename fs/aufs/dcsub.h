@@ -16,31 +16,29 @@
  */
 
 /*
- * all header files
+ * sub-routines for dentry cache
  */
 
-#ifndef __AUFS_H__
-#define __AUFS_H__
+#ifndef __AUFS_DCSUB_H__
+#define __AUFS_DCSUB_H__
 
 #ifdef __KERNEL__
 
-#define AuStub(type, name, body, ...) \
-	static inline type name(__VA_ARGS__) { body; }
+#include <linux/dcache.h>
 
-#define AuStubVoid(name, ...) \
-	AuStub(void, name, , __VA_ARGS__)
-#define AuStubInt0(name, ...) \
-	AuStub(int, name, return 0, __VA_ARGS__)
-
-#include "debug.h"
-
-#include "dcsub.h"
-#include "dentry.h"
-#include "fstype.h"
-#include "inode.h"
-#include "module.h"
-#include "rwsem.h"
-#include "super.h"
+/*
+ * by the commit
+ * 360f547 2015-01-25 dcache: let the dentry count go down to zero without
+ *			taking d_lock
+ * the type of d_lockref.count became int, but the inlined function d_count()
+ * still returns unsigned int.
+ * I don't know why. Maybe it is for every d_count() users?
+ * Anyway au_dcount() lives on.
+ */
+static inline int au_dcount(struct dentry *d)
+{
+	return (int)d_count(d);
+}
 
 #endif /* __KERNEL__ */
-#endif /* __AUFS_H__ */
+#endif /* __AUFS_DCSUB_H__ */

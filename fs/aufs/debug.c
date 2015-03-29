@@ -110,3 +110,89 @@ void au_dpri_inode(struct inode *inode)
 	for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend; bindex++)
 		do_pri_inode(bindex, iinfo->ii_hinode[0 + bindex].hi_inode);
 }
+
+void au_dpri_dalias(struct inode *inode)
+{
+	struct dentry *d;
+
+	spin_lock(&inode->i_lock);
+	hlist_for_each_entry(d, &inode->i_dentry, d_u.d_alias)
+		au_dpri_dentry(d);
+	spin_unlock(&inode->i_lock);
+}
+
+static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
+{
+	if (!dentry || IS_ERR(dentry)) {
+		dpri("d%d: err %ld\n", bindex, PTR_ERR(dentry));
+		return -1;
+	}
+	/* do not call dget_parent() here */
+	/* note: access d_xxx without d_lock */
+	dpri("d%d: %p, %pd2?, %s, cnt %d, flags 0x%x, %shashed\n",
+	     bindex, dentry, dentry,
+	     dentry->d_sb ? au_sbtype(dentry->d_sb) : "??",
+	     au_dcount(dentry), dentry->d_flags,
+	     d_unhashed(dentry) ? "un" : "");
+	do_pri_inode(bindex, dentry->d_inode);
+	return 0;
+}
+
+void au_dpri_dentry(struct dentry *dentry)
+{
+	struct au_dinfo *dinfo;
+	aufs_bindex_t bindex;
+	int err;
+	struct au_hdentry *hdp;
+
+	err = do_pri_dentry(-1, dentry);
+	if (err || !au_test_aufs(dentry->d_sb))
+		return;
+
+	dinfo = au_di(dentry);
+	if (!dinfo)
+		return;
+	dpri("d-1: bstart %d, bend %d\n",
+	     dinfo->di_bstart, dinfo->di_bend);
+	if (dinfo->di_bstart < 0)
+		return;
+	hdp = dinfo->di_hdentry;
+	for (bindex = dinfo->di_bstart; bindex <= dinfo->di_bend; bindex++)
+		do_pri_dentry(bindex, hdp[0 + bindex].hd_dentry);
+}
+
+/* ---------------------------------------------------------------------- */
+
+void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line)
+{
+	struct inode *h_inode, *inode = dentry->d_inode;
+	struct dentry *h_dentry;
+	aufs_bindex_t bindex, bend, bi;
+
+	if (!inode /* || au_di(dentry)->di_lsc == AuLsc_DI_TMP */)
+		return;
+
+	bend = au_dbend(dentry);
+	bi = au_ibend(inode);
+	if (bi < bend)
+		bend = bi;
+	bindex = au_dbstart(dentry);
+	bi = au_ibstart(inode);
+	if (bi > bindex)
+		bindex = bi;
+
+	for (; bindex <= bend; bindex++) {
+		h_dentry = au_h_dptr(dentry, bindex);
+		if (!h_dentry)
+			continue;
+		h_inode = au_h_iptr(inode, bindex);
+		if (unlikely(h_inode != h_dentry->d_inode)) {
+			au_debug_on();
+			AuDbg("b%d, %s:%d\n", bindex, func, line);
+			AuDbgDentry(dentry);
+			AuDbgInode(inode);
+			au_debug_off();
+			BUG();
+		}
+	}
+}

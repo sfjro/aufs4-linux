@@ -28,6 +28,7 @@
 
 /* kmem cache */
 enum {
+	AuCache_DINFO,
 	AuCache_ICNTNR,
 	AuCache_Last
 };
@@ -46,6 +47,7 @@ static inline struct au_##name *au_cache_alloc_##name(void) \
 static inline void au_cache_free_##name(struct au_##name *p) \
 { kmem_cache_free(au_cachep[AuCache_##index], p); }
 
+AuCacheFuncs(dinfo, DINFO);
 AuCacheFuncs(icntnr, ICNTNR);
 
 #endif /* __KERNEL__ */
