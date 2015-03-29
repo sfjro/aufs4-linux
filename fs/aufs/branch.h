@@ -37,6 +37,10 @@ struct au_xino_file {
 	struct mutex		xi_nondir_mtx;
 
 	/* todo: make xino files an array to support huge inode number */
+
+#ifdef CONFIG_DEBUG_FS
+	struct dentry		 *xi_dbgaufs;
+#endif
 };
 
 /* members for writable branch only */

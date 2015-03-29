@@ -20,4 +20,5 @@ aufs-y := module.o sbinfo.o super.o branch.o xino.o sysaufs.o opts.o \
 # all are boolean
 aufs-$(CONFIG_PROC_FS) += procfs.o plink.o
 aufs-$(CONFIG_SYSFS) += sysfs.o
+aufs-$(CONFIG_DEBUG_FS) += dbgaufs.o
 aufs-$(CONFIG_AUFS_DEBUG) += debug.o

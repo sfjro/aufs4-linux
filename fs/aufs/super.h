@@ -161,6 +161,11 @@ struct au_sbinfo {
 	 * but using sysfs is majority.
 	 */
 	struct kobject		si_kobj;
+#ifdef CONFIG_DEBUG_FS
+	struct dentry		 *si_dbgaufs;
+	struct dentry		 *si_dbgaufs_plink;
+	struct dentry		 *si_dbgaufs_xib;
+#endif
 
 #ifdef CONFIG_AUFS_SBILIST
 	struct list_head	si_list;
@@ -292,6 +297,22 @@ AuStubVoid(au_sbilist_add, struct super_block *sb)
 AuStubVoid(au_sbilist_del, struct super_block *sb)
 #define AuGFP_SBILIST	GFP_NOFS
 #endif
+
+/* ---------------------------------------------------------------------- */
+
+static inline void dbgaufs_si_null(struct au_sbinfo *sbinfo)
+{
+	/*
+	 * This function is a dynamic '__init' function actually,
+	 * so the tiny check for si_rwsem is unnecessary.
+	 */
+	/* AuRwMustWriteLock(&sbinfo->si_rwsem); */
+#ifdef CONFIG_DEBUG_FS
+	sbinfo->si_dbgaufs = NULL;
+	sbinfo->si_dbgaufs_plink = NULL;
+	sbinfo->si_dbgaufs_xib = NULL;
+#endif
+}
 
 /* ---------------------------------------------------------------------- */
 
