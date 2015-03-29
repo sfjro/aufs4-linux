@@ -215,6 +215,40 @@ static void au_call_do_plink_lkup(void *args)
 	*a->errp = au_do_plink_lkup(a->tgtname, a->h_parent, a->br);
 }
 
+/* lookup the plink-ed @inode under the branch at @bindex */
+struct dentry *au_plink_lkup(struct inode *inode, aufs_bindex_t bindex)
+{
+	struct dentry *h_dentry, *h_parent;
+	struct au_branch *br;
+	struct inode *h_dir;
+	int wkq_err;
+	char a[PLINK_NAME_LEN];
+	struct qstr tgtname = QSTR_INIT(a, 0);
+
+	AuDebugOn(au_plink_maint(inode->i_sb, AuLock_NOPLM));
+
+	br = au_sbr(inode->i_sb, bindex);
+	h_parent = br->br_wbr->wbr_plink;
+	h_dir = h_parent->d_inode;
+	tgtname.len = plink_name(a, sizeof(a), inode, bindex);
+
+	if (!uid_eq(current_fsuid(), GLOBAL_ROOT_UID)) {
+		struct au_do_plink_lkup_args args = {
+			.errp		= &h_dentry,
+			.tgtname	= &tgtname,
+			.h_parent	= h_parent,
+			.br		= br
+		};
+
+		wkq_err = au_wkq_wait(au_call_do_plink_lkup, &args);
+		if (unlikely(wkq_err))
+			h_dentry = ERR_PTR(wkq_err);
+	} else
+		h_dentry = au_do_plink_lkup(&tgtname, h_parent, br);
+
+	return h_dentry;
+}
+
 /* create a pseudo-link */
 static int do_whplink(struct qstr *tgt, struct dentry *h_parent,
 		      struct dentry *h_dentry, struct au_branch *br)

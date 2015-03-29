@@ -100,6 +100,48 @@ void au_update_iigen(struct inode *inode, int half)
 	spin_unlock(&iinfo->ii_genspin);
 }
 
+/* it may be called at remount time, too */
+void au_update_ibrange(struct inode *inode, int do_put_zero)
+{
+	struct au_iinfo *iinfo;
+	aufs_bindex_t bindex, bend;
+
+	iinfo = au_ii(inode);
+	if (!iinfo)
+		return;
+
+	IiMustWriteLock(inode);
+
+	if (do_put_zero && iinfo->ii_bstart >= 0) {
+		for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend;
+		     bindex++) {
+			struct inode *h_i;
+
+			h_i = iinfo->ii_hinode[0 + bindex].hi_inode;
+			if (h_i
+			    && !h_i->i_nlink
+			    && !(h_i->i_state & I_LINKABLE))
+				au_set_h_iptr(inode, bindex, NULL, 0);
+		}
+	}
+
+	iinfo->ii_bstart = -1;
+	iinfo->ii_bend = -1;
+	bend = au_sbend(inode->i_sb);
+	for (bindex = 0; bindex <= bend; bindex++)
+		if (iinfo->ii_hinode[0 + bindex].hi_inode) {
+			iinfo->ii_bstart = bindex;
+			break;
+		}
+	if (iinfo->ii_bstart >= 0)
+		for (bindex = bend; bindex >= iinfo->ii_bstart; bindex--)
+			if (iinfo->ii_hinode[0 + bindex].hi_inode) {
+				iinfo->ii_bend = bindex;
+				break;
+			}
+	AuDebugOn(iinfo->ii_bstart > iinfo->ii_bend);
+}
+
 /* ---------------------------------------------------------------------- */
 
 void au_icntnr_init_once(void *_c)
