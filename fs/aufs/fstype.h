@@ -73,6 +73,15 @@ static inline int au_test_nfs(struct super_block *sb __maybe_unused)
 #endif
 }
 
+static inline int au_test_fuse(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_FUSE_FS) || defined(CONFIG_FUSE_FS_MODULE)
+	return sb->s_magic == FUSE_SUPER_MAGIC;
+#else
+	return 0;
+#endif
+}
+
 static inline int au_test_xfs(struct super_block *sb __maybe_unused)
 {
 #if defined(CONFIG_XFS_FS) || defined(CONFIG_XFS_FS_MODULE)
@@ -269,6 +278,25 @@ static inline int au_test_fs_remote(struct super_block *sb)
 /* ---------------------------------------------------------------------- */
 
 /*
+ * Note: these functions (below) are created after reading ->getattr() in all
+ * filesystems under linux/fs. it means we have to do so in every update...
+ */
+
+/*
+ * some filesystems require getattr to refresh the inode attributes before
+ * referencing.
+ * in most cases, we can rely on the inode attribute in NFS (or every remote fs)
+ * and leave the work for d_revalidate()
+ */
+static inline int au_test_fs_refresh_iattr(struct super_block *sb)
+{
+	return au_test_nfs(sb)
+		|| au_test_fuse(sb)
+		/* || au_test_btrfs(sb) */	/* untested */
+		;
+}
+
+/*
  * filesystems which don't maintain i_size or i_blocks.
  */
 static inline int au_test_fs_bad_iattr_size(struct super_block *sb)
@@ -310,6 +338,7 @@ static inline int au_test_fs_no_limit_nlink(struct super_block *sb)
 static inline int au_test_fs_notime(struct super_block *sb)
 {
 	return au_test_nfs(sb)
+		|| au_test_fuse(sb)
 		|| au_test_ubifs(sb)
 		;
 }

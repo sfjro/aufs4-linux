@@ -19,7 +19,6 @@
  * move-down, opposite of copy-up
  */
 
-#include <linux/uaccess.h>
 #include "aufs.h"
 
 struct au_mvd_args {

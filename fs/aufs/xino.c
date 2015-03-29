@@ -20,7 +20,6 @@
  */
 
 #include <linux/seq_file.h>
-#include <linux/uaccess.h>
 #include <linux/statfs.h>
 #include "aufs.h"
 

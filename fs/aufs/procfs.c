@@ -20,7 +20,6 @@
  */
 
 #include <linux/proc_fs.h>
-#include <linux/uaccess.h>
 #include "aufs.h"
 
 static int au_procfs_plm_release(struct inode *inode, struct file *file)

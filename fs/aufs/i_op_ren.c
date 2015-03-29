@@ -351,6 +351,7 @@ static int do_rename(struct au_ren_args *a)
 	/* update target timestamps */
 	AuDebugOn(au_dbstart(a->src_dentry) != a->btgt);
 	a->h_path.dentry = au_h_dptr(a->src_dentry, a->btgt);
+	vfsub_update_h_iattr(&a->h_path, /*did*/NULL); /*ignore*/
 	a->src_inode->i_ctime = a->h_path.dentry->d_inode->i_ctime;
 
 	/* remove whiteout for dentry */

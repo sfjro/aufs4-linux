@@ -129,6 +129,21 @@ config AUFS_BR_RAMFS
 	Unless you are going to use ramfs as an aufs branch fs without
 	switch_root or something, leave it N.
 
+config AUFS_BR_FUSE
+	bool "Fuse fs as an aufs branch"
+	depends on FUSE_FS
+	select AUFS_POLL
+	help
+	If you want to use fuse-based userspace filesystem as an aufs
+	branch fs, then enable this option.
+	It implements the internal poll(2) operation which is
+	implemented by fuse only (curretnly).
+
+config AUFS_POLL
+	bool
+	help
+	Automatic configuration for internal use.
+
 config AUFS_BR_HFSPLUS
 	bool "Hfsplus as an aufs branch"
 	depends on HFSPLUS_FS

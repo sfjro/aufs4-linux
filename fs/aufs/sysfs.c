@@ -21,7 +21,6 @@
 
 #include <linux/compat.h>
 #include <linux/seq_file.h>
-#include <linux/uaccess.h>
 #include "aufs.h"
 
 static struct attribute *au_attr[] = {

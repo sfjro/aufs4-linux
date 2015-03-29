@@ -21,7 +21,6 @@
 
 #include <linux/fs_stack.h>
 #include <linux/mm.h>
-#include <linux/uaccess.h>
 #include "aufs.h"
 
 void au_cpup_attr_flags(struct inode *dst, unsigned int iflags)

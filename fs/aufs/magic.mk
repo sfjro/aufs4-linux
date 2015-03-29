@@ -1,4 +1,10 @@
 
+# defined in ${srctree}/fs/fuse/inode.c
+# tristate
+ifdef CONFIG_FUSE_FS
+ccflags-y += -DFUSE_SUPER_MAGIC=0x65735546
+endif
+
 # defined in ${srctree}/fs/xfs/xfs_sb.h
 # tristate
 ifdef CONFIG_XFS_FS

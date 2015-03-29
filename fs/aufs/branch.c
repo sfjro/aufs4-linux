@@ -21,7 +21,6 @@
 
 #include <linux/compat.h>
 #include <linux/statfs.h>
-#include <linux/uaccess.h>
 #include "aufs.h"
 
 /*
