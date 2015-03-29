@@ -65,6 +65,8 @@ struct au_finfo {
 unsigned int au_file_roflags(unsigned int flags);
 struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 		       struct file *file);
+int au_reval_and_lock_fdi(struct file *file, int (*reopen)(struct file *file),
+			  int wlock);
 
 /* finfo.c */
 void au_hfput(struct au_hfile *hf, struct file *file);
