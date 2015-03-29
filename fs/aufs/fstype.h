@@ -122,6 +122,38 @@ static inline int au_test_configfs(struct super_block *sb __maybe_unused)
 #endif
 }
 
+static inline int au_test_minix(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_MINIX_FS) || defined(CONFIG_MINIX_FS_MODULE)
+	return sb->s_magic == MINIX3_SUPER_MAGIC
+		|| sb->s_magic == MINIX2_SUPER_MAGIC
+		|| sb->s_magic == MINIX2_SUPER_MAGIC2
+		|| sb->s_magic == MINIX_SUPER_MAGIC
+		|| sb->s_magic == MINIX_SUPER_MAGIC2;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_fat(struct super_block *sb __maybe_unused)
+{
+#if defined(CONFIG_FAT_FS) || defined(CONFIG_FAT_FS_MODULE)
+	return sb->s_magic == MSDOS_SUPER_MAGIC;
+#else
+	return 0;
+#endif
+}
+
+static inline int au_test_msdos(struct super_block *sb)
+{
+	return au_test_fat(sb);
+}
+
+static inline int au_test_vfat(struct super_block *sb)
+{
+	return au_test_fat(sb);
+}
+
 static inline int au_test_securityfs(struct super_block *sb __maybe_unused)
 {
 #ifdef CONFIG_SECURITYFS
@@ -204,6 +236,18 @@ static inline int au_test_fs_bad_iattr_size(struct super_block *sb)
 		|| au_test_ubifs(sb)
 		/* || au_test_minix(sb) */	/* untested */
 		;
+}
+
+/*
+ * filesystems which don't store the correct value in some of their inode
+ * attributes.
+ */
+static inline int au_test_fs_bad_iattr(struct super_block *sb)
+{
+	return au_test_fs_bad_iattr_size(sb)
+		|| au_test_fat(sb)
+		|| au_test_msdos(sb)
+		|| au_test_vfat(sb);
 }
 
 /* they don't check i_nlink in link(2) */
