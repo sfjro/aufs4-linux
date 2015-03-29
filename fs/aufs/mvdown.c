@@ -223,7 +223,7 @@ static int au_do_cpdown(const unsigned char dmsg, struct au_mvd_args *a)
 		.bsrc	= a->mvd_bsrc,
 		.len	= -1,
 		.pin	= &a->mvd_pin_dst,
-		.flags	= AuCpup_DTIME
+		.flags	= AuCpup_DTIME | AuCpup_HOPEN
 	};
 
 	AuDbg("b%d, b%d\n", cpg.bsrc, cpg.bdst);

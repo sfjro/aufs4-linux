@@ -121,7 +121,7 @@ static int au_cmoo(struct dentry *dentry)
 		.bsrc	= -1,
 		.len	= -1,
 		.pin	= &pin,
-		.flags	= AuCpup_DTIME
+		.flags	= AuCpup_DTIME | AuCpup_HOPEN
 	};
 	struct inode *delegated;
 	struct super_block *sb;
@@ -389,6 +389,7 @@ int au_ready_to_write(struct file *file, loff_t len, struct au_pin *pin)
 	struct dentry *parent;
 	struct inode *inode;
 	struct super_block *sb;
+	struct file *h_file;
 	struct au_cp_generic cpg = {
 		.dentry	= file->f_path.dentry,
 		.bdst	= -1,
@@ -435,12 +436,22 @@ int au_ready_to_write(struct file *file, loff_t len, struct au_pin *pin)
 	if (dbstart <= cpg.bdst		/* just reopen */
 	    || !d_unhashed(cpg.dentry)	/* copyup and reopen */
 		) {
-		di_downgrade_lock(parent, AuLock_IR);
-		if (dbstart > cpg.bdst)
-			err = au_sio_cpup_simple(&cpg);
-		if (!err)
-			err = au_reopen_nondir(file);
+		h_file = au_h_open_pre(cpg.dentry, cpg.bsrc, /*force_wr*/0);
+		if (IS_ERR(h_file))
+			err = PTR_ERR(h_file);
+		else {
+			di_downgrade_lock(parent, AuLock_IR);
+			if (dbstart > cpg.bdst)
+				err = au_sio_cpup_simple(&cpg);
+			if (!err)
+				err = au_reopen_nondir(file);
+			au_h_open_post(cpg.dentry, cpg.bsrc, h_file);
+		}
 	} else {			/* copyup as wh and reopen */
+		/*
+		 * since writable hfsplus branch is not supported,
+		 * h_open_pre/post() are unnecessary.
+		 */
 		err = au_ready_to_write_wh(file, len, cpg.bdst, pin);
 		di_downgrade_lock(parent, AuLock_IR);
 	}

@@ -937,7 +937,7 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 				.bsrc	= a->src_bstart,
 				.len	= -1,
 				.pin	= &pin,
-				.flags	= AuCpup_DTIME
+				.flags	= AuCpup_DTIME | AuCpup_HOPEN
 			};
 			AuDebugOn(au_dbstart(a->src_dentry) != a->src_bstart);
 			err = au_sio_cpup_simple(&cpg);

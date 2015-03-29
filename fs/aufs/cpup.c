@@ -950,6 +950,14 @@ static int au_do_sio_cpup_simple(struct au_cp_generic *cpg)
 
 	dentry = cpg->dentry;
 	h_file = NULL;
+	if (au_ftest_cpup(cpg->flags, HOPEN)) {
+		AuDebugOn(cpg->bsrc < 0);
+		h_file = au_h_open_pre(dentry, cpg->bsrc, /*force_wr*/0);
+		err = PTR_ERR(h_file);
+		if (IS_ERR(h_file))
+			goto out;
+	}
+
 	parent = dget_parent(dentry);
 	h_dir = au_h_iptr(parent->d_inode, cpg->bdst);
 	if (!au_test_h_perm_sio(h_dir, MAY_EXEC | MAY_WRITE)
@@ -966,7 +974,10 @@ static int au_do_sio_cpup_simple(struct au_cp_generic *cpg)
 	}
 
 	dput(parent);
+	if (h_file)
+		au_h_open_post(dentry, cpg->bsrc, h_file);
 
+out:
 	return err;
 }
 
@@ -1135,6 +1146,7 @@ int au_sio_cpup_wh(struct au_cp_generic *cpg, struct file *file)
 		au_set_h_iptr(dir, bdst, au_igrab(h_tmpdir), /*flags*/0);
 
 		mutex_lock_nested(&h_tmpdir->i_mutex, AuLsc_I_PARENT3);
+		/* todo: au_h_open_pre()? */
 
 		pin_orig = cpg->pin;
 		au_pin_init(&wh_pin, dentry, bdst, AuLsc_DI_PARENT,
@@ -1158,6 +1170,7 @@ int au_sio_cpup_wh(struct au_cp_generic *cpg, struct file *file)
 
 	if (h_orph) {
 		mutex_unlock(&h_tmpdir->i_mutex);
+		/* todo: au_h_open_post()? */
 		au_set_h_iptr(dir, bdst, au_igrab(h_dir), /*flags*/0);
 		au_set_h_dptr(parent, bdst, h_parent);
 		AuDebugOn(!pin_orig);

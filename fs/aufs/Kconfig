@@ -108,6 +108,15 @@ config AUFS_RDU
 	shows better performance in most cases.
 	See detail in aufs.5.
 
+config AUFS_BR_HFSPLUS
+	bool "Hfsplus as an aufs branch"
+	depends on HFSPLUS_FS
+	default y
+	help
+	If you want to use hfsplus fs as an aufs branch fs, then enable
+	this option. This option introduces a small overhead at
+	copying-up a file on hfsplus.
+
 config AUFS_BDEV_LOOP
 	bool
 	depends on BLK_DEV_LOOP

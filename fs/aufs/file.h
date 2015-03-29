@@ -82,6 +82,19 @@ int au_reval_and_lock_fdi(struct file *file, int (*reopen)(struct file *file),
 int au_do_flush(struct file *file, fl_owner_t id,
 		int (*flush)(struct file *file, fl_owner_t id));
 
+#ifdef CONFIG_AUFS_BR_HFSPLUS
+/* hfsplus.c */
+struct file *au_h_open_pre(struct dentry *dentry, aufs_bindex_t bindex,
+			   int force_wr);
+void au_h_open_post(struct dentry *dentry, aufs_bindex_t bindex,
+		    struct file *h_file);
+#else
+AuStub(struct file *, au_h_open_pre, return NULL, struct dentry *dentry,
+       aufs_bindex_t bindex, int force_wr)
+AuStubVoid(au_h_open_post, struct dentry *dentry, aufs_bindex_t bindex,
+	   struct file *h_file);
+#endif
+
 /* f_op.c */
 extern const struct file_operations aufs_file_fop;
 int au_do_open_nondir(struct file *file, int flags);
