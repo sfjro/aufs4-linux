@@ -48,6 +48,9 @@ static int __init au_cache_init(void)
 		au_cachep[AuCache_ICNTNR] = AuCacheCtor(au_icntnr,
 							au_icntnr_init_once);
 	if (au_cachep[AuCache_ICNTNR])
+		au_cachep[AuCache_FINFO] = AuCacheCtor(au_finfo,
+						       au_fi_init_once);
+	if (au_cachep[AuCache_FINFO])
 		return 0;
 
 	return -ENOMEM;

@@ -19,7 +19,6 @@
  * external inode number translation table and bitmap
  */
 
-#include <linux/file.h>
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
 #include "aufs.h"

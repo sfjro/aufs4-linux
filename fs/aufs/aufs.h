@@ -38,6 +38,7 @@
 #include "cpup.h"
 #include "dcsub.h"
 #include "dentry.h"
+#include "file.h"
 #include "fstype.h"
 #include "inode.h"
 #include "module.h"

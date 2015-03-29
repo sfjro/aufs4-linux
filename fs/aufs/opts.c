@@ -19,7 +19,6 @@
  * mount options/flags
  */
 
-#include <linux/file.h>
 #include <linux/namei.h>
 #include <linux/types.h> /* a distribution requires */
 #include <linux/parser.h>

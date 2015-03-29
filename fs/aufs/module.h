@@ -52,6 +52,7 @@ AuStubVoid(au_procfs_fin, void);
 enum {
 	AuCache_DINFO,
 	AuCache_ICNTNR,
+	AuCache_FINFO,
 	AuCache_Last
 };
 
@@ -71,6 +72,7 @@ static inline void au_cache_free_##name(struct au_##name *p) \
 
 AuCacheFuncs(dinfo, DINFO);
 AuCacheFuncs(icntnr, ICNTNR);
+AuCacheFuncs(finfo, FINFO);
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_MODULE_H__ */

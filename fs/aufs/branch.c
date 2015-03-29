@@ -19,7 +19,6 @@
  * branch management
  */
 
-#include <linux/file.h>
 #include <linux/statfs.h>
 #include "aufs.h"
 

@@ -96,6 +96,8 @@ struct inode;
 void au_dpri_inode(struct inode *inode);
 void au_dpri_dalias(struct inode *inode);
 void au_dpri_dentry(struct dentry *dentry);
+struct file;
+void au_dpri_file(struct file *filp);
 struct super_block;
 void au_dpri_sb(struct super_block *sb);
 
@@ -125,6 +127,13 @@ void au_dbg_verify_kthread(void);
 	mutex_unlock(&au_dbg_mtx); \
 } while (0)
 
+#define AuDbgFile(f) do { \
+	mutex_lock(&au_dbg_mtx); \
+	AuDbg(#f "\n"); \
+	au_dpri_file(f); \
+	mutex_unlock(&au_dbg_mtx); \
+} while (0)
+
 #define AuDbgSb(sb) do { \
 	mutex_lock(&au_dbg_mtx); \
 	AuDbg(#sb "\n"); \
@@ -139,6 +148,7 @@ AuStubVoid(au_dbg_verify_kthread, void)
 #define AuDbgInode(i)		do {} while (0)
 #define AuDbgDAlias(i)		do {} while (0)
 #define AuDbgDentry(d)		do {} while (0)
+#define AuDbgFile(f)		do {} while (0)
 #define AuDbgSb(sb)		do {} while (0)
 #endif /* CONFIG_AUFS_DEBUG */
 
