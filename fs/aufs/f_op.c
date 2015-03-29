@@ -19,8 +19,10 @@
  * file and vm operations
  */
 
+#include <linux/aio.h>
 #include <linux/fs_stack.h>
 #include <linux/mman.h>
+#include <linux/security.h>
 #include "aufs.h"
 
 int au_do_open_nondir(struct file *file, int flags)
@@ -89,6 +91,401 @@ int aufs_release_nondir(struct inode *inode __maybe_unused, struct file *file)
 
 	au_finfo_fin(file);
 	return 0;
+}
+
+/* ---------------------------------------------------------------------- */
+
+static int au_do_flush_nondir(struct file *file, fl_owner_t id)
+{
+	int err;
+	struct file *h_file;
+
+	err = 0;
+	h_file = au_hf_top(file);
+	if (h_file)
+		err = vfsub_flush(h_file, id);
+	return err;
+}
+
+static int aufs_flush_nondir(struct file *file, fl_owner_t id)
+{
+	return au_do_flush(file, id, au_do_flush_nondir);
+}
+
+/* ---------------------------------------------------------------------- */
+/*
+ * read and write functions acquire [fdi]_rwsem once, but release before
+ * mmap_sem. This is because to stop a race condition between mmap(2).
+ * Releasing these aufs-rwsem should be safe, no branch-mamagement (by keeping
+ * si_rwsem), no harmful copy-up should happen. Actually copy-up may happen in
+ * read functions after [fdi]_rwsem are released, but it should be harmless.
+ */
+
+static ssize_t aufs_read(struct file *file, char __user *buf, size_t count,
+			 loff_t *ppos)
+{
+	ssize_t err;
+	struct dentry *dentry;
+	struct file *h_file;
+	struct super_block *sb;
+
+	dentry = file->f_path.dentry;
+	sb = dentry->d_sb;
+	si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLMW);
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/0);
+	if (unlikely(err))
+		goto out;
+
+	h_file = au_hf_top(file);
+	get_file(h_file);
+	di_read_unlock(dentry, AuLock_IR);
+	fi_read_unlock(file);
+
+	/* filedata may be obsoleted by concurrent copyup, but no problem */
+	err = vfsub_read_u(h_file, buf, count, ppos);
+	/* todo: necessary? */
+	/* file->f_ra = h_file->f_ra; */
+	/* update without lock, I don't think it a problem */
+	fsstack_copy_attr_atime(dentry->d_inode, file_inode(h_file));
+	fput(h_file);
+
+out:
+	si_read_unlock(sb);
+	return err;
+}
+
+/*
+ * todo: very ugly
+ * it locks both of i_mutex and si_rwsem for read in safe.
+ * if the plink maintenance mode continues forever (that is the problem),
+ * may loop forever.
+ */
+static void au_mtx_and_read_lock(struct inode *inode)
+{
+	int err;
+	struct super_block *sb = inode->i_sb;
+
+	while (1) {
+		mutex_lock(&inode->i_mutex);
+		err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
+		if (!err)
+			break;
+		mutex_unlock(&inode->i_mutex);
+		si_read_lock(sb, AuLock_NOPLMW);
+		si_read_unlock(sb);
+	}
+}
+
+static ssize_t aufs_write(struct file *file, const char __user *ubuf,
+			  size_t count, loff_t *ppos)
+{
+	ssize_t err;
+	blkcnt_t blks;
+	aufs_bindex_t bstart;
+	struct au_pin pin;
+	struct dentry *dentry;
+	struct inode *inode, *h_inode;
+	struct super_block *sb;
+	struct file *h_file;
+	char __user *buf = (char __user *)ubuf;
+
+	dentry = file->f_path.dentry;
+	sb = dentry->d_sb;
+	inode = dentry->d_inode;
+	au_mtx_and_read_lock(inode);
+
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/1);
+	if (unlikely(err))
+		goto out;
+
+	err = au_ready_to_write(file, -1, &pin);
+	di_downgrade_lock(dentry, AuLock_IR);
+	if (unlikely(err)) {
+		di_read_unlock(dentry, AuLock_IR);
+		fi_write_unlock(file);
+		goto out;
+	}
+
+	bstart = au_fbstart(file);
+	h_file = au_hf_top(file);
+	get_file(h_file);
+	h_inode = file_inode(h_file);
+	blks = h_inode->i_blocks;
+	au_unpin(&pin);
+	di_read_unlock(dentry, AuLock_IR);
+	fi_write_unlock(file);
+
+	err = vfsub_write_u(h_file, buf, count, ppos);
+	ii_write_lock_child(inode);
+	au_cpup_attr_timesizes(inode);
+	inode->i_mode = file_inode(h_file)->i_mode;
+	ii_write_unlock(inode);
+	fput(h_file);
+
+out:
+	si_read_unlock(sb);
+	mutex_unlock(&inode->i_mutex);
+	return err;
+}
+
+static ssize_t au_do_iter(struct file *h_file, int rw, struct kiocb *kio,
+			  struct iov_iter *iov_iter)
+{
+	ssize_t err;
+	struct file *file;
+	ssize_t (*iter)(struct kiocb *, struct iov_iter *);
+	ssize_t (*aio)(struct kiocb *, const struct iovec *, unsigned long,
+		       loff_t);
+
+	err = security_file_permission(h_file, rw);
+	if (unlikely(err))
+		goto out;
+
+	err = -ENOSYS;
+	iter = NULL;
+	aio = NULL;
+	if (rw == MAY_READ) {
+		iter = h_file->f_op->read_iter;
+		aio = h_file->f_op->aio_read;
+	} else if (rw == MAY_WRITE) {
+		iter = h_file->f_op->write_iter;
+		aio = h_file->f_op->aio_write;
+	}
+
+	file = kio->ki_filp;
+	kio->ki_filp = h_file;
+	if (iter) {
+		lockdep_off();
+		err = iter(kio, iov_iter);
+		lockdep_on();
+	} else if (aio) {
+		lockdep_off();
+		err = aio(kio, iov_iter->iov, iov_iter->nr_segs, kio->ki_pos);
+		lockdep_on();
+	} else
+		/* currently there is no such fs */
+		WARN_ON_ONCE(1);
+	kio->ki_filp = file;
+
+out:
+	return err;
+}
+
+static ssize_t aufs_read_iter(struct kiocb *kio, struct iov_iter *iov_iter)
+{
+	ssize_t err;
+	struct file *file, *h_file;
+	struct dentry *dentry;
+	struct super_block *sb;
+
+	file = kio->ki_filp;
+	dentry = file->f_path.dentry;
+	sb = dentry->d_sb;
+	si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLMW);
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/0);
+	if (unlikely(err))
+		goto out;
+
+	h_file = au_hf_top(file);
+	get_file(h_file);
+	di_read_unlock(dentry, AuLock_IR);
+	fi_read_unlock(file);
+
+	err = au_do_iter(h_file, MAY_READ, kio, iov_iter);
+	/* todo: necessary? */
+	/* file->f_ra = h_file->f_ra; */
+	/* update without lock, I don't think it a problem */
+	fsstack_copy_attr_atime(dentry->d_inode, file_inode(h_file));
+	fput(h_file);
+
+out:
+	si_read_unlock(sb);
+	return err;
+}
+
+static ssize_t aufs_write_iter(struct kiocb *kio, struct iov_iter *iov_iter)
+{
+	ssize_t err;
+	blkcnt_t blks;
+	aufs_bindex_t bstart;
+	struct au_pin pin;
+	struct dentry *dentry;
+	struct inode *inode, *h_inode;
+	struct file *file, *h_file;
+	struct super_block *sb;
+
+	file = kio->ki_filp;
+	dentry = file->f_path.dentry;
+	sb = dentry->d_sb;
+	inode = dentry->d_inode;
+	au_mtx_and_read_lock(inode);
+
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/1);
+	if (unlikely(err))
+		goto out;
+
+	err = au_ready_to_write(file, -1, &pin);
+	di_downgrade_lock(dentry, AuLock_IR);
+	if (unlikely(err)) {
+		di_read_unlock(dentry, AuLock_IR);
+		fi_write_unlock(file);
+		goto out;
+	}
+
+	bstart = au_fbstart(file);
+	h_file = au_hf_top(file);
+	get_file(h_file);
+	h_inode = file_inode(h_file);
+	blks = h_inode->i_blocks;
+	au_unpin(&pin);
+	di_read_unlock(dentry, AuLock_IR);
+	fi_write_unlock(file);
+
+	err = au_do_iter(h_file, MAY_WRITE, kio, iov_iter);
+	ii_write_lock_child(inode);
+	au_cpup_attr_timesizes(inode);
+	inode->i_mode = file_inode(h_file)->i_mode;
+	ii_write_unlock(inode);
+	fput(h_file);
+
+out:
+	si_read_unlock(sb);
+	mutex_unlock(&inode->i_mutex);
+	return err;
+}
+
+static ssize_t aufs_splice_read(struct file *file, loff_t *ppos,
+				struct pipe_inode_info *pipe, size_t len,
+				unsigned int flags)
+{
+	ssize_t err;
+	struct file *h_file;
+	struct dentry *dentry;
+	struct super_block *sb;
+
+	dentry = file->f_path.dentry;
+	sb = dentry->d_sb;
+	si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLMW);
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/0);
+	if (unlikely(err))
+		goto out;
+
+	err = -EINVAL;
+	h_file = au_hf_top(file);
+	get_file(h_file);
+	di_read_unlock(dentry, AuLock_IR);
+	fi_read_unlock(file);
+
+	err = vfsub_splice_to(h_file, ppos, pipe, len, flags);
+	/* todo: necessasry? */
+	/* file->f_ra = h_file->f_ra; */
+	/* update without lock, I don't think it a problem */
+	fsstack_copy_attr_atime(dentry->d_inode, file_inode(h_file));
+	fput(h_file);
+
+out:
+	si_read_unlock(sb);
+	return err;
+}
+
+static ssize_t
+aufs_splice_write(struct pipe_inode_info *pipe, struct file *file, loff_t *ppos,
+		  size_t len, unsigned int flags)
+{
+	ssize_t err;
+	blkcnt_t blks;
+	aufs_bindex_t bstart;
+	struct au_pin pin;
+	struct dentry *dentry;
+	struct inode *inode, *h_inode;
+	struct super_block *sb;
+	struct file *h_file;
+
+	dentry = file->f_path.dentry;
+	sb = dentry->d_sb;
+	inode = dentry->d_inode;
+	au_mtx_and_read_lock(inode);
+
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/1);
+	if (unlikely(err))
+		goto out;
+
+	err = au_ready_to_write(file, -1, &pin);
+	di_downgrade_lock(dentry, AuLock_IR);
+	if (unlikely(err)) {
+		di_read_unlock(dentry, AuLock_IR);
+		fi_write_unlock(file);
+		goto out;
+	}
+
+	bstart = au_fbstart(file);
+	h_file = au_hf_top(file);
+	get_file(h_file);
+	h_inode = file_inode(h_file);
+	blks = h_inode->i_blocks;
+	au_unpin(&pin);
+	di_read_unlock(dentry, AuLock_IR);
+	fi_write_unlock(file);
+
+	err = vfsub_splice_from(pipe, h_file, ppos, len, flags);
+	ii_write_lock_child(inode);
+	au_cpup_attr_timesizes(inode);
+	inode->i_mode = file_inode(h_file)->i_mode;
+	ii_write_unlock(inode);
+	fput(h_file);
+
+out:
+	si_read_unlock(sb);
+	mutex_unlock(&inode->i_mutex);
+	return err;
+}
+
+static long aufs_fallocate(struct file *file, int mode, loff_t offset,
+			   loff_t len)
+{
+	long err;
+	struct au_pin pin;
+	struct dentry *dentry;
+	struct super_block *sb;
+	struct inode *inode;
+	struct file *h_file;
+
+	dentry = file->f_path.dentry;
+	sb = dentry->d_sb;
+	inode = dentry->d_inode;
+	au_mtx_and_read_lock(inode);
+
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/1);
+	if (unlikely(err))
+		goto out;
+
+	err = au_ready_to_write(file, -1, &pin);
+	di_downgrade_lock(dentry, AuLock_IR);
+	if (unlikely(err)) {
+		di_read_unlock(dentry, AuLock_IR);
+		fi_write_unlock(file);
+		goto out;
+	}
+
+	h_file = au_hf_top(file);
+	get_file(h_file);
+	au_unpin(&pin);
+	di_read_unlock(dentry, AuLock_IR);
+	fi_write_unlock(file);
+
+	lockdep_off();
+	err = vfs_fallocate(h_file, mode, offset, len);
+	lockdep_on();
+	ii_write_lock_child(inode);
+	au_cpup_attr_timesizes(inode);
+	inode->i_mode = file_inode(h_file)->i_mode;
+	ii_write_unlock(inode);
+	fput(h_file);
+
+out:
+	si_read_unlock(sb);
+	mutex_unlock(&inode->i_mutex);
+	return err;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -222,10 +619,171 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+static int aufs_fsync_nondir(struct file *file, loff_t start, loff_t end,
+			     int datasync)
+{
+	int err;
+	struct au_pin pin;
+	struct dentry *dentry;
+	struct inode *inode;
+	struct file *h_file;
+	struct super_block *sb;
+
+	dentry = file->f_path.dentry;
+	inode = dentry->d_inode;
+	sb = dentry->d_sb;
+	mutex_lock(&inode->i_mutex);
+	err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
+	if (unlikely(err))
+		goto out;
+
+	err = 0; /* -EBADF; */ /* posix? */
+	if (unlikely(!(file->f_mode & FMODE_WRITE)))
+		goto out_si;
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/1);
+	if (unlikely(err))
+		goto out_si;
+
+	err = au_ready_to_write(file, -1, &pin);
+	di_downgrade_lock(dentry, AuLock_IR);
+	if (unlikely(err))
+		goto out_unlock;
+	au_unpin(&pin);
+
+	err = -EINVAL;
+	h_file = au_hf_top(file);
+	err = vfsub_fsync(h_file, &h_file->f_path, datasync);
+	au_cpup_attr_timesizes(inode);
+
+out_unlock:
+	di_read_unlock(dentry, AuLock_IR);
+	fi_write_unlock(file);
+out_si:
+	si_read_unlock(sb);
+out:
+	mutex_unlock(&inode->i_mutex);
+	return err;
+}
+
+/* no one supports this operation, currently */
+#if 0
+static int aufs_aio_fsync_nondir(struct kiocb *kio, int datasync)
+{
+	int err;
+	struct au_pin pin;
+	struct dentry *dentry;
+	struct inode *inode;
+	struct file *file, *h_file;
+
+	file = kio->ki_filp;
+	dentry = file->f_path.dentry;
+	inode = dentry->d_inode;
+	au_mtx_and_read_lock(inode);
+
+	err = 0; /* -EBADF; */ /* posix? */
+	if (unlikely(!(file->f_mode & FMODE_WRITE)))
+		goto out;
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/1);
+	if (unlikely(err))
+		goto out;
+
+	err = au_ready_to_write(file, -1, &pin);
+	di_downgrade_lock(dentry, AuLock_IR);
+	if (unlikely(err))
+		goto out_unlock;
+	au_unpin(&pin);
+
+	err = -ENOSYS;
+	h_file = au_hf_top(file);
+	if (h_file->f_op->aio_fsync) {
+		struct mutex *h_mtx;
+
+		h_mtx = &file_inode(h_file)->i_mutex;
+		if (!is_sync_kiocb(kio)) {
+			get_file(h_file);
+			fput(file);
+		}
+		kio->ki_filp = h_file;
+		err = h_file->f_op->aio_fsync(kio, datasync);
+		mutex_lock_nested(h_mtx, AuLsc_I_CHILD);
+		if (!err)
+			vfsub_update_h_iattr(&h_file->f_path, /*did*/NULL);
+		/*ignore*/
+		au_cpup_attr_timesizes(inode);
+		mutex_unlock(h_mtx);
+	}
+
+out_unlock:
+	di_read_unlock(dentry, AuLock_IR);
+	fi_write_unlock(file);
+out:
+	si_read_unlock(inode->sb);
+	mutex_unlock(&inode->i_mutex);
+	return err;
+}
+#endif
+
+static int aufs_fasync(int fd, struct file *file, int flag)
+{
+	int err;
+	struct file *h_file;
+	struct dentry *dentry;
+	struct super_block *sb;
+
+	dentry = file->f_path.dentry;
+	sb = dentry->d_sb;
+	si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLMW);
+	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/0);
+	if (unlikely(err))
+		goto out;
+
+	h_file = au_hf_top(file);
+	if (h_file->f_op->fasync)
+		err = h_file->f_op->fasync(fd, h_file, flag);
+
+	di_read_unlock(dentry, AuLock_IR);
+	fi_read_unlock(file);
+
+out:
+	si_read_unlock(sb);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/* no one supports this operation, currently */
+#if 0
+static ssize_t aufs_sendpage(struct file *file, struct page *page, int offset,
+			     size_t len, loff_t *pos, int more)
+{
+}
+#endif
+
+/* ---------------------------------------------------------------------- */
+
 const struct file_operations aufs_file_fop = {
 	.owner		= THIS_MODULE,
 
+	.llseek		= default_llseek,
+
+	.read		= aufs_read,
+	.write		= aufs_write,
+	.read_iter	= aufs_read_iter,
+	.write_iter	= aufs_write_iter,
+
 	.mmap		= aufs_mmap,
 	.open		= aufs_open_nondir,
-	.release	= aufs_release_nondir
+	.flush		= aufs_flush_nondir,
+	.release	= aufs_release_nondir,
+	.fsync		= aufs_fsync_nondir,
+	/* .aio_fsync	= aufs_aio_fsync_nondir, */
+	.fasync		= aufs_fasync,
+	/* .sendpage	= aufs_sendpage, */
+	.splice_write	= aufs_splice_write,
+	.splice_read	= aufs_splice_read,
+#if 0
+	.aio_splice_write = aufs_aio_splice_write,
+	.aio_splice_read  = aufs_aio_splice_read,
+#endif
+	.fallocate	= aufs_fallocate
 };

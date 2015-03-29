@@ -327,6 +327,30 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+int au_do_flush(struct file *file, fl_owner_t id,
+		int (*flush)(struct file *file, fl_owner_t id))
+{
+	int err;
+	struct super_block *sb;
+	struct inode *inode;
+
+	inode = file_inode(file);
+	sb = inode->i_sb;
+	si_noflush_read_lock(sb);
+	fi_read_lock(file);
+	ii_read_lock_child(inode);
+
+	err = flush(file, id);
+	au_cpup_attr_timesizes(inode);
+
+	ii_read_unlock(inode);
+	fi_read_unlock(file);
+	si_read_unlock(sb);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
 static int au_file_refresh_by_inode(struct file *file, int *need_reopen)
 {
 	int err;

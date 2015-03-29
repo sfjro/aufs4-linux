@@ -76,6 +76,8 @@ struct au_pin;
 int au_ready_to_write(struct file *file, loff_t len, struct au_pin *pin);
 int au_reval_and_lock_fdi(struct file *file, int (*reopen)(struct file *file),
 			  int wlock);
+int au_do_flush(struct file *file, fl_owner_t id,
+		int (*flush)(struct file *file, fl_owner_t id));
 
 /* f_op.c */
 extern const struct file_operations aufs_file_fop;
