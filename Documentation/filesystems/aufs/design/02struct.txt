@@ -103,6 +103,31 @@ dynamically, a branch has its own id. When the branch order changes,
 aufs finds the new index by searching the branch id.
 
 
+Pseudo-link
+----------------------------------------------------------------------
+Assume "fileA" exists on the lower readonly branch only and it is
+hardlinked to "fileB" on the branch. When you write something to fileA,
+aufs copies-up it to the upper writable branch. Additionally aufs
+creates a hardlink under the Pseudo-link Directory of the writable
+branch. The inode of a pseudo-link is kept in aufs super_block as a
+simple list. If fileB is read after unlinking fileA, aufs returns
+filedata from the pseudo-link instead of the lower readonly
+branch. Because the pseudo-link is based upon the inode, to keep the
+inode number by xino (see above) is essentially necessary.
+
+All the hardlinks under the Pseudo-link Directory of the writable branch
+should be restored in a proper location later. Aufs provides a utility
+to do this. The userspace helpers executed at remounting and unmounting
+aufs by default.
+During this utility is running, it puts aufs into the pseudo-link
+maintenance mode. In this mode, only the process which began the
+maintenance mode (and its child processes) is allowed to operate in
+aufs. Some other processes which are not related to the pseudo-link will
+be allowed to run too, but the rest have to return an error or wait
+until the maintenance mode ends. If a process already acquires an inode
+mutex (in VFS), it has to return an error.
+
+
 XIB(external inode number bitmap)
 ----------------------------------------------------------------------
 Addition to the xino file per a branch, aufs has an external inode number

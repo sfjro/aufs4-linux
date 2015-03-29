@@ -64,6 +64,11 @@ AuStubInt0(au_debug_test, void)
 } while (0)
 #define AuLabel(l)		AuDbg(#l "\n")
 #define AuIOErr(fmt, ...)	pr_err("I/O Error, " fmt, ##__VA_ARGS__)
+#define AuWarn1(fmt, ...) do { \
+	static unsigned char _c; \
+	if (!_c++) \
+		pr_warn(fmt, ##__VA_ARGS__); \
+} while (0)
 
 #define AuIOErr1(fmt, ...) do { \
 	static unsigned char _c; \

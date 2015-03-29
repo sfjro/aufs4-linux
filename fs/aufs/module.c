@@ -122,9 +122,12 @@ static int __init aufs_init(void)
 	err = sysaufs_init();
 	if (unlikely(err))
 		goto out;
-	err = au_wkq_init();
+	err = au_procfs_init();
 	if (unlikely(err))
 		goto out_sysaufs;
+	err = au_wkq_init();
+	if (unlikely(err))
+		goto out_procfs;
 	err = au_cache_init();
 	if (unlikely(err))
 		goto out_wkq;
@@ -136,6 +139,8 @@ static int __init aufs_init(void)
 	au_cache_fin();
 out_wkq:
 	au_wkq_fin();
+out_procfs:
+	au_procfs_fin();
 out_sysaufs:
 	sysaufs_fin();
 out:
@@ -146,6 +151,7 @@ static void __exit aufs_exit(void)
 {
 	au_cache_fin();
 	au_wkq_fin();
+	au_procfs_fin();
 	sysaufs_fin();
 }
 

@@ -59,6 +59,10 @@ static inline struct dentry *vfsub_lkup_one(struct qstr *name,
 {
 	return vfsub_lookup_one_len(name->name, parent, name->len);
 }
+/* ---------------------------------------------------------------------- */
+
+int vfsub_link(struct dentry *src_dentry, struct inode *dir,
+	       struct path *path, struct inode **delegated_inode);
 
 /* ---------------------------------------------------------------------- */
 

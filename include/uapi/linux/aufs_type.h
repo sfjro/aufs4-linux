@@ -79,6 +79,12 @@ typedef int16_t aufs_bindex_t;
 #define AUFS_XINO_FNAME		"." AUFS_NAME ".xino"
 #define AUFS_XINO_DEFPATH	"/tmp/" AUFS_XINO_FNAME
 #define AUFS_WKQ_NAME		AUFS_NAME "d"
+#define AUFS_PLINK_WARN		50 /* number of plinks in a single bucket */
+
+/* pseudo-link maintenace under /proc */
+#define AUFS_PLINK_MAINT_NAME	"plink_maint"
+#define AUFS_PLINK_MAINT_DIR	"fs/" AUFS_NAME
+#define AUFS_PLINK_MAINT_PATH	AUFS_PLINK_MAINT_DIR "/" AUFS_PLINK_MAINT_NAME
 
 #define AUFS_DIROPQ_NAME	AUFS_WH_PFX ".opq" /* whiteouted doubly */
 #define AUFS_WH_DIROPQ		AUFS_WH_PFX AUFS_DIROPQ_NAME

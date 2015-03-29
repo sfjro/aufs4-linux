@@ -26,9 +26,12 @@
  */
 void au_si_free(struct kobject *kobj)
 {
+	int i;
 	struct au_sbinfo *sbinfo;
 
 	sbinfo = container_of(kobj, struct au_sbinfo, si_kobj);
+	for (i = 0; i < AuPlink_NHASH; i++)
+		AuDebugOn(!hlist_empty(&sbinfo->si_plink[i].head));
 	AuDebugOn(atomic_read(&sbinfo->si_nowait.nw_len));
 
 	au_rw_write_lock(&sbinfo->si_rwsem);
@@ -44,7 +47,7 @@ void au_si_free(struct kobject *kobj)
 
 int au_si_alloc(struct super_block *sb)
 {
-	int err;
+	int err, i;
 	struct au_sbinfo *sbinfo;
 	static struct lock_class_key aufs_si;
 
@@ -69,11 +72,16 @@ int au_si_alloc(struct super_block *sb)
 	sbinfo->si_bend = -1;
 	sbinfo->si_last_br_id = AUFS_BRANCH_MAX / 2;
 
-	sbinfo->si_mntflags = AuOpt_Def;
+	sbinfo->si_mntflags = au_opts_plink(AuOpt_Def);
 
 	mutex_init(&sbinfo->si_xib_mtx);
 	sbinfo->si_xino_brid = -1;
 	/* leave si_xib_last_pindex and si_xib_next_bit */
+
+	for (i = 0; i < AuPlink_NHASH; i++)
+		au_sphl_init(sbinfo->si_plink + i);
+	init_waitqueue_head(&sbinfo->si_plink_wq);
+	spin_lock_init(&sbinfo->si_plink_maint_lock);
 
 	/* leave other members for sysaufs and si_mnt. */
 	sbinfo->si_sb = sb;
@@ -146,20 +154,31 @@ aufs_bindex_t au_new_br_id(struct super_block *sb)
 /* it is ok that new 'nwt' tasks are appended while we are sleeping */
 int si_read_lock(struct super_block *sb, int flags)
 {
+	int err;
+
+	err = 0;
 	if (au_ftest_lock(flags, FLUSH))
 		au_nwt_flush(&au_sbi(sb)->si_nowait);
 
 	si_noflush_read_lock(sb);
+	err = au_plink_maint(sb, flags);
+	if (unlikely(err))
+		si_read_unlock(sb);
 
-	return 0;
+	return err;
 }
 
 int si_write_lock(struct super_block *sb, int flags)
 {
+	int err;
+
 	if (au_ftest_lock(flags, FLUSH))
 		au_nwt_flush(&au_sbi(sb)->si_nowait);
 
 	si_noflush_write_lock(sb);
+	err = au_plink_maint(sb, flags);
+	if (unlikely(err))
+		si_write_unlock(sb);
 
-	return 0;
+	return err;
 }
