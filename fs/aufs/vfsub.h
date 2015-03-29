@@ -30,6 +30,7 @@
 
 /* copied from linux/fs/internal.h */
 /* todo: BAD approach!! */
+extern void __mnt_drop_write(struct vfsmount *);
 extern spinlock_t inode_sb_list_lock;
 
 /* ---------------------------------------------------------------------- */

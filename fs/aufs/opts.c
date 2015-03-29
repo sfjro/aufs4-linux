@@ -28,8 +28,8 @@
 
 enum {
 	Opt_br,
-	Opt_add, Opt_del, Opt_append, Opt_prepend,
-	Opt_idel,
+	Opt_add, Opt_del, Opt_mod, Opt_append, Opt_prepend,
+	Opt_idel, Opt_imod,
 	Opt_rdcache, Opt_rdblk, Opt_rdhash,
 	Opt_rdblk_def, Opt_rdhash_def,
 	Opt_xino, Opt_noxino,
@@ -60,6 +60,9 @@ static match_table_t options = {
 	{Opt_del, "del=%s"},
 	{Opt_del, "del:%s"},
 	/* {Opt_idel, "idel:%d"}, */
+	{Opt_mod, "mod=%s"},
+	{Opt_mod, "mod:%s"},
+	/* {Opt_imod, "imod:%d:%s"}, */
 
 	{Opt_xino, "xino=%s"},
 	{Opt_noxino, "noxino"},
@@ -473,6 +476,7 @@ static void dump_opts(struct au_opts *opts)
 	union {
 		struct au_opt_add *add;
 		struct au_opt_del *del;
+		struct au_opt_mod *mod;
 		struct au_opt_xino *xino;
 		struct au_opt_xino_itrunc *xino_itrunc;
 		struct au_opt_wbr_create *create;
@@ -493,6 +497,12 @@ static void dump_opts(struct au_opts *opts)
 			u.del = &opt->del;
 			AuDbg("del {%s, %p}\n",
 			      u.del->pathname, u.del->h_path.dentry);
+			break;
+		case Opt_mod:
+		case Opt_imod:
+			u.mod = &opt->mod;
+			AuDbg("mod {%s, 0x%x, %p}\n",
+				  u.mod->path, u.mod->perm, u.mod->h_root);
 			break;
 		case Opt_append:
 			u.add = &opt->add;
@@ -619,6 +629,10 @@ void au_opts_free(struct au_opts *opts)
 		case Opt_idel:
 			path_put(&opt->del.h_path);
 			break;
+		case Opt_mod:
+		case Opt_imod:
+			dput(opt->mod.h_root);
+			break;
 		case Opt_xino:
 			fput(opt->xino.file);
 			break;
@@ -695,6 +709,64 @@ static int au_opts_parse_idel(struct super_block *sb, aufs_bindex_t bindex,
 	err = 0;
 	del->h_path.dentry = dget(au_h_dptr(root, bindex));
 	del->h_path.mnt = mntget(au_sbr_mnt(sb, bindex));
+
+out:
+	aufs_read_unlock(root, !AuLock_IR);
+	return err;
+}
+#endif
+
+static int noinline_for_stack
+au_opts_parse_mod(struct au_opt_mod *mod, substring_t args[])
+{
+	int err;
+	struct path path;
+	char *p;
+
+	err = -EINVAL;
+	mod->path = args[0].from;
+	p = strchr(mod->path, '=');
+	if (unlikely(!p)) {
+		pr_err("no permssion %s\n", args[0].from);
+		goto out;
+	}
+
+	*p++ = 0;
+	err = vfsub_kern_path(mod->path, lkup_dirflags, &path);
+	if (unlikely(err)) {
+		pr_err("lookup failed %s (%d)\n", mod->path, err);
+		goto out;
+	}
+
+	mod->perm = br_perm_val(p);
+	AuDbg("mod path %s, perm 0x%x, %s\n", mod->path, mod->perm, p);
+	mod->h_root = dget(path.dentry);
+	path_put(&path);
+
+out:
+	return err;
+}
+
+#if 0 /* reserved for future use */
+static int au_opts_parse_imod(struct super_block *sb, aufs_bindex_t bindex,
+			      struct au_opt_mod *mod, substring_t args[])
+{
+	int err;
+	struct dentry *root;
+
+	err = -EINVAL;
+	root = sb->s_root;
+	aufs_read_lock(root, AuLock_FLUSH);
+	if (bindex < 0 || au_sbend(sb) < bindex) {
+		pr_err("out of bounds, %d\n", bindex);
+		goto out;
+	}
+
+	err = 0;
+	mod->perm = br_perm_val(args[1].from);
+	AuDbg("mod path %s, perm 0x%x, %s\n",
+	      mod->path, mod->perm, args[1].from);
+	mod->h_root = dget(au_h_dptr(root, bindex));
 
 out:
 	aufs_read_unlock(root, !AuLock_IR);
@@ -850,6 +922,23 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 				break;
 			}
 			err = au_opts_parse_idel(sb, n, &opt->del, a->args);
+			if (!err)
+				opt->type = token;
+			break;
+#endif
+		case Opt_mod:
+			err = au_opts_parse_mod(&opt->mod, a->args);
+			if (!err)
+				opt->type = token;
+			break;
+#ifdef IMOD /* reserved for future use */
+		case Opt_imod:
+			u.mod->path = "(indexed)";
+			if (unlikely(match_int(&a->args[0], &n))) {
+				pr_err("bad integer in %s\n", opt_str);
+				break;
+			}
+			err = au_opts_parse_imod(sb, n, &opt->mod, a->args);
 			if (!err)
 				opt->type = token;
 			break;
@@ -1160,7 +1249,7 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 static int au_opt_br(struct super_block *sb, struct au_opt *opt,
 		     struct au_opts *opts)
 {
-	int err;
+	int err, do_refresh;
 
 	err = 0;
 	switch (opt->type) {
@@ -1189,6 +1278,18 @@ static int au_opt_br(struct super_block *sb, struct au_opt *opt,
 			err = 1;
 			au_fset_opts(opts->flags, TRUNC_XIB);
 			au_fset_opts(opts->flags, REFRESH);
+		}
+		break;
+
+	case Opt_mod:
+	case Opt_imod:
+		err = au_br_mod(sb, &opt->mod,
+				au_ftest_opts(opts->flags, REMOUNT),
+				&do_refresh);
+		if (!err) {
+			err = 1;
+			if (do_refresh)
+				au_fset_opts(opts->flags, REFRESH);
 		}
 		break;
 	}

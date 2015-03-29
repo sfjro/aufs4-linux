@@ -60,3 +60,15 @@ o Confirm the deleting branch is not busy
 
   If any file on the deleting branch is opened by aufs, then aufs
   rejects deleting.
+
+
+Modify the Permission of a Branch
+----------------------------------------------------------------------
+o Re-initialize or remove the xino file and whiteout bases if necessary.
+  See struct.txt.
+
+o rw --> ro: Confirm the modifying branch is not busy
+  Aufs rejects the request if any of these conditions are true.
+  - a file on the branch is mmap-ed.
+  - a regular file on the branch is opened for write and there is no
+    same named entry on the upper branch.
