@@ -325,6 +325,42 @@ void au_update_digen(struct dentry *dentry)
 	/* smp_mb(); */ /* atomic_set */
 }
 
+void au_update_dbstart(struct dentry *dentry)
+{
+	aufs_bindex_t bindex, bend;
+	struct dentry *h_dentry;
+
+	bend = au_dbend(dentry);
+	for (bindex = au_dbstart(dentry); bindex <= bend; bindex++) {
+		h_dentry = au_h_dptr(dentry, bindex);
+		if (!h_dentry)
+			continue;
+		if (h_dentry->d_inode) {
+			au_set_dbstart(dentry, bindex);
+			return;
+		}
+		au_set_h_dptr(dentry, bindex, NULL);
+	}
+}
+
+void au_update_dbend(struct dentry *dentry)
+{
+	aufs_bindex_t bindex, bstart;
+	struct dentry *h_dentry;
+
+	bstart = au_dbstart(dentry);
+	for (bindex = au_dbend(dentry); bindex >= bstart; bindex--) {
+		h_dentry = au_h_dptr(dentry, bindex);
+		if (!h_dentry)
+			continue;
+		if (h_dentry->d_inode) {
+			au_set_dbend(dentry, bindex);
+			return;
+		}
+		au_set_h_dptr(dentry, bindex, NULL);
+	}
+}
+
 int au_find_dbindex(struct dentry *dentry, struct dentry *h_dentry)
 {
 	aufs_bindex_t bindex, bend;

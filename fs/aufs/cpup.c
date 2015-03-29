@@ -968,3 +968,118 @@ int au_sio_cpup_simple(struct au_cp_generic *cpg)
 	AuDebugOn(cpg->bsrc <= cpg->bdst);
 	return au_do_sio_cpup_simple(cpg);
 }
+
+/* ---------------------------------------------------------------------- */
+
+/*
+ * generic routine for both of copy-up and copy-down.
+ */
+/* cf. revalidate function in file.c */
+int au_cp_dirs(struct dentry *dentry, aufs_bindex_t bdst,
+	       int (*cp)(struct dentry *dentry, aufs_bindex_t bdst,
+			 struct au_pin *pin,
+			 struct dentry *h_parent, void *arg),
+	       void *arg)
+{
+	int err;
+	struct au_pin pin;
+	struct dentry *d, *parent, *h_parent, *real_parent;
+
+	err = 0;
+	parent = dget_parent(dentry);
+	if (IS_ROOT(parent))
+		goto out;
+
+	au_pin_init(&pin, dentry, bdst, AuLsc_DI_PARENT2, AuLsc_I_PARENT2,
+		    /*udba dummy*/0, AuPin_MNT_WRITE);
+
+	/* do not use au_dpage */
+	real_parent = parent;
+	while (1) {
+		dput(parent);
+		parent = dget_parent(dentry);
+		h_parent = au_h_dptr(parent, bdst);
+		if (h_parent)
+			goto out; /* success */
+
+		/* find top dir which is necessary to cpup */
+		do {
+			d = parent;
+			dput(parent);
+			parent = dget_parent(d);
+			di_read_lock_parent3(parent, !AuLock_IR);
+			h_parent = au_h_dptr(parent, bdst);
+			di_read_unlock(parent, !AuLock_IR);
+		} while (!h_parent);
+
+		if (d != real_parent)
+			di_write_lock_child3(d);
+
+		/* somebody else might create while we were sleeping */
+		if (!au_h_dptr(d, bdst) || !au_h_dptr(d, bdst)->d_inode) {
+			if (au_h_dptr(d, bdst))
+				au_update_dbstart(d);
+
+			au_pin_set_dentry(&pin, d);
+			err = au_do_pin(&pin);
+			if (!err) {
+				err = cp(d, bdst, &pin, h_parent, arg);
+				au_unpin(&pin);
+			}
+		}
+
+		if (d != real_parent)
+			di_write_unlock(d);
+		if (unlikely(err))
+			break;
+	}
+
+out:
+	dput(parent);
+	return err;
+}
+
+static int au_cpup_dir(struct dentry *dentry, aufs_bindex_t bdst,
+		       struct au_pin *pin,
+		       struct dentry *h_parent __maybe_unused,
+		       void *arg __maybe_unused)
+{
+	struct au_cp_generic cpg = {
+		.dentry	= dentry,
+		.bdst	= bdst,
+		.bsrc	= -1,
+		.len	= 0,
+		.pin	= pin,
+		.flags	= AuCpup_DTIME
+	};
+	return au_sio_cpup_simple(&cpg);
+}
+
+int au_cpup_dirs(struct dentry *dentry, aufs_bindex_t bdst)
+{
+	return au_cp_dirs(dentry, bdst, au_cpup_dir, NULL);
+}
+
+int au_test_and_cpup_dirs(struct dentry *dentry, aufs_bindex_t bdst)
+{
+	int err;
+	struct dentry *parent;
+	struct inode *dir;
+
+	parent = dget_parent(dentry);
+	dir = parent->d_inode;
+	err = 0;
+	if (au_h_iptr(dir, bdst))
+		goto out;
+
+	di_read_unlock(parent, AuLock_IR);
+	di_write_lock_parent(parent);
+	/* someone else might change our inode while we were sleeping */
+	if (!au_h_iptr(dir, bdst))
+		err = au_cpup_dirs(dentry, bdst);
+	di_downgrade_lock(parent, AuLock_IR);
+
+out:
+	dput(parent);
+	return err;
+}

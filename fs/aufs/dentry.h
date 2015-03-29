@@ -73,6 +73,8 @@ void au_set_h_dptr(struct dentry *dentry, aufs_bindex_t bindex,
 int au_digen_test(struct dentry *dentry, unsigned int sigen);
 int au_dbrange_test(struct dentry *dentry);
 void au_update_digen(struct dentry *dentry);
+void au_update_dbstart(struct dentry *dentry);
+void au_update_dbend(struct dentry *dentry);
 int au_find_dbindex(struct dentry *dentry, struct dentry *h_dentry);
 
 /* ---------------------------------------------------------------------- */

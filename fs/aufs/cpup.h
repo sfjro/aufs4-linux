@@ -61,6 +61,14 @@ struct au_cp_generic {
 int au_copy_file(struct file *dst, struct file *src, loff_t len);
 int au_sio_cpup_simple(struct au_cp_generic *cpg);
 
+int au_cp_dirs(struct dentry *dentry, aufs_bindex_t bdst,
+	       int (*cp)(struct dentry *dentry, aufs_bindex_t bdst,
+			 struct au_pin *pin,
+			 struct dentry *h_parent, void *arg),
+	       void *arg);
+int au_cpup_dirs(struct dentry *dentry, aufs_bindex_t bdst);
+int au_test_and_cpup_dirs(struct dentry *dentry, aufs_bindex_t bdst);
+
 /* ---------------------------------------------------------------------- */
 
 /* keep timestamps when copyup */
