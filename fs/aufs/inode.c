@@ -223,6 +223,11 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 
 	/* do not set hnotify for whiteouted dirs (SHWH mode) */
 	flags = au_hi_flags(inode, isdir);
+	if (au_opt_test(au_mntflags(dentry->d_sb), SHWH)
+	    && au_ftest_hi(flags, HNOTIFY)
+	    && dentry->d_name.len > AUFS_WH_PFX_LEN
+	    && !memcmp(dentry->d_name.name, AUFS_WH_PFX, AUFS_WH_PFX_LEN))
+		au_fclr_hi(flags, HNOTIFY);
 	iinfo = au_ii(inode);
 	iinfo->ii_bstart = bstart;
 	iinfo->ii_bend = btail;

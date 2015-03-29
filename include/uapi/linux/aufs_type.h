@@ -270,6 +270,7 @@ struct aufs_rdu {
 	/* number of entries which were added in a single call */
 	uint64_t		rent;
 	uint8_t			full;
+	uint8_t			shwh;
 
 	struct au_rdu_cookie	cookie;
 } __aligned(8);

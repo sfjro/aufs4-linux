@@ -108,6 +108,14 @@ config AUFS_RDU
 	shows better performance in most cases.
 	See detail in aufs.5.
 
+config AUFS_SHWH
+	bool "Show whiteouts"
+	help
+	If you want to make the whiteouts in aufs visible, then enable
+	this option and specify 'shwh' mount option. Although it may
+	sounds like philosophy or something, but in technically it
+	simply shows the name of whiteout with keeping its behaviour.
+
 config AUFS_BR_RAMFS
 	bool "Ramfs (initramfs/rootfs) as an aufs branch"
 	help

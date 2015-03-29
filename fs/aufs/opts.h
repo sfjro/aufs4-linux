@@ -38,6 +38,7 @@ struct super_block;
 #define AuOpt_UDBA_NONE		(1 << 2)	/* users direct branch access */
 #define AuOpt_UDBA_REVAL	(1 << 3)
 #define AuOpt_UDBA_HNOTIFY	(1 << 4)
+#define AuOpt_SHWH		(1 << 5)	/* show whiteout */
 #define AuOpt_PLINK		(1 << 6)	/* pseudo-link */
 #define AuOpt_DIRPERM1		(1 << 7)	/* ignore the lower dir's perm
 						   bits */
@@ -50,6 +51,10 @@ struct super_block;
 #ifndef CONFIG_AUFS_HNOTIFY
 #undef AuOpt_UDBA_HNOTIFY
 #define AuOpt_UDBA_HNOTIFY	0
+#endif
+#ifndef CONFIG_AUFS_SHWH
+#undef AuOpt_SHWH
+#define AuOpt_SHWH		0
 #endif
 
 #define AuOpt_Def	(AuOpt_XINO \
