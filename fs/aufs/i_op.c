@@ -853,6 +853,99 @@ out:
 	return err;
 }
 
+#if IS_ENABLED(CONFIG_AUFS_XATTR) || IS_ENABLED(CONFIG_FS_POSIX_ACL)
+static int au_h_path_to_set_attr(struct dentry *dentry,
+				 struct au_icpup_args *a, struct path *h_path)
+{
+	int err;
+	struct super_block *sb;
+
+	sb = dentry->d_sb;
+	a->udba = au_opt_udba(sb);
+	/* no d_unlinked(), to set UDBA_NONE for root */
+	if (d_unhashed(dentry))
+		a->udba = AuOpt_UDBA_NONE;
+	if (a->udba != AuOpt_UDBA_NONE) {
+		AuDebugOn(IS_ROOT(dentry));
+		err = au_reval_for_attr(dentry, au_sigen(sb));
+		if (unlikely(err))
+			goto out;
+	}
+	err = au_pin_and_icpup(dentry, /*ia*/NULL, a);
+	if (unlikely(err < 0))
+		goto out;
+
+	h_path->dentry = a->h_path.dentry;
+	h_path->mnt = au_sbr_mnt(sb, a->btgt);
+
+out:
+	return err;
+}
+
+ssize_t au_srxattr(struct dentry *dentry, struct au_srxattr *arg)
+{
+	int err;
+	struct path h_path;
+	struct super_block *sb;
+	struct au_icpup_args *a;
+	struct inode *inode, *h_inode;
+
+	inode = dentry->d_inode;
+	IMustLock(inode);
+
+	err = -ENOMEM;
+	a = kzalloc(sizeof(*a), GFP_NOFS);
+	if (unlikely(!a))
+		goto out;
+
+	sb = dentry->d_sb;
+	err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
+	if (unlikely(err))
+		goto out_kfree;
+
+	h_path.dentry = NULL;	/* silence gcc */
+	di_write_lock_child(dentry);
+	err = au_h_path_to_set_attr(dentry, a, &h_path);
+	if (unlikely(err))
+		goto out_di;
+
+	mutex_unlock(&a->h_inode->i_mutex);
+	switch (arg->type) {
+	case AU_XATTR_SET:
+		err = vfsub_setxattr(h_path.dentry,
+				     arg->u.set.name, arg->u.set.value,
+				     arg->u.set.size, arg->u.set.flags);
+		break;
+	case AU_XATTR_REMOVE:
+		err = vfsub_removexattr(h_path.dentry, arg->u.remove.name);
+		break;
+	case AU_ACL_SET:
+		err = -EOPNOTSUPP;
+		h_inode = h_path.dentry->d_inode;
+		if (h_inode->i_op->set_acl)
+			err = h_inode->i_op->set_acl(h_inode,
+						     arg->u.acl_set.acl,
+						     arg->u.acl_set.type);
+		break;
+	}
+	if (!err)
+		au_cpup_attr_timesizes(inode);
+
+	au_unpin(&a->pin);
+	if (unlikely(err))
+		au_update_dbstart(dentry);
+
+out_di:
+	di_write_unlock(dentry);
+	si_read_unlock(sb);
+out_kfree:
+	kfree(a);
+out:
+	AuTraceErr(err);
+	return err;
+}
+#endif
+
 static void au_refresh_iattr(struct inode *inode, struct kstat *st,
 			     unsigned int nlink)
 {
@@ -1128,8 +1221,20 @@ static int aufs_update_time(struct inode *inode, struct timespec *ts, int flags)
 
 struct inode_operations aufs_symlink_iop = {
 	.permission	= aufs_permission,
+#ifdef CONFIG_FS_POSIX_ACL
+	.get_acl	= aufs_get_acl,
+	.set_acl	= aufs_set_acl, /* unsupport for symlink? */
+#endif
+
 	.setattr	= aufs_setattr,
 	.getattr	= aufs_getattr,
+
+#ifdef CONFIG_AUFS_XATTR
+	.setxattr	= aufs_setxattr,
+	.getxattr	= aufs_getxattr,
+	.listxattr	= aufs_listxattr,
+	.removexattr	= aufs_removexattr,
+#endif
 
 	.readlink	= aufs_readlink,
 	.follow_link	= aufs_follow_link,
@@ -1150,8 +1255,20 @@ struct inode_operations aufs_dir_iop = {
 	.rename		= aufs_rename,
 
 	.permission	= aufs_permission,
+#ifdef CONFIG_FS_POSIX_ACL
+	.get_acl	= aufs_get_acl,
+	.set_acl	= aufs_set_acl,
+#endif
+
 	.setattr	= aufs_setattr,
 	.getattr	= aufs_getattr,
+
+#ifdef CONFIG_AUFS_XATTR
+	.setxattr	= aufs_setxattr,
+	.getxattr	= aufs_getxattr,
+	.listxattr	= aufs_listxattr,
+	.removexattr	= aufs_removexattr,
+#endif
 
 	.update_time	= aufs_update_time,
 	/* no support for atomic_open() */
@@ -1161,8 +1278,20 @@ struct inode_operations aufs_dir_iop = {
 
 struct inode_operations aufs_iop = {
 	.permission	= aufs_permission,
+#ifdef CONFIG_FS_POSIX_ACL
+	.get_acl	= aufs_get_acl,
+	.set_acl	= aufs_set_acl,
+#endif
+
 	.setattr	= aufs_setattr,
 	.getattr	= aufs_getattr,
+
+#ifdef CONFIG_AUFS_XATTR
+	.setxattr	= aufs_setxattr,
+	.getxattr	= aufs_getxattr,
+	.listxattr	= aufs_listxattr,
+	.removexattr	= aufs_removexattr,
+#endif
 
 	.update_time	= aufs_update_time
 };

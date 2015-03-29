@@ -26,6 +26,7 @@
 
 #include <linux/fs.h>
 #include <linux/mount.h>
+#include <linux/xattr.h>
 #include "debug.h"
 
 /* copied from linux/fs/internal.h */
@@ -245,6 +246,31 @@ int vfsub_notify_change(struct path *path, struct iattr *ia,
 			struct inode **delegated_inode);
 int vfsub_unlink(struct inode *dir, struct path *path,
 		 struct inode **delegated_inode, int force);
+
+/* ---------------------------------------------------------------------- */
+
+static inline int vfsub_setxattr(struct dentry *dentry, const char *name,
+				 const void *value, size_t size, int flags)
+{
+	int err;
+
+	lockdep_off();
+	err = vfs_setxattr(dentry, name, value, size, flags);
+	lockdep_on();
+
+	return err;
+}
+
+static inline int vfsub_removexattr(struct dentry *dentry, const char *name)
+{
+	int err;
+
+	lockdep_off();
+	err = vfs_removexattr(dentry, name);
+	lockdep_on();
+
+	return err;
+}
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_VFSUB_H__ */
