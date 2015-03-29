@@ -381,6 +381,13 @@ static ssize_t aufs_splice_read(struct file *file, loff_t *ppos,
 	err = -EINVAL;
 	h_file = au_hf_top(file);
 	get_file(h_file);
+	if (au_test_loopback_kthread()) {
+		au_warn_loopback(h_file->f_path.dentry->d_sb);
+		if (file->f_mapping != h_file->f_mapping) {
+			file->f_mapping = h_file->f_mapping;
+			smp_mb(); /* unnecessary? */
+		}
+	}
 	di_read_unlock(dentry, AuLock_IR);
 	fi_read_unlock(file);
 

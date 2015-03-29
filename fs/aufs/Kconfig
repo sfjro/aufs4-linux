@@ -108,6 +108,14 @@ config AUFS_RDU
 	shows better performance in most cases.
 	See detail in aufs.5.
 
+config AUFS_BDEV_LOOP
+	bool
+	depends on BLK_DEV_LOOP
+	default y
+	help
+	Automatic configuration for internal use.
+	Convert =[ym] into =y.
+
 config AUFS_DEBUG
 	bool "Debug aufs"
 	help

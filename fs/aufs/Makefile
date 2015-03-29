@@ -22,6 +22,7 @@ aufs-y := module.o sbinfo.o super.o branch.o xino.o sysaufs.o opts.o \
 aufs-$(CONFIG_PROC_FS) += procfs.o plink.o
 aufs-$(CONFIG_SYSFS) += sysfs.o
 aufs-$(CONFIG_DEBUG_FS) += dbgaufs.o
+aufs-$(CONFIG_AUFS_BDEV_LOOP) += loop.o
 aufs-$(CONFIG_AUFS_HNOTIFY) += hnotify.o
 aufs-$(CONFIG_AUFS_HFSNOTIFY) += hfsnotify.o
 aufs-$(CONFIG_AUFS_EXPORT) += export.o

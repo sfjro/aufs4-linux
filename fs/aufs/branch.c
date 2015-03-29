@@ -108,7 +108,8 @@ int au_br_index(struct super_block *sb, aufs_bindex_t br_id)
 static int test_overlap(struct super_block *sb, struct dentry *h_adding,
 			struct dentry *h_root)
 {
-	if (unlikely(h_adding == h_root))
+	if (unlikely(h_adding == h_root
+		     || au_test_loopback_overlap(sb, h_adding)))
 		return 1;
 	if (h_adding->d_sb != h_root->d_sb)
 		return 0;
