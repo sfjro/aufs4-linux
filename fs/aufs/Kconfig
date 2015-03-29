@@ -51,6 +51,24 @@ config AUFS_SBILIST
 	Automatic configuration for internal use.
 	When aufs supports Magic SysRq or /proc, enabled automatically.
 
+config AUFS_HNOTIFY
+	bool "Detect direct branch access (bypassing aufs)"
+	help
+	If you want to modify files on branches directly, eg. bypassing aufs,
+	and want aufs to detect the changes of them fully, then enable this
+	option and use 'udba=notify' mount option.
+	Currently there is only one available configuration, "fsnotify".
+	It will have a negative impact to the performance.
+	See detail in aufs.5.
+
+choice
+	prompt "method" if AUFS_HNOTIFY
+	default AUFS_HFSNOTIFY
+config AUFS_HFSNOTIFY
+	bool "fsnotify"
+	select FSNOTIFY
+endchoice
+
 config AUFS_EXPORT
 	bool "NFS-exportable aufs"
 	depends on EXPORTFS = y
