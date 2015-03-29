@@ -93,8 +93,14 @@ static inline void vfsub_mnt_drop_write(struct vfsmount *mnt)
 
 int vfsub_create(struct inode *dir, struct path *path, int mode,
 		 bool want_excl);
+int vfsub_symlink(struct inode *dir, struct path *path,
+		  const char *symname);
+int vfsub_mknod(struct inode *dir, struct path *path, int mode, dev_t dev);
 int vfsub_link(struct dentry *src_dentry, struct inode *dir,
 	       struct path *path, struct inode **delegated_inode);
+int vfsub_rename(struct inode *src_hdir, struct dentry *src_dentry,
+		 struct inode *hdir, struct path *path,
+		 struct inode **delegated_inode);
 int vfsub_mkdir(struct inode *dir, struct path *path, int mode);
 int vfsub_rmdir(struct inode *dir, struct path *path);
 

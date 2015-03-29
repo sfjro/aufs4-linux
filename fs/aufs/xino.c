@@ -188,8 +188,7 @@ struct file *au_xino_create2(struct file *base_file, struct file *copy_src)
 
 	if (copy_src) {
 		/* no one can touch copy_src xino */
-		/* err = au_copy_file(file, copy_src, vfsub_f_size_read(copy_src)); later */
-		err = 0;
+		err = au_copy_file(file, copy_src, vfsub_f_size_read(copy_src));
 		if (unlikely(err)) {
 			pr_err("%pd copy err %d\n", base, err);
 			goto out_fput;

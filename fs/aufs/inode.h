@@ -140,6 +140,7 @@ void au_set_h_iptr(struct inode *inode, aufs_bindex_t bindex,
 		   struct inode *h_inode, unsigned int flags);
 
 void au_update_iigen(struct inode *inode, int half);
+void au_update_ibrange(struct inode *inode, int do_put_zero);
 
 void au_icntnr_init_once(void *_c);
 int au_iinfo_init(struct inode *inode);

@@ -146,9 +146,20 @@ aufs_bindex_t au_sbr_id(struct super_block *sb, aufs_bindex_t bindex)
 }
 
 static inline
+struct vfsmount *au_sbr_mnt(struct super_block *sb, aufs_bindex_t bindex)
+{
+	return au_br_mnt(au_sbr(sb, bindex));
+}
+
+static inline
 struct super_block *au_sbr_sb(struct super_block *sb, aufs_bindex_t bindex)
 {
 	return au_br_sb(au_sbr(sb, bindex));
+}
+
+static inline void au_sbr_put(struct super_block *sb, aufs_bindex_t bindex)
+{
+	atomic_dec(&au_sbr(sb, bindex)->br_count);
 }
 
 static inline int au_sbr_perm(struct super_block *sb, aufs_bindex_t bindex)

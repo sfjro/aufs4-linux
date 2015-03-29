@@ -107,6 +107,50 @@ out:
 	return err;
 }
 
+int vfsub_symlink(struct inode *dir, struct path *path, const char *symname)
+{
+	int err;
+	struct dentry *d;
+
+	IMustLock(dir);
+
+	d = path->dentry;
+	path->dentry = d->d_parent;
+	err = security_path_symlink(path, d, symname);
+	path->dentry = d;
+	if (unlikely(err))
+		goto out;
+
+	lockdep_off();
+	err = vfs_symlink(dir, path->dentry, symname);
+	lockdep_on();
+
+out:
+	return err;
+}
+
+int vfsub_mknod(struct inode *dir, struct path *path, int mode, dev_t dev)
+{
+	int err;
+	struct dentry *d;
+
+	IMustLock(dir);
+
+	d = path->dentry;
+	path->dentry = d->d_parent;
+	err = security_path_mknod(path, d, mode, new_encode_dev(dev));
+	path->dentry = d;
+	if (unlikely(err))
+		goto out;
+
+	lockdep_off();
+	err = vfs_mknod(dir, path->dentry, mode, dev);
+	lockdep_on();
+
+out:
+	return err;
+}
+
 static int au_test_nlink(struct inode *inode)
 {
 	const unsigned int link_max = UINT_MAX >> 1; /* rough margin */
@@ -139,6 +183,36 @@ int vfsub_link(struct dentry *src_dentry, struct inode *dir, struct path *path,
 
 	lockdep_off();
 	err = vfs_link(src_dentry, dir, path->dentry, delegated_inode);
+	lockdep_on();
+
+out:
+	return err;
+}
+
+int vfsub_rename(struct inode *src_dir, struct dentry *src_dentry,
+		 struct inode *dir, struct path *path,
+		 struct inode **delegated_inode)
+{
+	int err;
+	struct path tmp = {
+		.mnt	= path->mnt
+	};
+	struct dentry *d;
+
+	IMustLock(dir);
+	IMustLock(src_dir);
+
+	d = path->dentry;
+	path->dentry = d->d_parent;
+	tmp.dentry = src_dentry->d_parent;
+	err = security_path_rename(&tmp, src_dentry, path, d, /*flags*/0);
+	path->dentry = d;
+	if (unlikely(err))
+		goto out;
+
+	lockdep_off();
+	err = vfs_rename(src_dir, src_dentry, dir, path->dentry,
+			 delegated_inode, /*flags*/0);
 	lockdep_on();
 
 out:
