@@ -2132,7 +2132,7 @@ reuse:
 			}
 
 			if (!page_mkwrite)
-				file_update_time(vma->vm_file);
+				vma_file_update_time(vma);
 		}
 
 		return ret;
