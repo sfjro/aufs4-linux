@@ -22,6 +22,7 @@
 #include <linux/mm.h>
 #include <linux/seq_file.h>
 #include <linux/statfs.h>
+#include <linux/vmalloc.h>
 #include "aufs.h"
 
 /*
