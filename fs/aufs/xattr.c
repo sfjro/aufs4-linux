@@ -49,7 +49,8 @@ out:
 static const int au_xattr_out_of_list = AuBrAttr_ICEX_OTH << 1;
 
 static int au_do_cpup_xattr(struct dentry *h_dst, struct dentry *h_src,
-			    char *name, char **buf, unsigned int ignore_flags)
+			    char *name, char **buf, unsigned int ignore_flags,
+			    unsigned int verbose)
 {
 	int err;
 	ssize_t ssz;
@@ -72,7 +73,8 @@ static int au_do_cpup_xattr(struct dentry *h_dst, struct dentry *h_src,
 	err = vfsub_setxattr(h_dst, name, *buf, ssz, /*flags*/0);
 	mutex_lock_nested(&h_idst->i_mutex, AuLsc_I_CHILD2);
 	if (unlikely(err)) {
-		AuDbg("%s, err %d\n", name, err);
+		if (verbose || au_debug_test())
+			pr_err("%s, err %d\n", name, err);
 		err = au_xattr_ignore(err, name, ignore_flags);
 	}
 
@@ -80,7 +82,8 @@ out:
 	return err;
 }
 
-int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags)
+int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
+		  unsigned int verbose)
 {
 	int err, unlocked, acl_access, acl_default;
 	ssize_t ssz;
@@ -135,7 +138,8 @@ int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags)
 		acl_default |= !strncmp(p, XATTR_NAME_POSIX_ACL_DEFAULT,
 					sizeof(XATTR_NAME_POSIX_ACL_DEFAULT)
 					- 1);
-		err = au_do_cpup_xattr(h_dst, h_src, p, &value, ignore_flags);
+		err = au_do_cpup_xattr(h_dst, h_src, p, &value, ignore_flags,
+				       verbose);
 		p += strlen(p) + 1;
 	}
 	AuTraceErr(err);
@@ -143,13 +147,13 @@ int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags)
 	if (!err && !acl_access) {
 		err = au_do_cpup_xattr(h_dst, h_src,
 				       XATTR_NAME_POSIX_ACL_ACCESS, &value,
-				       ignore_flags);
+				       ignore_flags, verbose);
 		AuTraceErr(err);
 	}
 	if (!err && !acl_default) {
 		err = au_do_cpup_xattr(h_dst, h_src,
 				       XATTR_NAME_POSIX_ACL_DEFAULT, &value,
-				       ignore_flags);
+				       ignore_flags, verbose);
 		AuTraceErr(err);
 	}
 
