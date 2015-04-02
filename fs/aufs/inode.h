@@ -281,7 +281,8 @@ AuStubVoid(au_plink_half_refresh, struct super_block *sb, aufs_bindex_t br_id);
 
 #ifdef CONFIG_AUFS_XATTR
 /* xattr.c */
-int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags);
+int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
+		  unsigned int verbose);
 ssize_t aufs_listxattr(struct dentry *dentry, char *list, size_t size);
 ssize_t aufs_getxattr(struct dentry *dentry, const char *name, void *value,
 		      size_t size);
@@ -292,7 +293,7 @@ int aufs_removexattr(struct dentry *dentry, const char *name);
 /* void au_xattr_init(struct super_block *sb); */
 #else
 AuStubInt0(au_cpup_xattr, struct dentry *h_dst, struct dentry *h_src,
-	   int ignore_flags);
+	   int ignore_flags, unsigned int verbose);
 /* AuStubVoid(au_xattr_init, struct super_block *sb); */
 #endif
 
