@@ -153,6 +153,8 @@ int cpup_iattr(struct dentry *dst, aufs_bindex_t bindex, struct dentry *h_src,
 	       struct au_cpup_reg_attr *h_src_attr)
 {
 	int err, sbits, icex;
+	unsigned int mnt_flags;
+	unsigned char verbose;
 	struct iattr ia;
 	struct path h_path;
 	struct inode *h_isrc, *h_idst;
@@ -204,8 +206,11 @@ int cpup_iattr(struct dentry *dst, aufs_bindex_t bindex, struct dentry *h_src,
 	}
 
 	icex = br->br_perm & AuBrAttr_ICEX;
-	if (!err)
-		err = au_cpup_xattr(h_path.dentry, h_src, icex);
+	if (!err) {
+		mnt_flags = au_mntflags(dst->d_sb);
+		verbose = !!au_opt_test(mnt_flags, VERBOSE);
+		err = au_cpup_xattr(h_path.dentry, h_src, icex, verbose);
+	}
 
 	return err;
 }
