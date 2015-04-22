@@ -263,8 +263,7 @@ static void epilog(struct inode *dir, struct dentry *dentry,
 	d_drop(dentry);
 	inode->i_ctime = dir->i_ctime;
 
-	if (au_ibstart(dir) == bindex)
-		au_cpup_attr_timesizes(dir);
+	au_dir_ts(dir, bindex);
 	dir->i_version++;
 }
 

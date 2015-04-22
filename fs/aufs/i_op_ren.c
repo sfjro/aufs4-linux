@@ -635,8 +635,7 @@ static void au_ren_refresh_dir(struct au_ren_args *a)
 		au_cpup_attr_nlink(dir, /*force*/1);
 	}
 
-	if (au_ibstart(dir) == a->btgt)
-		au_cpup_attr_timesizes(dir);
+	au_dir_ts(dir, a->btgt);
 
 	if (au_ftest_ren(a->flags, ISSAMEDIR))
 		return;
@@ -645,8 +644,7 @@ static void au_ren_refresh_dir(struct au_ren_args *a)
 	dir->i_version++;
 	if (au_ftest_ren(a->flags, ISDIR))
 		au_cpup_attr_nlink(dir, /*force*/1);
-	if (au_ibstart(dir) == a->btgt)
-		au_cpup_attr_timesizes(dir);
+	au_dir_ts(dir, a->btgt);
 }
 
 static void au_ren_refresh(struct au_ren_args *a)
