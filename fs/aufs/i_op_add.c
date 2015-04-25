@@ -57,8 +57,7 @@ static int epilog(struct inode *dir, aufs_bindex_t bindex,
 		d_instantiate(dentry, inode);
 		dir = dentry->d_parent->d_inode; /* dir inode is locked */
 		IMustLock(dir);
-		if (au_ibstart(dir) == au_dbstart(dentry))
-			au_cpup_attr_timesizes(dir);
+		au_dir_ts(dir, bindex);
 		dir->i_version++;
 		au_fhsm_wrote(sb, bindex, /*force*/0);
 		return 0; /* success */
@@ -745,9 +744,8 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 			goto out_revert;
 	}
 
+	au_dir_ts(dir, a->bdst);
 	dir->i_version++;
-	if (au_ibstart(dir) == au_dbstart(dentry))
-		au_cpup_attr_timesizes(dir);
 	inc_nlink(inode);
 	inode->i_ctime = dir->i_ctime;
 	d_instantiate(dentry, au_igrab(inode));
