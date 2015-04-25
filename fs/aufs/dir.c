@@ -95,6 +95,110 @@ loff_t au_dir_size(struct file *file, struct dentry *dentry)
 	return sz;
 }
 
+struct au_dir_ts_arg {
+	struct dentry *dentry;
+	aufs_bindex_t brid;
+};
+
+static void au_do_dir_ts(void *arg)
+{
+	struct au_dir_ts_arg *a = arg;
+	struct au_dtime dt;
+	struct path h_path;
+	struct inode *dir, *h_dir;
+	struct super_block *sb;
+	struct au_branch *br;
+	struct au_hinode *hdir;
+	int err;
+	aufs_bindex_t bstart, bindex;
+
+	sb = a->dentry->d_sb;
+	dir = a->dentry->d_inode;
+	if (!dir)
+		goto out;
+	/* no dir->i_mutex lock */
+	aufs_read_lock(a->dentry, AuLock_DW | AuLock_DIR); /* noflush */
+
+	bstart = au_ibstart(dir);
+	bindex = au_br_index(sb, a->brid);
+	if (bindex < bstart)
+		goto out_unlock;
+
+	br = au_sbr(sb, bindex);
+	h_path.dentry = au_h_dptr(a->dentry, bindex);
+	if (!h_path.dentry)
+		goto out_unlock;
+	h_path.mnt = au_br_mnt(br);
+	au_dtime_store(&dt, a->dentry, &h_path);
+
+	br = au_sbr(sb, bstart);
+	if (!au_br_writable(br->br_perm))
+		goto out_unlock;
+	h_path.dentry = au_h_dptr(a->dentry, bstart);
+	h_path.mnt = au_br_mnt(br);
+	err = vfsub_mnt_want_write(h_path.mnt);
+	if (err)
+		goto out_unlock;
+	hdir = au_hi(dir, bstart);
+	au_hn_imtx_lock_nested(hdir, AuLsc_I_PARENT);
+	h_dir = au_h_iptr(dir, bstart);
+	if (h_dir->i_nlink
+	    && timespec_compare(&h_dir->i_mtime, &dt.dt_mtime) < 0) {
+		dt.dt_h_path = h_path;
+		au_dtime_revert(&dt);
+	}
+	au_hn_imtx_unlock(hdir);
+	vfsub_mnt_drop_write(h_path.mnt);
+	au_cpup_attr_timesizes(dir);
+
+out_unlock:
+	aufs_read_unlock(a->dentry, AuLock_DW);
+out:
+	dput(a->dentry);
+	au_nwt_done(&au_sbi(sb)->si_nowait);
+	kfree(arg);
+}
+
+void au_dir_ts(struct inode *dir, aufs_bindex_t bindex)
+{
+	int perm, wkq_err;
+	aufs_bindex_t bstart;
+	struct au_dir_ts_arg *arg;
+	struct dentry *dentry;
+	struct super_block *sb;
+
+	IMustLock(dir);
+
+	dentry = d_find_any_alias(dir);
+	AuDebugOn(!dentry);
+	sb = dentry->d_sb;
+	bstart = au_ibstart(dir);
+	if (bstart == bindex) {
+		au_cpup_attr_timesizes(dir);
+		goto out;
+	}
+
+	perm = au_sbr_perm(sb, bstart);
+	if (!au_br_writable(perm))
+		goto out;
+
+	arg = kmalloc(sizeof(*arg), GFP_NOFS);
+	if (!arg)
+		goto out;
+
+	arg->dentry = dget(dentry); /* will be dput-ted by au_do_dir_ts() */
+	arg->brid = au_sbr_id(sb, bindex);
+	wkq_err = au_wkq_nowait(au_do_dir_ts, arg, sb, /*flags*/0);
+	if (unlikely(wkq_err)) {
+		pr_err("wkq %d\n", wkq_err);
+		dput(dentry);
+		kfree(arg);
+	}
+
+out:
+	dput(dentry);
+}
+
 /* ---------------------------------------------------------------------- */
 
 static int reopen_dir(struct file *file)
