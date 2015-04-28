@@ -24,7 +24,7 @@
 #include "aufs.h"
 
 /* todo: unnecessary to support mmap_sem since kernel-space? */
-ssize_t xino_fread(au_readf_t func, struct file *file, void *kbuf, size_t size,
+ssize_t xino_fread(vfs_readf_t func, struct file *file, void *kbuf, size_t size,
 		   loff_t *pos)
 {
 	ssize_t err;
@@ -53,7 +53,7 @@ ssize_t xino_fread(au_readf_t func, struct file *file, void *kbuf, size_t size,
 
 /* ---------------------------------------------------------------------- */
 
-static ssize_t do_xino_fwrite(au_writef_t func, struct file *file, void *kbuf,
+static ssize_t do_xino_fwrite(vfs_writef_t func, struct file *file, void *kbuf,
 			      size_t size, loff_t *pos)
 {
 	ssize_t err;
@@ -82,7 +82,7 @@ static ssize_t do_xino_fwrite(au_writef_t func, struct file *file, void *kbuf,
 
 struct do_xino_fwrite_args {
 	ssize_t *errp;
-	au_writef_t func;
+	vfs_writef_t func;
 	struct file *file;
 	void *buf;
 	size_t size;
@@ -95,8 +95,8 @@ static void call_do_xino_fwrite(void *args)
 	*a->errp = do_xino_fwrite(a->func, a->file, a->buf, a->size, a->pos);
 }
 
-ssize_t xino_fwrite(au_writef_t func, struct file *file, void *buf, size_t size,
-		    loff_t *pos)
+ssize_t xino_fwrite(vfs_writef_t func, struct file *file, void *buf,
+		    size_t size, loff_t *pos)
 {
 	ssize_t err;
 
@@ -414,7 +414,7 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
-static int au_xino_do_write(au_writef_t write, struct file *file,
+static int au_xino_do_write(vfs_writef_t write, struct file *file,
 			    ino_t h_ino, ino_t ino)
 {
 	loff_t pos;
@@ -574,7 +574,7 @@ void au_xino_delete_inode(struct inode *inode, const int unlinked)
 	struct au_hinode *hi;
 	struct inode *h_inode;
 	struct au_branch *br;
-	au_writef_t xwrite;
+	vfs_writef_t xwrite;
 
 	sb = inode->i_sb;
 	mnt_flags = au_mntflags(sb);
@@ -872,7 +872,7 @@ static int do_xib_restore(struct super_block *sb, struct file *file, void *page)
 	unsigned long pindex;
 	loff_t pos, pend;
 	struct au_sbinfo *sbinfo;
-	au_readf_t func;
+	vfs_readf_t func;
 	ino_t *ino;
 	unsigned long *p;
 
@@ -990,31 +990,6 @@ out:
 /*
  * xino mount option handlers
  */
-static au_readf_t find_readf(struct file *h_file)
-{
-	const struct file_operations *fop = h_file->f_op;
-
-	if (fop->read)
-		return fop->read;
-	if (fop->aio_read)
-		return do_sync_read;
-	if (fop->read_iter)
-		return new_sync_read;
-	return ERR_PTR(-ENOSYS);
-}
-
-static au_writef_t find_writef(struct file *h_file)
-{
-	const struct file_operations *fop = h_file->f_op;
-
-	if (fop->write)
-		return fop->write;
-	if (fop->aio_write)
-		return do_sync_write;
-	if (fop->write_iter)
-		return new_sync_write;
-	return ERR_PTR(-ENOSYS);
-}
 
 /* xino bitmap */
 static void xino_clear_xib(struct super_block *sb)
@@ -1050,8 +1025,8 @@ static int au_xino_set_xib(struct super_block *sb, struct file *base)
 	if (sbinfo->si_xib)
 		fput(sbinfo->si_xib);
 	sbinfo->si_xib = file;
-	sbinfo->si_xread = find_readf(file);
-	sbinfo->si_xwrite = find_writef(file);
+	sbinfo->si_xread = vfs_readf(file);
+	sbinfo->si_xwrite = vfs_writef(file);
 
 	err = -ENOMEM;
 	if (!sbinfo->si_xib_buf)
@@ -1112,7 +1087,7 @@ static int au_xino_set_br(struct super_block *sb, struct file *base)
 	} *fpair, *p;
 	struct au_branch *br;
 	struct inode *inode;
-	au_writef_t writef;
+	vfs_writef_t writef;
 
 	SiMustWriteLock(sb);
 

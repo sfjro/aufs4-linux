@@ -30,10 +30,6 @@
 #include "spl.h"
 #include "wkq.h"
 
-typedef ssize_t (*au_readf_t)(struct file *, char __user *, size_t, loff_t *);
-typedef ssize_t (*au_writef_t)(struct file *, const char __user *, size_t,
-			       loff_t *);
-
 /* policies to select one among multiple writable branches */
 struct au_wbr_copyup_operations {
 	int (*copyup)(struct dentry *dentry);
@@ -148,8 +144,8 @@ struct au_sbinfo {
 	unsigned int		si_mntflags;
 
 	/* external inode number (bitmap and translation table) */
-	au_readf_t		si_xread;
-	au_writef_t		si_xwrite;
+	vfs_readf_t		si_xread;
+	vfs_writef_t		si_xwrite;
 	struct file		*si_xib;
 	struct mutex		si_xib_mtx; /* protect xib members */
 	unsigned long		*si_xib_buf;

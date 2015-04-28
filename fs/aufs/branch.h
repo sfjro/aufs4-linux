@@ -174,10 +174,10 @@ int au_br_stfs(struct au_branch *br, struct aufs_stfs *stfs);
 static const loff_t au_loff_max = LLONG_MAX;
 
 int au_xib_trunc(struct super_block *sb);
-ssize_t xino_fread(au_readf_t func, struct file *file, void *buf, size_t size,
+ssize_t xino_fread(vfs_readf_t func, struct file *file, void *buf, size_t size,
 		   loff_t *pos);
-ssize_t xino_fwrite(au_writef_t func, struct file *file, void *buf, size_t size,
-		    loff_t *pos);
+ssize_t xino_fwrite(vfs_writef_t func, struct file *file, void *buf,
+		    size_t size, loff_t *pos);
 struct file *au_xino_create2(struct file *base_file, struct file *copy_src);
 struct file *au_xino_create(struct super_block *sb, char *fname, int silent);
 ino_t au_xino_new_ino(struct super_block *sb);
