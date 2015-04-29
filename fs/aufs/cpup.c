@@ -441,7 +441,13 @@ static int au_do_cpup_regular(struct au_cp_generic *cpg,
 		h_path.dentry = au_h_dptr(cpg->dentry, cpg->bsrc);
 		h_path.mnt = au_sbr_mnt(cpg->dentry->d_sb, cpg->bsrc);
 		h_src_attr->iflags = h_src_inode->i_flags;
-		err = vfs_getattr(&h_path, &h_src_attr->st);
+		if (!au_test_nfs(h_src_inode->i_sb))
+			err = vfs_getattr(&h_path, &h_src_attr->st);
+		else {
+			mutex_unlock(&h_src_inode->i_mutex);
+			err = vfs_getattr(&h_path, &h_src_attr->st);
+			mutex_lock_nested(&h_src_inode->i_mutex, AuLsc_I_CHILD);
+		}
 		if (unlikely(err)) {
 			mutex_unlock(&h_src_inode->i_mutex);
 			goto out;
