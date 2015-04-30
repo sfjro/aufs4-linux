@@ -191,14 +191,16 @@ static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 	     au_dcount(dentry), dentry->d_flags,
 	     d_unhashed(dentry) ? "un" : "");
 	hn = -1;
-	if (bindex >= 0 && dentry->d_inode && au_test_aufs(dentry->d_sb)) {
-		iinfo = au_ii(dentry->d_inode);
+	if (bindex >= 0
+	    && d_is_positive(dentry)
+	    && au_test_aufs(dentry->d_sb)) {
+		iinfo = au_ii(d_inode(dentry));
 		if (iinfo) {
 			hn = !!au_hn(iinfo->ii_hinode + bindex);
 			wh = iinfo->ii_hinode[0 + bindex].hi_whdentry;
 		}
 	}
-	do_pri_inode(bindex, dentry->d_inode, hn, wh);
+	do_pri_inode(bindex, d_inode(dentry), hn, wh);
 	return 0;
 }
 
@@ -353,7 +355,7 @@ void au_dpri_sb(struct super_block *sb)
 
 void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line)
 {
-	struct inode *h_inode, *inode = dentry->d_inode;
+	struct inode *h_inode, *inode = d_inode(dentry);
 	struct dentry *h_dentry;
 	aufs_bindex_t bindex, bend, bi;
 
@@ -374,7 +376,7 @@ void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line)
 		if (!h_dentry)
 			continue;
 		h_inode = au_h_iptr(inode, bindex);
-		if (unlikely(h_inode != h_dentry->d_inode)) {
+		if (unlikely(h_inode != d_inode(h_dentry))) {
 			au_debug_on();
 			AuDbg("b%d, %s:%d\n", bindex, func, line);
 			AuDbgDentry(dentry);

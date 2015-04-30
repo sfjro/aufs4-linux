@@ -150,7 +150,7 @@ static int au_do_lock(const unsigned char dmsg, struct au_mvd_args *a)
 			    AuPin_MNT_WRITE | AuPin_DI_LOCKED);
 		err = au_do_pin(&a->mvd_pin_src);
 		AuTraceErr(err);
-		a->mvd_h_src_dir = a->mvd_h_src_parent->d_inode;
+		a->mvd_h_src_dir = d_inode(a->mvd_h_src_parent);
 		if (unlikely(err)) {
 			AU_MVD_PR(dmsg, "pin_src failed\n");
 			goto out_dst;
@@ -164,7 +164,7 @@ static int au_do_lock(const unsigned char dmsg, struct au_mvd_args *a)
 		     au_opt_udba(a->sb),
 		     AuPin_MNT_WRITE | AuPin_DI_LOCKED);
 	AuTraceErr(err);
-	a->mvd_h_src_dir = a->mvd_h_src_parent->d_inode;
+	a->mvd_h_src_dir = d_inode(a->mvd_h_src_parent);
 	if (unlikely(err)) {
 		AU_MVD_PR(dmsg, "pin_src failed\n");
 		au_pin_hdir_lock(&a->mvd_pin_dst);
@@ -258,10 +258,10 @@ static int au_do_unlink_wh(const unsigned char dmsg, struct au_mvd_args *a)
 	}
 
 	err = 0;
-	if (h_path.dentry->d_inode) {
+	if (d_is_positive(h_path.dentry)) {
 		h_path.mnt = au_br_mnt(br);
 		delegated = NULL;
-		err = vfsub_unlink(a->mvd_h_dst_parent->d_inode, &h_path,
+		err = vfsub_unlink(d_inode(a->mvd_h_dst_parent), &h_path,
 				   &delegated, /*force*/0);
 		if (unlikely(err == -EWOULDBLOCK)) {
 			pr_warn("cannot retry for NFSv4 delegation"
@@ -643,13 +643,13 @@ int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *uarg)
 	args->mvdown.flags &= ~(AUFS_MVDOWN_ROLOWER_R | AUFS_MVDOWN_ROUPPER_R);
 	args->mvdown.au_errno = 0;
 	args->dentry = dentry;
-	args->inode = dentry->d_inode;
+	args->inode = d_inode(dentry);
 	args->sb = dentry->d_sb;
 
 	err = -ENOENT;
 	dmsg = !!(args->mvdown.flags & AUFS_MVDOWN_DMSG);
 	args->parent = dget_parent(dentry);
-	args->dir = args->parent->d_inode;
+	args->dir = d_inode(args->parent);
 	mutex_lock_nested(&args->dir->i_mutex, I_MUTEX_PARENT);
 	dput(args->parent);
 	if (unlikely(args->parent != dentry->d_parent)) {

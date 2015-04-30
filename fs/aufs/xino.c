@@ -144,7 +144,7 @@ struct file *au_xino_create2(struct file *base_file, struct file *copy_src)
 
 	base = base_file->f_path.dentry;
 	parent = base->d_parent; /* dir inode is locked */
-	dir = parent->d_inode;
+	dir = d_inode(parent);
 	IMustLock(dir);
 
 	file = ERR_PTR(-EINVAL);
@@ -222,11 +222,11 @@ static void au_xino_lock_dir(struct super_block *sb, struct file *xino,
 	if (brid >= 0)
 		bindex = au_br_index(sb, brid);
 	if (bindex >= 0) {
-		ldir->hdir = au_hi(sb->s_root->d_inode, bindex);
+		ldir->hdir = au_hi(d_inode(sb->s_root), bindex);
 		au_hn_imtx_lock_nested(ldir->hdir, AuLsc_I_PARENT);
 	} else {
 		ldir->parent = dget_parent(xino->f_path.dentry);
-		ldir->mtx = &ldir->parent->d_inode->i_mutex;
+		ldir->mtx = &d_inode(ldir->parent)->i_mutex;
 		mutex_lock_nested(ldir->mtx, AuLsc_I_PARENT);
 	}
 }
@@ -337,7 +337,7 @@ static void xino_do_trunc(void *_args)
 
 	err = 0;
 	sb = args->sb;
-	dir = sb->s_root->d_inode;
+	dir = d_inode(sb->s_root);
 	br = args->br;
 
 	si_noflush_write_lock(sb);
@@ -748,7 +748,7 @@ struct file *au_xino_create(struct super_block *sb, char *fname, int silent)
 
 	/* keep file count */
 	h_parent = dget_parent(file->f_path.dentry);
-	h_dir = h_parent->d_inode;
+	h_dir = d_inode(h_parent);
 	mutex_lock_nested(&h_dir->i_mutex, AuLsc_I_PARENT);
 	/* mnt_want_write() is unnecessary here */
 	/* no delegation since it is just created */
@@ -1097,7 +1097,7 @@ static int au_xino_set_br(struct super_block *sb, struct file *base)
 	if (unlikely(!fpair))
 		goto out;
 
-	inode = sb->s_root->d_inode;
+	inode = d_inode(sb->s_root);
 	ino = AUFS_ROOT_INO;
 	writef = au_sbi(sb)->si_xwrite;
 	for (bindex = 0, p = fpair; bindex <= bend; bindex++, p++) {
@@ -1187,7 +1187,7 @@ int au_xino_set(struct super_block *sb, struct au_opt_xino *xino, int remount)
 	}
 
 	au_opt_set(sbinfo->si_mntflags, XINO);
-	dir = parent->d_inode;
+	dir = d_inode(parent);
 	mutex_lock_nested(&dir->i_mutex, AuLsc_I_PARENT);
 	/* mnt_want_write() is unnecessary here */
 	err = au_xino_set_xib(sb, xino->file);

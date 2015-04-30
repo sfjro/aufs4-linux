@@ -161,13 +161,15 @@ int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr)
 unsigned int au_sigen_inc(struct super_block *sb)
 {
 	unsigned int gen;
+	struct inode *inode;
 
 	SiMustWriteLock(sb);
 
 	gen = ++au_sbi(sb)->si_generation;
 	au_update_digen(sb->s_root);
-	au_update_iigen(sb->s_root->d_inode, /*half*/0);
-	sb->s_root->d_inode->i_version++;
+	inode = d_inode(sb->s_root);
+	au_update_iigen(inode, /*half*/0);
+	inode->i_version++;
 	return gen;
 }
 

@@ -134,18 +134,19 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 	flags = au_hi_flags(inode, isdir);
 	bend = au_dbend(dentry);
 	for (bindex = au_dbstart(dentry); bindex <= bend; bindex++) {
-		struct inode *h_i;
+		struct inode *h_i, *h_inode;
 		struct dentry *h_d;
 
 		h_d = au_h_dptr(dentry, bindex);
-		if (!h_d || !h_d->d_inode)
+		if (!h_d || d_is_negative(h_d))
 			continue;
 
-		AuDebugOn(mode != (h_d->d_inode->i_mode & S_IFMT));
+		h_inode = d_inode(h_d);
+		AuDebugOn(mode != (h_inode->i_mode & S_IFMT));
 		if (iinfo->ii_bstart <= bindex && bindex <= iinfo->ii_bend) {
 			h_i = au_h_iptr(inode, bindex);
 			if (h_i) {
-				if (h_i == h_d->d_inode)
+				if (h_i == h_inode)
 					continue;
 				err = -EIO;
 				break;
@@ -155,7 +156,7 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 			iinfo->ii_bstart = bindex;
 		if (iinfo->ii_bend < bindex)
 			iinfo->ii_bend = bindex;
-		au_set_h_iptr(inode, bindex, au_igrab(h_d->d_inode), flags);
+		au_set_h_iptr(inode, bindex, au_igrab(h_inode), flags);
 		update = 1;
 	}
 	au_update_ibrange(inode, /*do_put_zero*/0);
@@ -186,7 +187,8 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 	err = 0;
 	isdir = 0;
 	bstart = au_dbstart(dentry);
-	h_inode = au_h_dptr(dentry, bstart)->d_inode;
+	h_dentry = au_h_dptr(dentry, bstart);
+	h_inode = d_inode(h_dentry);
 	mode = h_inode->i_mode;
 	switch (mode & S_IFMT) {
 	case S_IFREG:
@@ -235,7 +237,7 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 		h_dentry = au_h_dptr(dentry, bindex);
 		if (h_dentry)
 			au_set_h_iptr(inode, bindex,
-				      au_igrab(h_dentry->d_inode), flags);
+				      au_igrab(d_inode(h_dentry)), flags);
 	}
 	au_cpup_attr_all(inode, /*force*/1);
 	/*
@@ -260,6 +262,7 @@ static int reval_inode(struct inode *inode, struct dentry *dentry)
 	struct au_iigen iigen;
 	aufs_bindex_t bindex, bend;
 	struct inode *h_inode, *h_dinode;
+	struct dentry *h_dentry;
 
 	/*
 	 * before this function, if aufs got any iinfo lock, it must be only
@@ -272,7 +275,8 @@ static int reval_inode(struct inode *inode, struct dentry *dentry)
 
 	err = 1;
 	ii_write_lock_new_child(inode);
-	h_dinode = au_h_dptr(dentry, au_dbstart(dentry))->d_inode;
+	h_dentry = au_h_dptr(dentry, au_dbstart(dentry));
+	h_dinode = d_inode(h_dentry);
 	bend = au_ibend(inode);
 	for (bindex = au_ibstart(inode); bindex <= bend; bindex++) {
 		h_inode = au_h_iptr(inode, bindex);
@@ -334,7 +338,7 @@ out:
 /* todo: return with unlocked? */
 struct inode *au_new_inode(struct dentry *dentry, int must_new)
 {
-	struct inode *inode;
+	struct inode *inode, *h_inode;
 	struct dentry *h_dentry;
 	struct super_block *sb;
 	struct mutex *mtx;
@@ -345,7 +349,8 @@ struct inode *au_new_inode(struct dentry *dentry, int must_new)
 	sb = dentry->d_sb;
 	bstart = au_dbstart(dentry);
 	h_dentry = au_h_dptr(dentry, bstart);
-	h_ino = h_dentry->d_inode->i_ino;
+	h_inode = d_inode(h_dentry);
+	h_ino = h_inode->i_ino;
 
 	/*
 	 * stop 'race'-ing between hardlinks under different
@@ -428,7 +433,7 @@ new_ino:
 			mutex_lock(mtx);
 	}
 
-	if (unlikely(au_test_fs_unique_ino(h_dentry->d_inode)))
+	if (unlikely(au_test_fs_unique_ino(h_inode)))
 		AuWarn1("Warning: Un-notified UDBA or repeatedly renamed dir,"
 			" b%d, %s, %pd, hi%lu, i%lu.\n",
 			bstart, au_sbtype(h_dentry->d_sb), dentry,

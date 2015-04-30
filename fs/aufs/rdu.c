@@ -157,7 +157,7 @@ static int au_rdu(struct file *file, struct aufs_rdu *rdu)
 		goto out;
 
 	dentry = file->f_path.dentry;
-	inode = dentry->d_inode;
+	inode = d_inode(dentry);
 #if 1
 	mutex_lock(&inode->i_mutex);
 #else

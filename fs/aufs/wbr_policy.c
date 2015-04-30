@@ -30,13 +30,13 @@ int au_cpdown_attr(struct path *h_path, struct dentry *h_src)
 	struct iattr ia;
 	struct inode *h_isrc;
 
-	h_isrc = h_src->d_inode;
+	h_isrc = d_inode(h_src);
 	ia.ia_valid = ATTR_FORCE | ATTR_MODE | ATTR_UID | ATTR_GID;
 	ia.ia_mode = h_isrc->i_mode;
 	ia.ia_uid = h_isrc->i_uid;
 	ia.ia_gid = h_isrc->i_gid;
 	sbits = !!(ia.ia_mode & (S_ISUID | S_ISGID));
-	au_cpup_attr_flags(h_path->dentry->d_inode, h_isrc->i_flags);
+	au_cpup_attr_flags(d_inode(h_path->dentry), h_isrc->i_flags);
 	/* no delegation since it is just created */
 	err = vfsub_sio_notify_change(h_path, &ia, /*delegated*/NULL);
 
@@ -91,7 +91,7 @@ static int au_cpdown_dir_wh(struct dentry *dentry, struct dentry *h_parent,
 		goto out;
 
 	err = 0;
-	if (h_path.dentry->d_inode) {
+	if (d_is_positive(h_path.dentry)) {
 		h_path.mnt = au_br_mnt(br);
 		err = au_wh_unlink_dentry(au_h_iptr(dir, bdst), &h_path,
 					  dentry);
@@ -116,8 +116,8 @@ static int au_cpdown_dir(struct dentry *dentry, aufs_bindex_t bdst,
 	bstart = au_dbstart(dentry);
 	/* dentry is di-locked */
 	parent = dget_parent(dentry);
-	dir = parent->d_inode;
-	h_dir = h_parent->d_inode;
+	dir = d_inode(parent);
+	h_dir = d_inode(h_parent);
 	AuDebugOn(h_dir != au_h_iptr(dir, bdst));
 	IMustLock(h_dir);
 
@@ -139,7 +139,7 @@ static int au_cpdown_dir(struct dentry *dentry, aufs_bindex_t bdst,
 		au_fset_cpdown(*flags, WHED);
 	if (!au_ftest_cpdown(*flags, PARENT_OPQ) && bopq <= bdst)
 		au_fset_cpdown(*flags, PARENT_OPQ);
-	h_inode = h_path.dentry->d_inode;
+	h_inode = d_inode(h_path.dentry);
 	mutex_lock_nested(&h_inode->i_mutex, AuLsc_I_CHILD);
 	if (au_ftest_cpdown(*flags, WHED)) {
 		err = au_cpdown_dir_opq(dentry, bdst, flags);
@@ -160,7 +160,7 @@ static int au_cpdown_dir(struct dentry *dentry, aufs_bindex_t bdst,
 			goto out_opq;
 	}
 
-	inode = dentry->d_inode;
+	inode = d_inode(dentry);
 	if (au_ibend(inode) < bdst)
 		au_set_ibend(inode, bdst);
 	au_set_h_iptr(inode, bdst, au_igrab(h_inode),
@@ -279,7 +279,7 @@ static int au_wbr_create_tdp(struct dentry *dentry,
 	parent = dget_parent(dentry);
 	for (bindex = au_dbstart(parent); bindex < bstart; bindex++) {
 		h_parent = au_h_dptr(parent, bindex);
-		if (!h_parent || !h_parent->d_inode)
+		if (!h_parent || d_is_negative(h_parent))
 			continue;
 
 		if (!au_br_rdonly(au_sbr(sb, bindex))) {
@@ -431,7 +431,7 @@ static void au_mfs(struct dentry *dentry, struct dentry *parent)
 	for (; bindex <= bend; bindex++) {
 		if (parent) {
 			h_parent = au_h_dptr(parent, bindex);
-			if (!h_parent || !h_parent->d_inode)
+			if (!h_parent || d_is_negative(h_parent))
 				continue;
 		}
 		br = au_sbr(sb, bindex);
@@ -579,7 +579,7 @@ static int au_wbr_create_pmfs(struct dentry *dentry, unsigned int flags)
 
 	for (bindex = bstart; bindex <= bend; bindex++) {
 		h_parent = au_h_dptr(parent, bindex);
-		if (!h_parent || !h_parent->d_inode)
+		if (!h_parent || d_is_negative(h_parent))
 			continue;
 
 		br = au_sbr(sb, bindex);
@@ -658,7 +658,7 @@ static int au_wbr_copyup_bup(struct dentry *dentry)
 	bstart = au_dbstart(parent);
 	for (bindex = au_dbstart(dentry); bindex >= bstart; bindex--) {
 		h_parent = au_h_dptr(parent, bindex);
-		if (!h_parent || !h_parent->d_inode)
+		if (!h_parent || d_is_negative(h_parent))
 			continue;
 
 		if (!au_br_rdonly(au_sbr(sb, bindex))) {

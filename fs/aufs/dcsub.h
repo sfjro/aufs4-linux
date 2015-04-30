@@ -61,10 +61,12 @@ int au_test_subdir(struct dentry *d1, struct dentry *d2);
 static inline int au_d_hashed_positive(struct dentry *d)
 {
 	int err;
-	struct inode *inode = d->d_inode;
+	struct inode *inode = d_inode(d);
 
 	err = 0;
-	if (unlikely(d_unhashed(d) || !inode || !inode->i_nlink))
+	if (unlikely(d_unhashed(d)
+		     || d_is_negative(d)
+		     || !inode->i_nlink))
 		err = -ENOENT;
 	return err;
 }
@@ -72,11 +74,11 @@ static inline int au_d_hashed_positive(struct dentry *d)
 static inline int au_d_linkable(struct dentry *d)
 {
 	int err;
-	struct inode *inode = d->d_inode;
+	struct inode *inode = d_inode(d);
 
 	err = au_d_hashed_positive(d);
 	if (err
-	    && inode
+	    && d_is_positive(d)
 	    && (inode->i_state & I_LINKABLE))
 		err = 0;
 	return err;
@@ -91,8 +93,10 @@ static inline int au_d_alive(struct dentry *d)
 	if (!IS_ROOT(d))
 		err = au_d_hashed_positive(d);
 	else {
-		inode = d->d_inode;
-		if (unlikely(d_unlinked(d) || !inode || !inode->i_nlink))
+		inode = d_inode(d);
+		if (unlikely(d_unlinked(d)
+			     || d_is_negative(d)
+			     || !inode->i_nlink))
 			err = -ENOENT;
 	}
 	return err;
@@ -103,7 +107,7 @@ static inline int au_alive_dir(struct dentry *d)
 	int err;
 
 	err = au_d_alive(d);
-	if (unlikely(err || IS_DEADDIR(d->d_inode)))
+	if (unlikely(err || IS_DEADDIR(d_inode(d))))
 		err = -ENOENT;
 	return err;
 }

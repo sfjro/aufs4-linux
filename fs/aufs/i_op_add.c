@@ -40,7 +40,7 @@ static int epilog(struct inode *dir, aufs_bindex_t bindex,
 	bwh = -1;
 	sb = dir->i_sb;
 	if (wh_dentry) {
-		h_dir = wh_dentry->d_parent->d_inode; /* dir inode is locked */
+		h_dir = d_inode(wh_dentry->d_parent); /* dir inode is locked */
 		IMustLock(h_dir);
 		AuDebugOn(au_h_iptr(dir, bindex) != h_dir);
 		bwh = au_dbwh(dentry);
@@ -55,7 +55,7 @@ static int epilog(struct inode *dir, aufs_bindex_t bindex,
 	inode = au_new_inode(dentry, /*must_new*/1);
 	if (!IS_ERR(inode)) {
 		d_instantiate(dentry, inode);
-		dir = dentry->d_parent->d_inode; /* dir inode is locked */
+		dir = d_inode(dentry->d_parent); /* dir inode is locked */
 		IMustLock(dir);
 		au_dir_ts(dir, bindex);
 		dir->i_version++;
@@ -89,7 +89,7 @@ static int au_d_may_add(struct dentry *dentry)
 	err = 0;
 	if (unlikely(d_unhashed(dentry)))
 		err = -ENOENT;
-	if (unlikely(dentry->d_inode))
+	if (unlikely(d_is_positive(dentry)))
 		err = -EEXIST;
 	return err;
 }
@@ -111,15 +111,17 @@ int au_may_add(struct dentry *dentry, aufs_bindex_t bindex,
 		goto out;
 
 	h_dentry = au_h_dptr(dentry, bindex);
-	h_inode = h_dentry->d_inode;
-	if (!dentry->d_inode) {
+	if (d_is_negative(dentry)) {
 		err = -EEXIST;
-		if (unlikely(h_inode))
+		if (unlikely(d_is_positive(h_dentry)))
 			goto out;
 	} else {
 		/* rename(2) case */
 		err = -EIO;
-		if (unlikely(!h_inode || !h_inode->i_nlink))
+		if (unlikely(d_is_negative(h_dentry)))
+			goto out;
+		h_inode = d_inode(h_dentry);
+		if (unlikely(!h_inode->i_nlink))
 			goto out;
 
 		h_mode = h_inode->i_mode;
@@ -298,7 +300,7 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 		err = epilog(dir, bstart, wh_dentry, dentry);
 
 	/* revert */
-	if (unlikely(created && err && a->h_path.dentry->d_inode)) {
+	if (unlikely(created && err && d_is_positive(a->h_path.dentry))) {
 		/* no delegation since it is just created */
 		rerr = vfsub_unlink(h_dir, &a->h_path, /*delegated*/NULL,
 				    /*force*/0);
@@ -391,7 +393,7 @@ int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 	parent = d_find_any_alias(dir);
 	AuDebugOn(!parent);
 	di_write_lock_parent(parent);
-	if (unlikely(parent->d_inode != dir))
+	if (unlikely(d_inode(parent) != dir))
 		goto out_parent;
 
 	err = au_digen_test(parent, au_sigen(sb));
@@ -417,7 +419,7 @@ int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out_parent;
 
 	h_parent = au_h_dptr(parent, bindex);
-	err = inode_permission(h_parent->d_inode, MAY_WRITE | MAY_EXEC);
+	err = inode_permission(d_inode(h_parent), MAY_WRITE | MAY_EXEC);
 	if (unlikely(err))
 		goto out_mnt;
 
@@ -534,7 +536,7 @@ static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
 	plink = 0;
 	h_inode = NULL;
 	sb = src_dentry->d_sb;
-	inode = src_dentry->d_inode;
+	inode = d_inode(src_dentry);
 	if (au_ibstart(inode) <= a->bdst)
 		h_inode = au_h_iptr(inode, a->bdst);
 	if (!h_inode || !h_inode->i_nlink) {
@@ -548,7 +550,7 @@ static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
 		au_set_h_dptr(dentry, a->bdst, NULL);
 		AuDbg("temporary d_inode...\n");
 		spin_lock(&dentry->d_lock);
-		dentry->d_inode = src_dentry->d_inode; /* tmp */
+		dentry->d_inode = d_inode(src_dentry); /* tmp */
 		spin_unlock(&dentry->d_lock);
 		h_file = au_h_open_pre(dentry, a->bsrc, /*force_wr*/0);
 		if (IS_ERR(h_file))
@@ -587,7 +589,7 @@ static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
 			if (IS_ERR(h_src_dentry))
 				goto out;
 
-			if (unlikely(!h_src_dentry->d_inode)) {
+			if (unlikely(d_is_negative(h_src_dentry))) {
 				dput(h_src_dentry);
 				h_src_dentry = NULL;
 			}
@@ -633,7 +635,7 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 	};
 
 	IMustLock(dir);
-	inode = src_dentry->d_inode;
+	inode = d_inode(src_dentry);
 	IMustLock(inode);
 
 	err = -ENOMEM;
@@ -719,7 +721,7 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 		if (!err) {
 			h_src_dentry = au_h_dptr(src_dentry, a->bdst);
 			err = -ENOENT;
-			if (h_src_dentry && h_src_dentry->d_inode) {
+			if (h_src_dentry && d_is_positive(h_src_dentry)) {
 				delegated = NULL;
 				err = vfsub_link(h_src_dentry,
 						 au_pinned_h_dir(&a->pin),
@@ -835,7 +837,7 @@ int aufs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	/* make the dir opaque */
 	diropq = 0;
-	h_mtx = &h_path.dentry->d_inode->i_mutex;
+	h_mtx = &d_inode(h_path.dentry)->i_mutex;
 	if (wh_dentry
 	    || au_opt_test(au_mntflags(sb), ALWAYS_DIROPQ)) {
 		mutex_lock_nested(h_mtx, AuLsc_I_CHILD);

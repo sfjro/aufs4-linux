@@ -1599,7 +1599,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 	err = 0;
 	fhsm = 0;
 	root = sb->s_root;
-	dir = root->d_inode;
+	dir = d_inode(root);
 	do_plink = !!au_opt_test(sbinfo->si_mntflags, PLINK);
 	bend = au_sbend(sb);
 	for (bindex = 0; !err && bindex <= bend; bindex++) {
@@ -1772,7 +1772,7 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 		/* go on even if err */
 	}
 	if (au_opt_test(tmp, UDBA_HNOTIFY)) {
-		dir = sb->s_root->d_inode;
+		dir = d_inode(sb->s_root);
 		au_hn_reset(dir, au_hi_flags(dir, /*isdir*/1) & ~AuHi_XINO);
 	}
 
@@ -1790,7 +1790,7 @@ int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 
 	SiMustWriteLock(sb);
 
-	dir = sb->s_root->d_inode;
+	dir = d_inode(sb->s_root);
 	sbinfo = au_sbi(sb);
 	err = 0;
 	opt_xino = NULL;

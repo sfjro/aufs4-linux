@@ -48,7 +48,7 @@ static void sysrq_sb(struct super_block *sb)
 	pr("root dentry\n");
 	au_dpri_dentry(sb->s_root);
 	pr("root inode\n");
-	au_dpri_inode(sb->s_root->d_inode);
+	au_dpri_inode(d_inode(sb->s_root));
 #endif
 
 #if 0

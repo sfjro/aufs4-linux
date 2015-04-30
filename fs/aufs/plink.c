@@ -202,7 +202,7 @@ static struct dentry *au_do_plink_lkup(struct qstr *tgtname,
 	struct dentry *h_dentry;
 	struct mutex *h_mtx;
 
-	h_mtx = &h_parent->d_inode->i_mutex;
+	h_mtx = &d_inode(h_parent)->i_mutex;
 	mutex_lock_nested(h_mtx, AuLsc_I_CHILD2);
 	h_dentry = vfsub_lkup_one(tgtname, h_parent);
 	mutex_unlock(h_mtx);
@@ -220,7 +220,6 @@ struct dentry *au_plink_lkup(struct inode *inode, aufs_bindex_t bindex)
 {
 	struct dentry *h_dentry, *h_parent;
 	struct au_branch *br;
-	struct inode *h_dir;
 	int wkq_err;
 	char a[PLINK_NAME_LEN];
 	struct qstr tgtname = QSTR_INIT(a, 0);
@@ -229,7 +228,6 @@ struct dentry *au_plink_lkup(struct inode *inode, aufs_bindex_t bindex)
 
 	br = au_sbr(inode->i_sb, bindex);
 	h_parent = br->br_wbr->wbr_plink;
-	h_dir = h_parent->d_inode;
 	tgtname.len = plink_name(a, sizeof(a), inode, bindex);
 
 	if (!uid_eq(current_fsuid(), GLOBAL_ROOT_UID)) {
@@ -259,7 +257,7 @@ static int do_whplink(struct qstr *tgt, struct dentry *h_parent,
 	};
 	struct inode *h_dir, *delegated;
 
-	h_dir = h_parent->d_inode;
+	h_dir = d_inode(h_parent);
 	mutex_lock_nested(&h_dir->i_mutex, AuLsc_I_CHILD2);
 again:
 	h_path.dentry = vfsub_lkup_one(tgt, h_parent);
@@ -270,8 +268,8 @@ again:
 	err = 0;
 	/* wh.plink dir is not monitored */
 	/* todo: is it really safe? */
-	if (h_path.dentry->d_inode
-	    && h_path.dentry->d_inode != h_dentry->d_inode) {
+	if (d_is_positive(h_path.dentry)
+	    && d_inode(h_path.dentry) != d_inode(h_dentry)) {
 		delegated = NULL;
 		err = vfsub_unlink(h_dir, &h_path, &delegated, /*force*/0);
 		if (unlikely(err == -EWOULDBLOCK)) {
@@ -284,7 +282,7 @@ again:
 		if (!err)
 			goto again;
 	}
-	if (!err && !h_path.dentry->d_inode) {
+	if (!err && d_is_negative(h_path.dentry)) {
 		delegated = NULL;
 		err = vfsub_link(h_dentry, h_dir, &h_path, &delegated);
 		if (unlikely(err == -EWOULDBLOCK)) {
@@ -320,13 +318,11 @@ static int whplink(struct dentry *h_dentry, struct inode *inode,
 	int err, wkq_err;
 	struct au_wbr *wbr;
 	struct dentry *h_parent;
-	struct inode *h_dir;
 	char a[PLINK_NAME_LEN];
 	struct qstr tgtname = QSTR_INIT(a, 0);
 
 	wbr = au_sbr(inode->i_sb, bindex)->br_wbr;
 	h_parent = wbr->wbr_plink;
-	h_dir = h_parent->d_inode;
 	tgtname.len = plink_name(a, sizeof(a), inode, bindex);
 
 	/* always superio. */
