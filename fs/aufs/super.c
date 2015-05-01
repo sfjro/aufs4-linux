@@ -589,7 +589,7 @@ static int au_do_refresh_d(struct dentry *dentry, unsigned int sigen,
 	err = 0;
 	parent = dget_parent(dentry);
 	if (!au_digen_test(parent, sigen) && au_digen_test(dentry, sigen)) {
-		if (d_is_positive(dentry)) {
+		if (d_really_is_positive(dentry)) {
 			if (!d_is_dir(dentry))
 				err = au_do_refresh(dentry, /*dir_flags*/0,
 						 parent);

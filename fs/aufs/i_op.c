@@ -286,7 +286,7 @@ static int au_wr_dir_cpup(struct dentry *dentry, struct dentry *parent,
 
 		AuDbg("bcpup %d\n", bcpup);
 		if (!err) {
-			if (d_is_negative(dentry))
+			if (d_really_is_negative(dentry))
 				au_set_h_dptr(dentry, bstart, NULL);
 			au_update_dbrange(dentry, /*do_put_zero*/0);
 		}
@@ -365,7 +365,7 @@ int au_wr_dir(struct dentry *dentry, struct dentry *src_dentry,
 	/* copyup the new parent into the branch we process */
 	err = au_wr_dir_cpup(dentry, parent, add_entry, bcpup, bstart);
 	if (err >= 0) {
-		if (d_is_negative(dentry)) {
+		if (d_really_is_negative(dentry)) {
 			au_set_h_dptr(dentry, bstart, NULL);
 			au_set_dbstart(dentry, bcpup);
 			au_set_dbend(dentry, bcpup);

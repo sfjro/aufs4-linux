@@ -413,7 +413,7 @@ static struct dentry *au_lkup_by_ino(struct path *path, ino_t ino,
 	if (IS_ERR(dentry))
 		goto out_name;
 	AuDebugOn(au_test_anon(dentry));
-	if (unlikely(d_is_negative(dentry))) {
+	if (unlikely(d_really_is_negative(dentry))) {
 		dput(dentry);
 		dentry = ERR_PTR(-ENOENT);
 	}
@@ -554,7 +554,7 @@ struct dentry *decode_by_path(struct super_block *sb, ino_t ino, __u32 *fh,
 
 	dentry = ERR_PTR(-ENOENT);
 	AuDebugOn(au_test_anon(path.dentry));
-	if (unlikely(d_is_negative(path.dentry)))
+	if (unlikely(d_really_is_negative(path.dentry)))
 		goto out_path;
 
 	if (ino != d_inode(path.dentry)->i_ino)
@@ -722,7 +722,7 @@ static int aufs_encode_fh(struct inode *inode, __u32 *fh, int *max_len,
 		dput(dentry);
 		if (unlikely(!parent))
 			goto out_unlock;
-		if (d_is_positive(parent))
+		if (d_really_is_positive(parent))
 			dir = d_inode(parent);
 	}
 

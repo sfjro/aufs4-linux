@@ -223,7 +223,7 @@ void di_read_lock(struct dentry *d, int flags, unsigned int lsc)
 	struct inode *inode;
 
 	au_rw_read_lock_nested(&au_di(d)->di_rwsem, lsc);
-	if (d_is_positive(d)) {
+	if (d_really_is_positive(d)) {
 		inode = d_inode(d);
 		if (au_ftest_lock(flags, IW))
 			do_ii_write_lock(inode, lsc);
@@ -236,7 +236,7 @@ void di_read_unlock(struct dentry *d, int flags)
 {
 	struct inode *inode;
 
-	if (d_is_positive(d)) {
+	if (d_really_is_positive(d)) {
 		inode = d_inode(d);
 		if (au_ftest_lock(flags, IW)) {
 			au_dbg_verify_dinode(d);
@@ -251,7 +251,7 @@ void di_read_unlock(struct dentry *d, int flags)
 
 void di_downgrade_lock(struct dentry *d, int flags)
 {
-	if (d_is_positive(d) && au_ftest_lock(flags, IR))
+	if (d_really_is_positive(d) && au_ftest_lock(flags, IR))
 		ii_downgrade_lock(d_inode(d));
 	au_rw_dgrade_lock(&au_di(d)->di_rwsem);
 }
@@ -259,14 +259,14 @@ void di_downgrade_lock(struct dentry *d, int flags)
 void di_write_lock(struct dentry *d, unsigned int lsc)
 {
 	au_rw_write_lock_nested(&au_di(d)->di_rwsem, lsc);
-	if (d_is_positive(d))
+	if (d_really_is_positive(d))
 		do_ii_write_lock(d_inode(d), lsc);
 }
 
 void di_write_unlock(struct dentry *d)
 {
 	au_dbg_verify_dinode(d);
-	if (d_is_positive(d))
+	if (d_really_is_positive(d))
 		ii_write_unlock(d_inode(d));
 	au_rw_write_unlock(&au_di(d)->di_rwsem);
 }
@@ -338,7 +338,7 @@ struct dentry *au_h_d_alias(struct dentry *dentry, aufs_bindex_t bindex)
 	struct dentry *h_dentry;
 	struct inode *inode, *h_inode;
 
-	AuDebugOn(d_is_negative(dentry));
+	AuDebugOn(d_really_is_negative(dentry));
 
 	h_dentry = NULL;
 	if (au_dbstart(dentry) <= bindex

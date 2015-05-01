@@ -113,7 +113,7 @@ static void au_do_dir_ts(void *arg)
 	aufs_bindex_t bstart, bindex;
 
 	sb = a->dentry->d_sb;
-	if (d_is_negative(a->dentry))
+	if (d_really_is_negative(a->dentry))
 		goto out;
 	aufs_read_lock(a->dentry, AuLock_DW | AuLock_DIR); /* noflush */
 

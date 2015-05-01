@@ -89,7 +89,7 @@ static int au_d_may_add(struct dentry *dentry)
 	err = 0;
 	if (unlikely(d_unhashed(dentry)))
 		err = -ENOENT;
-	if (unlikely(d_is_positive(dentry)))
+	if (unlikely(d_really_is_positive(dentry)))
 		err = -EEXIST;
 	return err;
 }
@@ -111,7 +111,7 @@ int au_may_add(struct dentry *dentry, aufs_bindex_t bindex,
 		goto out;
 
 	h_dentry = au_h_dptr(dentry, bindex);
-	if (d_is_negative(dentry)) {
+	if (d_really_is_negative(dentry)) {
 		err = -EEXIST;
 		if (unlikely(d_is_positive(h_dentry)))
 			goto out;

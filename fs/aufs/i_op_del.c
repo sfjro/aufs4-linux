@@ -93,7 +93,7 @@ int au_may_del(struct dentry *dentry, aufs_bindex_t bindex,
 	struct inode *h_inode;
 
 	h_dentry = au_h_dptr(dentry, bindex);
-	if (d_is_positive(dentry)) {
+	if (d_really_is_positive(dentry)) {
 		err = -ENOENT;
 		if (unlikely(d_is_negative(h_dentry)))
 			goto out;

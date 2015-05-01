@@ -527,7 +527,7 @@ static int au_may_ren(struct au_ren_args *a)
 
 	err = -EIO;
 	isdir = !!au_ftest_ren(a->flags, ISDIR);
-	if (d_is_negative(a->dst_dentry)) {
+	if (d_really_is_negative(a->dst_dentry)) {
 		if (d_is_negative(a->dst_h_dentry))
 			err = au_may_add(a->dst_dentry, a->btgt,
 					 a->dst_h_parent, isdir);
@@ -821,13 +821,13 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 	a->src_dir = _src_dir;
 	a->src_dentry = _src_dentry;
 	a->src_inode = NULL;
-	if (d_is_positive(a->src_dentry))
+	if (d_really_is_positive(a->src_dentry))
 		a->src_inode = d_inode(a->src_dentry);
 	a->src_parent = a->src_dentry->d_parent; /* dir inode is locked */
 	a->dst_dir = _dst_dir;
 	a->dst_dentry = _dst_dentry;
 	a->dst_inode = NULL;
-	if (d_is_positive(a->dst_dentry))
+	if (d_really_is_positive(a->dst_dentry))
 		a->dst_inode = d_inode(a->dst_dentry);
 	a->dst_parent = a->dst_dentry->d_parent; /* dir inode is locked */
 	if (a->dst_inode) {
@@ -839,7 +839,7 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 	flags = AuLock_FLUSH | AuLock_NOPLM | AuLock_GEN;
 	if (d_is_dir(a->src_dentry)) {
 		au_fset_ren(a->flags, ISDIR);
-		if (unlikely(d_is_positive(a->dst_dentry)
+		if (unlikely(d_really_is_positive(a->dst_dentry)
 			     && !d_is_dir(a->dst_dentry)))
 			goto out_free;
 		err = aufs_read_and_write_lock2(a->dst_dentry, a->src_dentry,
