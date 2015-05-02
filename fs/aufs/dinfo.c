@@ -207,24 +207,30 @@ static void do_ii_read_lock(struct inode *inode, unsigned int lsc)
 
 void di_read_lock(struct dentry *d, int flags, unsigned int lsc)
 {
+	struct inode *inode;
+
 	au_rw_read_lock_nested(&au_di(d)->di_rwsem, lsc);
-	if (d->d_inode) {
+	if (d_really_is_positive(d)) {
+		inode = d_inode(d);
 		if (au_ftest_lock(flags, IW))
-			do_ii_write_lock(d->d_inode, lsc);
+			do_ii_write_lock(inode, lsc);
 		else if (au_ftest_lock(flags, IR))
-			do_ii_read_lock(d->d_inode, lsc);
+			do_ii_read_lock(inode, lsc);
 	}
 }
 
 void di_read_unlock(struct dentry *d, int flags)
 {
-	if (d->d_inode) {
+	struct inode *inode;
+
+	if (d_really_is_positive(d)) {
+		inode = d_inode(d);
 		if (au_ftest_lock(flags, IW)) {
 			au_dbg_verify_dinode(d);
-			ii_write_unlock(d->d_inode);
+			ii_write_unlock(inode);
 		} else if (au_ftest_lock(flags, IR)) {
 			au_dbg_verify_dinode(d);
-			ii_read_unlock(d->d_inode);
+			ii_read_unlock(inode);
 		}
 	}
 	au_rw_read_unlock(&au_di(d)->di_rwsem);
@@ -232,30 +238,30 @@ void di_read_unlock(struct dentry *d, int flags)
 
 void di_downgrade_lock(struct dentry *d, int flags)
 {
-	if (d->d_inode && au_ftest_lock(flags, IR))
-		ii_downgrade_lock(d->d_inode);
+	if (d_really_is_positive(d) && au_ftest_lock(flags, IR))
+		ii_downgrade_lock(d_inode(d));
 	au_rw_dgrade_lock(&au_di(d)->di_rwsem);
 }
 
 void di_write_lock(struct dentry *d, unsigned int lsc)
 {
 	au_rw_write_lock_nested(&au_di(d)->di_rwsem, lsc);
-	if (d->d_inode)
-		do_ii_write_lock(d->d_inode, lsc);
+	if (d_really_is_positive(d))
+		do_ii_write_lock(d_inode(d), lsc);
 }
 
 void di_write_unlock(struct dentry *d)
 {
 	au_dbg_verify_dinode(d);
-	if (d->d_inode)
-		ii_write_unlock(d->d_inode);
+	if (d_really_is_positive(d))
+		ii_write_unlock(d_inode(d));
 	au_rw_write_unlock(&au_di(d)->di_rwsem);
 }
 
 void di_write_lock2_child(struct dentry *d1, struct dentry *d2, int isdir)
 {
 	AuDebugOn(d1 == d2
-		  || d1->d_inode == d2->d_inode
+		  || d_inode(d1) == d_inode(d2)
 		  || d1->d_sb != d2->d_sb);
 
 	if (isdir && au_test_subdir(d1, d2)) {
@@ -271,7 +277,7 @@ void di_write_lock2_child(struct dentry *d1, struct dentry *d2, int isdir)
 void di_write_lock2_parent(struct dentry *d1, struct dentry *d2, int isdir)
 {
 	AuDebugOn(d1 == d2
-		  || d1->d_inode == d2->d_inode
+		  || d_inode(d1) == d_inode(d2)
 		  || d1->d_sb != d2->d_sb);
 
 	if (isdir && au_test_subdir(d1, d2)) {
@@ -287,7 +293,7 @@ void di_write_lock2_parent(struct dentry *d1, struct dentry *d2, int isdir)
 void di_write_unlock2(struct dentry *d1, struct dentry *d2)
 {
 	di_write_unlock(d1);
-	if (d1->d_inode == d2->d_inode)
+	if (d_inode(d1) == d_inode(d2))
 		au_rw_write_unlock(&au_di(d2)->di_rwsem);
 	else
 		di_write_unlock(d2);
@@ -319,8 +325,7 @@ struct dentry *au_h_d_alias(struct dentry *dentry, aufs_bindex_t bindex)
 	struct dentry *h_dentry;
 	struct inode *inode, *h_inode;
 
-	inode = dentry->d_inode;
-	AuDebugOn(!inode);
+	AuDebugOn(d_really_is_negative(dentry));
 
 	h_dentry = NULL;
 	if (au_dbstart(dentry) <= bindex
@@ -331,6 +336,7 @@ struct dentry *au_h_d_alias(struct dentry *dentry, aufs_bindex_t bindex)
 		goto out; /* success */
 	}
 
+	inode = d_inode(dentry);
 	AuDebugOn(bindex < au_ibstart(inode));
 	AuDebugOn(au_ibend(inode) < bindex);
 	h_inode = au_h_iptr(inode, bindex);
@@ -430,7 +436,7 @@ int au_digen_test(struct dentry *dentry, unsigned int sigen)
 
 	err = 0;
 	if (unlikely(au_digen(dentry) != sigen
-		     || au_iigen_test(dentry->d_inode, sigen)))
+		     || au_iigen_test(d_inode(dentry), sigen)))
 		err = -EIO;
 
 	return err;
@@ -461,7 +467,7 @@ void au_update_dbrange(struct dentry *dentry, int do_put_zero)
 		bend = dinfo->di_bend;
 		for (bindex = dinfo->di_bstart; bindex <= bend; bindex++) {
 			h_d = hdp[0 + bindex].hd_dentry;
-			if (h_d && !h_d->d_inode)
+			if (h_d && d_is_negative(h_d))
 				au_set_h_dptr(dentry, bindex, NULL);
 		}
 	}
@@ -493,7 +499,7 @@ void au_update_dbstart(struct dentry *dentry)
 		h_dentry = au_h_dptr(dentry, bindex);
 		if (!h_dentry)
 			continue;
-		if (h_dentry->d_inode) {
+		if (d_is_positive(h_dentry)) {
 			au_set_dbstart(dentry, bindex);
 			return;
 		}
@@ -511,7 +517,7 @@ void au_update_dbend(struct dentry *dentry)
 		h_dentry = au_h_dptr(dentry, bindex);
 		if (!h_dentry)
 			continue;
-		if (h_dentry->d_inode) {
+		if (d_is_positive(h_dentry)) {
 			au_set_dbend(dentry, bindex);
 			return;
 		}
