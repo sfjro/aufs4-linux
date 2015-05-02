@@ -28,7 +28,7 @@ int au_wr_dir_need_wh(struct dentry *dentry, int isdir, aufs_bindex_t *bcpup)
 	bstart = au_dbstart(dentry);
 	if (*bcpup < 0) {
 		*bcpup = bstart;
-		if (au_test_ro(sb, bstart, dentry->d_inode)) {
+		if (au_test_ro(sb, bstart, d_inode(dentry))) {
 			err = AuWbrCopyup(au_sbi(sb), dentry);
 			*bcpup = err;
 			if (unlikely(err < 0))
@@ -36,7 +36,7 @@ int au_wr_dir_need_wh(struct dentry *dentry, int isdir, aufs_bindex_t *bcpup)
 		}
 	} else
 		AuDebugOn(bstart < *bcpup
-			  || au_test_ro(sb, *bcpup, dentry->d_inode));
+			  || au_test_ro(sb, *bcpup, d_inode(dentry)));
 	AuDbg("bcpup %d, bstart %d\n", *bcpup, bstart);
 
 	if (*bcpup != bstart) {
@@ -80,10 +80,12 @@ int au_may_del(struct dentry *dentry, aufs_bindex_t bindex,
 	struct inode *h_inode;
 
 	h_dentry = au_h_dptr(dentry, bindex);
-	h_inode = h_dentry->d_inode;
-	if (dentry->d_inode) {
+	if (d_really_is_positive(dentry)) {
 		err = -ENOENT;
-		if (unlikely(!h_inode || !h_inode->i_nlink))
+		if (unlikely(d_is_negative(h_dentry)))
+			goto out;
+		h_inode = d_inode(h_dentry);
+		if (unlikely(!h_inode->i_nlink))
 			goto out;
 
 		h_mode = h_inode->i_mode;
@@ -98,7 +100,7 @@ int au_may_del(struct dentry *dentry, aufs_bindex_t bindex,
 	} else {
 		/* rename(2) case */
 		err = -EIO;
-		if (unlikely(h_inode))
+		if (unlikely(d_is_positive(h_dentry)))
 			goto out;
 	}
 
@@ -114,7 +116,7 @@ int au_may_del(struct dentry *dentry, aufs_bindex_t bindex,
 	 */
 	err = -EACCES;
 	if (unlikely(!au_opt_test(au_mntflags(dentry->d_sb), DIRPERM1)
-		     && au_test_h_perm(h_parent->d_inode,
+		     && au_test_h_perm(d_inode(h_parent),
 				       MAY_EXEC | MAY_WRITE)))
 		goto out;
 
@@ -204,6 +206,7 @@ static int renwh_and_rmdir(struct dentry *dentry, aufs_bindex_t bindex,
 	int rmdir_later, err, dirwh;
 	struct dentry *h_dentry;
 	struct super_block *sb;
+	struct inode *inode;
 
 	sb = dentry->d_sb;
 	SiMustAnyLock(sb);
@@ -213,7 +216,8 @@ static int renwh_and_rmdir(struct dentry *dentry, aufs_bindex_t bindex,
 		goto out;
 
 	/* stop monitoring */
-	au_hn_free(au_hi(dentry->d_inode, bindex));
+	inode = d_inode(dentry);
+	au_hn_free(au_hi(inode, bindex));
 
 	if (!au_test_fs_remote(h_dentry->d_sb)) {
 		dirwh = au_sbi(sb)->si_dirwh;
@@ -246,7 +250,7 @@ static void epilog(struct inode *dir, struct dentry *dentry,
 {
 	struct inode *inode;
 
-	inode = dentry->d_inode;
+	inode = d_inode(dentry);
 	d_drop(dentry);
 	inode->i_ctime = dir->i_ctime;
 
@@ -306,7 +310,7 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 	err = au_d_hashed_positive(dentry);
 	if (unlikely(err))
 		goto out_unlock;
-	inode = dentry->d_inode;
+	inode = d_inode(dentry);
 	IMustLock(inode);
 	err = -EISDIR;
 	if (unlikely(d_is_dir(dentry)))
@@ -337,7 +341,7 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 		}
 	} else {
 		/* dir inode is locked */
-		h_dir = wh_dentry->d_parent->d_inode;
+		h_dir = d_inode(wh_dentry->d_parent);
 		IMustLock(h_dir);
 		err = 0;
 	}
@@ -350,7 +354,7 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 		if (bindex == bstart) {
 			vfsub_update_h_iattr(&a->h_path, /*did*/NULL);
 			/*ignore*/
-			inode->i_ctime = a->h_path.dentry->d_inode->i_ctime;
+			inode->i_ctime = d_inode(a->h_path.dentry)->i_ctime;
 		} else
 			/* todo: this timestamp may be reverted later */
 			inode->i_ctime = h_dir->i_ctime;
@@ -407,7 +411,7 @@ int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 	err = au_alive_dir(dentry);
 	if (unlikely(err))
 		goto out_unlock;
-	inode = dentry->d_inode;
+	inode = d_inode(dentry);
 	IMustLock(inode);
 	err = -ENOTDIR;
 	if (unlikely(!d_is_dir(dentry)))
@@ -447,7 +451,7 @@ int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 		au_hn_free(au_hi(inode, bstart));
 
 		/* dir inode is locked */
-		IMustLock(wh_dentry->d_parent->d_inode);
+		IMustLock(d_inode(wh_dentry->d_parent));
 		err = 0;
 	}
 

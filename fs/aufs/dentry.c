@@ -69,8 +69,8 @@ real_lookup:
 		goto out;
 	}
 
-	h_inode = h_dentry->d_inode;
-	if (!h_inode) {
+	h_inode = d_inode(h_dentry);
+	if (d_is_negative(h_dentry)) {
 		if (!allow_neg)
 			goto out_neg;
 	} else if (wh_found
@@ -85,7 +85,7 @@ real_lookup:
 
 	if (!d_is_dir(h_dentry)
 	    || !wh_able
-	    || (d_is_positive(dentry) && !d_is_dir(dentry)))
+	    || (d_really_is_positive(dentry) && !d_is_dir(dentry)))
 		goto out; /* success */
 
 	mutex_lock_nested(&h_inode->i_mutex, AuLsc_I_CHILD);
@@ -131,7 +131,6 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 	};
 	const struct qstr *name = &dentry->d_name;
 	struct dentry *parent;
-	struct inode *inode;
 	struct super_block *sb;
 
 	sb = dentry->d_sb;
@@ -143,7 +142,6 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 	if (unlikely(err))
 		goto out;
 
-	inode = dentry->d_inode;
 	isdir = !!d_is_dir(dentry);
 	if (!type)
 		au_fset_lkup(args.flags, ALLOW_NEG);
@@ -158,7 +156,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 
 		h_dentry = au_h_dptr(dentry, bindex);
 		if (h_dentry) {
-			if (h_dentry->d_inode)
+			if (d_is_positive(h_dentry))
 				npositive++;
 			if (type != S_IFDIR)
 				break;
@@ -168,7 +166,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 		if (!h_parent || !d_is_dir(h_parent))
 			continue;
 
-		h_dir = h_parent->d_inode;
+		h_dir = d_inode(h_parent);
 		mutex_lock_nested(&h_dir->i_mutex, AuLsc_I_PARENT);
 		h_dentry = au_do_lookup(h_parent, dentry, bindex, &whname,
 					&args);
@@ -185,9 +183,9 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 			break;
 		if (!h_dentry)
 			continue;
-		h_inode = h_dentry->d_inode;
-		if (!h_inode)
+		if (d_is_negative(h_dentry))
 			continue;
+		h_inode = d_inode(h_dentry);
 		npositive++;
 		if (!args.type)
 			args.type = h_inode->i_mode & S_IFMT;
@@ -225,7 +223,7 @@ struct dentry *au_sio_lkup_one(struct qstr *name, struct dentry *parent)
 	struct dentry *dentry;
 	int wkq_err;
 
-	if (!au_test_h_perm_sio(parent->d_inode, MAY_EXEC))
+	if (!au_test_h_perm_sio(d_inode(parent), MAY_EXEC))
 		dentry = vfsub_lkup_one(name, parent);
 	else {
 		struct vfsub_lkup_one_args args = {
@@ -261,7 +259,7 @@ int au_lkup_neg(struct dentry *dentry, aufs_bindex_t bindex, int wh)
 	err = PTR_ERR(h_dentry);
 	if (IS_ERR(h_dentry))
 		goto out;
-	if (unlikely(h_dentry->d_inode)) {
+	if (unlikely(d_is_positive(h_dentry))) {
 		err = -EIO;
 		AuIOErr("%pd should be negative on b%d.\n", h_dentry, bindex);
 		dput(h_dentry);
@@ -336,10 +334,11 @@ static int au_h_verify_dentry(struct dentry *h_dentry, struct dentry *h_parent,
 	err = 0;
 	memset(&ia, -1, sizeof(ia));
 	h_sb = h_dentry->d_sb;
-	h_inode = h_dentry->d_inode;
-	if (h_inode)
+	h_inode = NULL;
+	if (d_is_positive(h_dentry)) {
+		h_inode = d_inode(h_dentry);
 		au_iattr_save(&ia, h_inode);
-	else if (au_test_nfs(h_sb) || au_test_fuse(h_sb))
+	} else if (au_test_nfs(h_sb) || au_test_fuse(h_sb))
 		/* nfs d_revalidate may return 0 for negative dentry */
 		/* fuse d_revalidate always return 0 for negative dentry */
 		goto out;
@@ -352,7 +351,7 @@ static int au_h_verify_dentry(struct dentry *h_dentry, struct dentry *h_parent,
 
 	err = 0;
 	if (unlikely(h_d != h_dentry
-		     || h_d->d_inode != h_inode
+		     || d_inode(h_d) != h_inode
 		     || (h_inode && au_iattr_test(&ia, h_inode))))
 		err = au_busy_or_stale();
 	dput(h_d);
@@ -371,7 +370,7 @@ int au_h_verify(struct dentry *h_dentry, unsigned int udba, struct inode *h_dir,
 	if (udba == AuOpt_UDBA_REVAL
 	    && !au_test_fs_remote(h_dentry->d_sb)) {
 		IMustLock(h_dir);
-		err = (h_dentry->d_parent->d_inode != h_dir);
+		err = (d_inode(h_dentry->d_parent) != h_dir);
 	} else if (udba != AuOpt_UDBA_NONE)
 		err = au_h_verify_dentry(h_dentry, h_parent, br);
 
@@ -463,9 +462,9 @@ static void au_do_hide(struct dentry *dentry)
 {
 	struct inode *inode;
 
-	inode = dentry->d_inode;
-	if (inode) {
-		if (!S_ISDIR(inode->i_mode)) {
+	if (d_really_is_positive(dentry)) {
+		inode = d_inode(dentry);
+		if (!d_is_dir(dentry)) {
 			if (inode->i_nlink && !d_unhashed(dentry))
 				drop_nlink(inode);
 		} else {
@@ -562,20 +561,26 @@ static int au_refresh_by_dinfo(struct dentry *dentry, struct au_dinfo *dinfo,
 
 	err = 0;
 	AuDebugOn(dinfo->di_bstart < 0);
-	orig_h.dentry = dinfo->di_hdentry[dinfo->di_bstart].hd_dentry;
-	orig_h.inode = orig_h.dentry->d_inode;
 	orig_h.mode = 0;
-	if (orig_h.inode)
+	orig_h.dentry = dinfo->di_hdentry[dinfo->di_bstart].hd_dentry;
+	orig_h.inode = NULL;
+	if (d_is_positive(orig_h.dentry)) {
+		orig_h.inode = d_inode(orig_h.dentry);
 		orig_h.mode = orig_h.inode->i_mode & S_IFMT;
+	}
 	memset(&tmp_h, 0, sizeof(tmp_h));
 	if (tmp->di_bstart >= 0) {
 		tmp_h.dentry = tmp->di_hdentry[tmp->di_bstart].hd_dentry;
-		tmp_h.inode = tmp_h.dentry->d_inode;
-		if (tmp_h.inode)
+		tmp_h.inode = NULL;
+		if (d_is_positive(tmp_h.dentry)) {
+			tmp_h.inode = d_inode(tmp_h.dentry);
 			tmp_h.mode = tmp_h.inode->i_mode & S_IFMT;
+		}
 	}
 
-	inode = dentry->d_inode;
+	inode = NULL;
+	if (d_really_is_positive(dentry))
+		inode = d_inode(dentry);
 	if (!orig_h.inode) {
 		AuDbg("nagative originally\n");
 		if (inode) {
@@ -655,8 +660,8 @@ static int au_refresh_by_dinfo(struct dentry *dentry, struct au_dinfo *dinfo,
 					h_dentry = hd[bindex].hd_dentry;
 					if (!h_dentry)
 						continue;
-					h_inode = h_dentry->d_inode;
-					AuDebugOn(!h_inode);
+					AuDebugOn(d_is_negative(h_dentry));
+					h_inode = d_inode(h_dentry);
 					AuDebugOn(orig_h.mode
 						  != (h_inode->i_mode
 						      & S_IFMT));
@@ -690,10 +695,9 @@ int au_refresh_dentry(struct dentry *dentry, struct dentry *parent)
 
 	DiMustWriteLock(dentry);
 	AuDebugOn(IS_ROOT(dentry));
-	AuDebugOn(!parent->d_inode);
+	AuDebugOn(d_really_is_negative(parent));
 
 	sb = dentry->d_sb;
-	inode = dentry->d_inode;
 	sigen = au_sigen(sb);
 	err = au_digen_test(parent, sigen);
 	if (unlikely(err))
@@ -709,8 +713,10 @@ int au_refresh_dentry(struct dentry *dentry, struct dentry *parent)
 
 	if (d_unhashed(dentry) || ebrange /* || dinfo->di_tmpfile */) {
 		AuDebugOn(au_dbstart(dentry) < 0 && au_dbend(dentry) >= 0);
-		if (inode)
+		if (d_really_is_positive(dentry)) {
+			inode = d_inode(dentry);
 			err = au_refresh_hinode_self(inode);
+		}
 		au_dbg_verify_dinode(dentry);
 		if (!err)
 			goto out_dgen; /* success */
@@ -867,10 +873,12 @@ static int h_d_revalidate(struct dentry *dentry, struct inode *inode,
 			continue;
 
 		/* UDBA tests */
-		h_inode = h_dentry->d_inode;
-		if (unlikely(!!inode != !!h_inode))
+		if (unlikely(!!inode != d_is_positive(h_dentry)))
 			goto err;
 
+		h_inode = NULL;
+		if (d_is_positive(h_dentry))
+			h_inode = d_inode(h_dentry);
 		h_plus = plus;
 		h_mode = mode;
 		h_cached_inode = h_inode;
@@ -929,7 +937,6 @@ int au_reval_dpath(struct dentry *dentry, unsigned int sigen)
 {
 	int err;
 	struct dentry *d, *parent;
-	struct inode *inode;
 
 	if (!au_ftest_si(au_sbi(dentry->d_sb), FAILED_REFRESH_DIR))
 		return simple_reval_dpath(dentry, sigen);
@@ -948,7 +955,6 @@ int au_reval_dpath(struct dentry *dentry, unsigned int sigen)
 			d = parent;
 		}
 
-		inode = d->d_inode;
 		if (d != dentry)
 			di_write_lock_child2(d);
 
@@ -1005,7 +1011,9 @@ static int aufs_d_revalidate(struct dentry *dentry, unsigned int flags)
 		AuTraceErr(err);
 		goto out;
 	}
-	inode = dentry->d_inode;
+	inode = NULL;
+	if (d_really_is_positive(dentry))
+		inode = d_inode(dentry);
 	if (unlikely(inode && is_bad_inode(inode))) {
 		err = -EINVAL;
 		AuTraceErr(err);
