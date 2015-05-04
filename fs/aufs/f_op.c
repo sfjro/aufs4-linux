@@ -25,11 +25,10 @@
 #include <linux/security.h>
 #include "aufs.h"
 
-int au_do_open_nondir(struct file *file, int flags)
+int au_do_open_nondir(struct file *file, int flags, struct file *h_file)
 {
 	int err;
 	aufs_bindex_t bindex;
-	struct file *h_file;
 	struct dentry *dentry;
 	struct au_finfo *finfo;
 	struct inode *h_inode;
@@ -38,11 +37,15 @@ int au_do_open_nondir(struct file *file, int flags)
 
 	err = 0;
 	dentry = file->f_path.dentry;
+	AuDebugOn(IS_ERR_OR_NULL(dentry));
 	finfo = au_fi(file);
 	memset(&finfo->fi_htop, 0, sizeof(finfo->fi_htop));
 	atomic_set(&finfo->fi_mmapped, 0);
 	bindex = au_dbstart(dentry);
-	h_file = au_h_open(dentry, bindex, flags, file, /*force_wr*/0);
+	if (!h_file)
+		h_file = au_h_open(dentry, bindex, flags, file, /*force_wr*/0);
+	else
+		get_file(h_file);
 	if (IS_ERR(h_file))
 		err = PTR_ERR(h_file);
 	else {
@@ -68,13 +71,16 @@ static int aufs_open_nondir(struct inode *inode __maybe_unused,
 {
 	int err;
 	struct super_block *sb;
+	struct au_do_open_args args = {
+		.open	= au_do_open_nondir
+	};
 
 	AuDbg("%pD, f_flags 0x%x, f_mode 0x%x\n",
 	      file, vfsub_file_flags(file), file->f_mode);
 
 	sb = file->f_path.dentry->d_sb;
 	si_read_lock(sb, AuLock_FLUSH);
-	err = au_do_open(file, au_do_open_nondir, /*fidir*/NULL);
+	err = au_do_open(file, &args);
 	si_read_unlock(sb);
 	return err;
 }
