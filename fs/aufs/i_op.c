@@ -254,6 +254,149 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+struct aopen_node {
+	struct hlist_node hlist;
+	struct file *file, *h_file;
+};
+
+static int au_do_aopen(struct inode *inode, struct file *file)
+{
+	struct au_sphlhead *aopen;
+	struct aopen_node *node;
+	struct au_do_open_args args = {
+		.no_lock	= 1,
+		.open		= au_do_open_nondir
+	};
+
+	aopen = &au_sbi(inode->i_sb)->si_aopen;
+	spin_lock(&aopen->spin);
+	hlist_for_each_entry(node, &aopen->head, hlist)
+		if (node->file == file) {
+			args.h_file = node->h_file;
+			break;
+		}
+	spin_unlock(&aopen->spin);
+	/* AuDebugOn(!args.h_file); */
+
+	return au_do_open(file, &args);
+}
+
+static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
+			    struct file *file, unsigned int open_flag,
+			    umode_t create_mode, int *opened)
+{
+	int err, h_opened = *opened;
+	struct dentry *parent;
+	struct dentry *d;
+	struct au_sphlhead *aopen;
+	struct vfsub_aopen_args args = {
+		.open_flag	= open_flag,
+		.create_mode	= create_mode,
+		.opened		= &h_opened
+	};
+	struct aopen_node aopen_node = {
+		.file	= file
+	};
+
+	IMustLock(dir);
+	AuDbg("open_flag 0x%x\n", open_flag);
+	AuDbgDentry(dentry);
+
+	err = 0;
+	if (!au_di(dentry)) {
+		d = aufs_lookup(dir, dentry, /*flags*/0);
+		if (IS_ERR(d)) {
+			err = PTR_ERR(d);
+			goto out;
+		} else if (d) {
+			/*
+			 * obsoleted dentry found.
+			 * another error will be returned later.
+			 */
+			d_drop(d);
+			dput(d);
+			AuDbgDentry(d);
+		}
+		AuDbgDentry(dentry);
+	}
+
+	if (d_is_positive(dentry)
+	    || d_unhashed(dentry)
+	    || d_unlinked(dentry)
+	    || !(open_flag & O_CREAT))
+		goto out_no_open;
+
+	err = aufs_read_lock(dentry, AuLock_DW | AuLock_FLUSH | AuLock_GEN);
+	if (unlikely(err))
+		goto out;
+
+	parent = dentry->d_parent;	/* dir is locked */
+	di_write_lock_parent(parent);
+	err = au_lkup_dentry(dentry, /*bstart*/0, /*type*/0);
+	if (unlikely(err))
+		goto out_unlock;
+
+	AuDbgDentry(dentry);
+	if (d_is_positive(dentry))
+		goto out_unlock;
+
+	args.file = get_empty_filp();
+	err = PTR_ERR(args.file);
+	if (IS_ERR(args.file))
+		goto out_unlock;
+
+	args.file->f_flags = file->f_flags;
+	err = au_aopen_or_create(dir, dentry, &args);
+	AuTraceErr(err);
+	AuDbgFile(args.file);
+	if (unlikely(err < 0)) {
+		if (h_opened & FILE_OPENED)
+			fput(args.file);
+		else
+			put_filp(args.file);
+		goto out_unlock;
+	}
+
+	/* some filesystems don't set FILE_CREATED while succeeded? */
+	*opened |= FILE_CREATED;
+	if (h_opened & FILE_OPENED)
+		aopen_node.h_file = args.file;
+	else {
+		put_filp(args.file);
+		args.file = NULL;
+	}
+	aopen = &au_sbi(dir->i_sb)->si_aopen;
+	au_sphl_add(&aopen_node.hlist, aopen);
+	err = finish_open(file, dentry, au_do_aopen, opened);
+	au_sphl_del(&aopen_node.hlist, aopen);
+	AuTraceErr(err);
+	AuDbgFile(file);
+	if (aopen_node.h_file)
+		fput(aopen_node.h_file);
+
+out_unlock:
+	di_write_unlock(parent);
+	aufs_read_unlock(dentry, AuLock_DW);
+	AuDbgDentry(dentry);
+	if (unlikely(err))
+		goto out;
+out_no_open:
+	if (!err && !(*opened & FILE_CREATED)) {
+		AuLabel(out_no_open);
+		dget(dentry);
+		err = finish_no_open(file, dentry);
+	}
+out:
+	AuDbg("%pd%s%s\n", dentry,
+	      (*opened & FILE_CREATED) ? " created" : "",
+	      (*opened & FILE_OPENED) ? " opened" : "");
+	AuTraceErr(err);
+	return err;
+}
+
+
+/* ---------------------------------------------------------------------- */
+
 static int au_wr_dir_cpup(struct dentry *dentry, struct dentry *parent,
 			  const unsigned char add_entry, aufs_bindex_t bcpup,
 			  aufs_bindex_t bstart)
@@ -1271,8 +1414,7 @@ struct inode_operations aufs_dir_iop = {
 #endif
 
 	.update_time	= aufs_update_time,
-	/* no support for atomic_open() */
-
+	.atomic_open	= aufs_atomic_open,
 	.tmpfile	= aufs_tmpfile
 };
 
