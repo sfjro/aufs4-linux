@@ -43,7 +43,7 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 	struct super_block *sb;
 	struct au_branch *br;
 	struct path h_path;
-	int err, exec_flag;
+	int err;
 
 	/* a race condition can happen between open and unlink/rmdir */
 	h_file = ERR_PTR(-ENOENT);
@@ -64,9 +64,9 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 
 	sb = dentry->d_sb;
 	br = au_sbr(sb, bindex);
-	h_file = ERR_PTR(-EACCES);
-	exec_flag = flags & __FMODE_EXEC;
-	if (exec_flag && (au_br_mnt(br)->mnt_flags & MNT_NOEXEC))
+	err = au_br_test_oflag(flags, br);
+	h_file = ERR_PTR(err);
+	if (unlikely(err))
 		goto out;
 
 	/* drop flags for writing */
@@ -92,7 +92,7 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 	if (IS_ERR(h_file))
 		goto out_br;
 
-	if (exec_flag) {
+	if (flags & __FMODE_EXEC) {
 		err = deny_write_access(h_file);
 		if (unlikely(err)) {
 			fput(h_file);

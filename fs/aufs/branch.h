@@ -150,6 +150,18 @@ static inline int au_br_hnotifyable(int brperm __maybe_unused)
 #endif
 }
 
+static inline int au_br_test_oflag(int oflag, struct au_branch *br)
+{
+	int err, exec_flag;
+
+	err = 0;
+	exec_flag = oflag & __FMODE_EXEC;
+	if (unlikely(exec_flag && (au_br_mnt(br)->mnt_flags & MNT_NOEXEC)))
+		err = -EACCES;
+
+	return err;
+}
+
 /* ---------------------------------------------------------------------- */
 
 /* branch.c */
