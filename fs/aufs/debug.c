@@ -237,7 +237,7 @@ static int do_pri_file(aufs_bindex_t bindex, struct file *file)
 	}
 	a[0] = 0;
 	if (bindex < 0
-	    && file->f_path.dentry
+	    && !IS_ERR_OR_NULL(file->f_path.dentry)
 	    && au_test_aufs(file->f_path.dentry->d_sb)
 	    && au_fi(file))
 		snprintf(a, sizeof(a), ", gen %d, mmapped %d",
@@ -245,7 +245,7 @@ static int do_pri_file(aufs_bindex_t bindex, struct file *file)
 	dpri("f%d: mode 0x%x, flags 0%o, cnt %ld, v %llu, pos %llu%s\n",
 	     bindex, file->f_mode, file->f_flags, (long)file_count(file),
 	     file->f_version, file->f_pos, a);
-	if (file->f_path.dentry)
+	if (!IS_ERR_OR_NULL(file->f_path.dentry))
 		do_pri_dentry(bindex, file->f_path.dentry);
 	return 0;
 }
@@ -260,7 +260,7 @@ void au_dpri_file(struct file *file)
 
 	err = do_pri_file(-1, file);
 	if (err
-	    || !file->f_path.dentry
+	    || IS_ERR_OR_NULL(file->f_path.dentry)
 	    || !au_test_aufs(file->f_path.dentry->d_sb))
 		return;
 

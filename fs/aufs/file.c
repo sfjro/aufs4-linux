@@ -43,7 +43,7 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 	struct super_block *sb;
 	struct au_branch *br;
 	struct path h_path;
-	int err, exec_flag;
+	int err;
 
 	/* a race condition can happen between open and unlink/rmdir */
 	h_file = ERR_PTR(-ENOENT);
@@ -64,9 +64,9 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 
 	sb = dentry->d_sb;
 	br = au_sbr(sb, bindex);
-	h_file = ERR_PTR(-EACCES);
-	exec_flag = flags & __FMODE_EXEC;
-	if (exec_flag && (au_br_mnt(br)->mnt_flags & MNT_NOEXEC))
+	err = au_br_test_oflag(flags, br);
+	h_file = ERR_PTR(err);
+	if (unlikely(err))
 		goto out;
 
 	/* drop flags for writing */
@@ -92,7 +92,7 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 	if (IS_ERR(h_file))
 		goto out_br;
 
-	if (exec_flag) {
+	if (flags & __FMODE_EXEC) {
 		err = deny_write_access(h_file);
 		if (unlikely(err)) {
 			fput(h_file);
@@ -223,24 +223,43 @@ out:
 	return err;
 }
 
-int au_do_open(struct file *file, int (*open)(struct file *file, int flags),
-	       struct au_fidir *fidir)
+int au_do_open(struct file *file, struct au_do_open_args *args)
 {
-	int err;
+	int err, no_lock = args->no_lock;
 	struct dentry *dentry;
 	struct au_finfo *finfo;
 
-	err = au_finfo_init(file, fidir);
+	if (!no_lock)
+		err = au_finfo_init(file, args->fidir);
+	else {
+		lockdep_off();
+		err = au_finfo_init(file, args->fidir);
+		lockdep_on();
+	}
 	if (unlikely(err))
 		goto out;
 
 	dentry = file->f_path.dentry;
-	di_write_lock_child(dentry);
-	err = au_cmoo(dentry);
-	di_downgrade_lock(dentry, AuLock_IR);
-	if (!err)
-		err = open(file, vfsub_file_flags(file));
-	di_read_unlock(dentry, AuLock_IR);
+	AuDebugOn(IS_ERR_OR_NULL(dentry));
+	if (!no_lock) {
+		di_write_lock_child(dentry);
+		err = au_cmoo(dentry);
+		di_downgrade_lock(dentry, AuLock_IR);
+		if (!err)
+			err = args->open(file, vfsub_file_flags(file), NULL);
+		di_read_unlock(dentry, AuLock_IR);
+	} else {
+		err = au_cmoo(dentry);
+		if (!err)
+			err = args->open(file, vfsub_file_flags(file),
+					 args->h_file);
+		if (!err && au_fbstart(file) != au_dbstart(dentry))
+			/*
+			 * cmoo happens after h_file was opened.
+			 * need to refresh file later.
+			 */
+			atomic_dec(&au_fi(file)->fi_generation);
+	}
 
 	finfo = au_fi(file);
 	if (!err) {
@@ -248,7 +267,13 @@ int au_do_open(struct file *file, int (*open)(struct file *file, int flags),
 		au_sphl_add(&finfo->fi_hlist,
 			    &au_sbi(file->f_path.dentry->d_sb)->si_files);
 	}
-	fi_write_unlock(file);
+	if (!no_lock)
+		fi_write_unlock(file);
+	else {
+		lockdep_off();
+		fi_write_unlock(file);
+		lockdep_on();
+	}
 	if (unlikely(err)) {
 		finfo->fi_hdir = NULL;
 		au_finfo_fin(file);
