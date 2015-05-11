@@ -245,14 +245,14 @@ out:
 	return err;
 }
 
-static int do_open_dir(struct file *file, int flags)
+static int do_open_dir(struct file *file, int flags, struct file *h_file)
 {
 	int err;
 	aufs_bindex_t bindex, btail;
 	struct dentry *dentry, *h_dentry;
-	struct file *h_file;
 
 	FiMustWriteLock(file);
+	AuDebugOn(h_file);
 
 	err = 0;
 	dentry = file->f_path.dentry;
@@ -300,7 +300,11 @@ static int aufs_open_dir(struct inode *inode __maybe_unused,
 	si_read_lock(sb, AuLock_FLUSH);
 	fidir = au_fidir_alloc(sb);
 	if (fidir) {
-		err = au_do_open(file, do_open_dir, fidir);
+		struct au_do_open_args args = {
+			.open	= do_open_dir,
+			.fidir	= fidir
+		};
+		err = au_do_open(file, &args);
 		if (unlikely(err))
 			kfree(fidir);
 	}

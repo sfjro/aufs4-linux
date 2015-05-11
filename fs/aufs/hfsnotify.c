@@ -139,7 +139,7 @@ static char *au_hfsn_name(u32 mask)
 	test_ret(FS_UNMOUNT);
 	test_ret(FS_Q_OVERFLOW);
 	test_ret(FS_IN_IGNORED);
-	test_ret(FS_IN_ISDIR);
+	test_ret(FS_ISDIR);
 	test_ret(FS_IN_ONESHOT);
 	test_ret(FS_EVENT_ON_CHILD);
 	return "";
