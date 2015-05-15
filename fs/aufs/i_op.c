@@ -44,13 +44,19 @@ static int h_permission(struct inode *h_inode, int mask,
 	 * - skip the lower fs test in the case of write to ro branch.
 	 * - nfs dir permission write check is optimized, but a policy for
 	 *   link/rename requires a real check.
+	 * - nfs always sets MS_POSIXACL regardless its mount option 'noacl.'
+	 *   in this case, generic_permission() returns -EOPNOTSUPP.
 	 */
 	if ((write_mask && !au_br_writable(brperm))
 	    || (au_test_nfs(h_inode->i_sb) && S_ISDIR(h_inode->i_mode)
 		&& write_mask && !(mask & MAY_READ))
 	    || !h_inode->i_op->permission) {
 		/* AuLabel(generic_permission); */
+		/* AuDbg("get_acl %pf\n", h_inode->i_op->get_acl); */
 		err = generic_permission(h_inode, mask);
+		if (err == -EOPNOTSUPP && au_test_nfs_noacl(h_inode))
+			err = h_inode->i_op->permission(h_inode, mask);
+		AuTraceErr(err);
 	} else {
 		/* AuLabel(h_inode->permission); */
 		err = h_inode->i_op->permission(h_inode, mask);

@@ -27,6 +27,7 @@
 #include <linux/fs.h>
 #include <linux/magic.h>
 #include <linux/romfs_fs.h>
+#include <linux/nfs_fs.h>
 
 static inline int au_test_aufs(struct super_block *sb)
 {
@@ -382,6 +383,17 @@ static inline int au_test_fs_rr(struct super_block *sb)
 		|| au_test_iso9660(sb)
 		|| au_test_cramfs(sb)
 		|| au_test_romfs(sb);
+}
+
+/*
+ * test if the @inode is nfs with 'noacl' option
+ * NFS always sets MS_POSIXACL regardless its mount option 'noacl.'
+ */
+static inline int au_test_nfs_noacl(struct inode *inode)
+{
+	return au_test_nfs(inode->i_sb)
+		/* && IS_POSIXACL(inode) */
+		&& !nfs_server_capable(inode, NFS_CAP_ACLS);
 }
 
 #endif /* __KERNEL__ */

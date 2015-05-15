@@ -72,11 +72,16 @@ static int au_do_cpup_xattr(struct dentry *h_dst, struct dentry *h_src,
 	ssz = vfs_getxattr_alloc(h_src, name, buf, 0, GFP_NOFS);
 	err = ssz;
 	if (unlikely(err <= 0)) {
-		AuTraceErr(err);
 		if (err == -ENODATA
 		    || (err == -EOPNOTSUPP
-			&& (ignore_flags & au_xattr_out_of_list)))
+			&& ((ignore_flags & au_xattr_out_of_list)
+			    || ((!strcmp(name, XATTR_NAME_POSIX_ACL_ACCESS)
+				 || !strcmp(name, XATTR_NAME_POSIX_ACL_DEFAULT))
+				&& au_test_nfs_noacl(h_src->d_inode)))
+			    ))
 			err = 0;
+		if (err && (verbose || au_debug_test()))
+			pr_err("%s, err %d\n", name, err);
 		goto out;
 	}
 
