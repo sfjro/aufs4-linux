@@ -75,9 +75,10 @@ static int au_do_cpup_xattr(struct dentry *h_dst, struct dentry *h_src,
 		if (err == -ENODATA
 		    || (err == -EOPNOTSUPP
 			&& ((ignore_flags & au_xattr_out_of_list)
-			    || ((!strcmp(name, XATTR_NAME_POSIX_ACL_ACCESS)
-				 || !strcmp(name, XATTR_NAME_POSIX_ACL_DEFAULT))
-				&& au_test_nfs_noacl(h_src->d_inode)))
+			    || (au_test_nfs_noacl(h_src->d_inode)
+				&& (!strcmp(name, XATTR_NAME_POSIX_ACL_ACCESS)
+				    || !strcmp(name,
+					       XATTR_NAME_POSIX_ACL_DEFAULT))))
 			    ))
 			err = 0;
 		if (err && (verbose || au_debug_test()))
