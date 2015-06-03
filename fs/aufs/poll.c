@@ -39,14 +39,16 @@ unsigned int aufs_poll(struct file *file, poll_table *wait)
 	if (unlikely(err))
 		goto out;
 
+	di_read_unlock(dentry, AuLock_IR);
+	h_file = au_hf_top(file);
+	get_file(h_file);
+	fi_read_unlock(file);
+
 	/* it is not an error if h_file has no operation */
 	mask = DEFAULT_POLLMASK;
-	h_file = au_hf_top(file);
 	if (h_file->f_op->poll)
 		mask = h_file->f_op->poll(h_file, wait);
-
-	di_read_unlock(dentry, AuLock_IR);
-	fi_read_unlock(file);
+	fput(h_file);
 
 out:
 	si_read_unlock(sb);
