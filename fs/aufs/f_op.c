@@ -654,19 +654,16 @@ static int aufs_fsync_nondir(struct file *file, loff_t start, loff_t end,
 	struct super_block *sb;
 
 	dentry = file->f_path.dentry;
-	inode = dentry->d_inode;
 	sb = dentry->d_sb;
-	mutex_lock(&inode->i_mutex);
-	err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
-	if (unlikely(err))
-		goto out;
+	inode = dentry->d_inode;
+	au_mtx_and_read_lock(inode);
 
 	err = 0; /* -EBADF; */ /* posix? */
 	if (unlikely(!(file->f_mode & FMODE_WRITE)))
-		goto out_si;
+		goto out;
 	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/1);
 	if (unlikely(err))
-		goto out_si;
+		goto out;
 
 	err = au_ready_to_write(file, -1, &pin);
 	di_downgrade_lock(dentry, AuLock_IR);
@@ -682,9 +679,8 @@ static int aufs_fsync_nondir(struct file *file, loff_t start, loff_t end,
 out_unlock:
 	di_read_unlock(dentry, AuLock_IR);
 	fi_write_unlock(file);
-out_si:
-	si_read_unlock(sb);
 out:
+	si_read_unlock(sb);
 	mutex_unlock(&inode->i_mutex);
 	return err;
 }
