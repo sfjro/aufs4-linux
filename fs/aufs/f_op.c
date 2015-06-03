@@ -653,35 +653,35 @@ static int aufs_fsync_nondir(struct file *file, loff_t start, loff_t end,
 	struct file *h_file;
 	struct super_block *sb;
 
+	err = 0; /* -EBADF; */ /* posix? */
+	if (unlikely(!(file->f_mode & FMODE_WRITE)))
+		goto out;
+
 	dentry = file->f_path.dentry;
 	sb = dentry->d_sb;
 	inode = dentry->d_inode;
 	au_mtx_and_read_lock(inode);
-
-	err = 0; /* -EBADF; */ /* posix? */
-	if (unlikely(!(file->f_mode & FMODE_WRITE)))
-		goto out;
 	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/1);
 	if (unlikely(err))
-		goto out;
+		goto out_mtx;
 
 	err = au_ready_to_write(file, -1, &pin);
 	di_downgrade_lock(dentry, AuLock_IR);
 	if (unlikely(err))
-		goto out_unlock;
+		goto out_fdi;
 	au_unpin(&pin);
 
-	err = -EINVAL;
 	h_file = au_hf_top(file);
 	err = vfsub_fsync(h_file, &h_file->f_path, datasync);
 	au_cpup_attr_timesizes(inode);
 
-out_unlock:
+out_fdi:
 	di_read_unlock(dentry, AuLock_IR);
 	fi_write_unlock(file);
-out:
+out_mtx:
 	si_read_unlock(sb);
 	mutex_unlock(&inode->i_mutex);
+out:
 	return err;
 }
 
@@ -695,22 +695,22 @@ static int aufs_aio_fsync_nondir(struct kiocb *kio, int datasync)
 	struct inode *inode;
 	struct file *file, *h_file;
 
+	err = 0; /* -EBADF; */ /* posix? */
+	if (unlikely(!(file->f_mode & FMODE_WRITE)))
+		goto out;
+
 	file = kio->ki_filp;
 	dentry = file->f_path.dentry;
 	inode = dentry->d_inode;
 	au_mtx_and_read_lock(inode);
-
-	err = 0; /* -EBADF; */ /* posix? */
-	if (unlikely(!(file->f_mode & FMODE_WRITE)))
-		goto out;
 	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/1);
 	if (unlikely(err))
-		goto out;
+		goto out_mtx;
 
 	err = au_ready_to_write(file, -1, &pin);
 	di_downgrade_lock(dentry, AuLock_IR);
 	if (unlikely(err))
-		goto out_unlock;
+		goto out_fdi;
 	au_unpin(&pin);
 
 	err = -ENOSYS;
@@ -733,12 +733,13 @@ static int aufs_aio_fsync_nondir(struct kiocb *kio, int datasync)
 		mutex_unlock(h_mtx);
 	}
 
-out_unlock:
+out_fdi:
 	di_read_unlock(dentry, AuLock_IR);
 	fi_write_unlock(file);
-out:
+out_mtx:
 	si_read_unlock(inode->sb);
 	mutex_unlock(&inode->i_mutex);
+out:
 	return err;
 }
 #endif
