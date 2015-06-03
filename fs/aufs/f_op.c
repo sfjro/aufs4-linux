@@ -468,10 +468,12 @@ static long aufs_fallocate(struct file *file, int mode, loff_t offset,
 			   loff_t len)
 {
 	long err;
+	blkcnt_t blks;
+	aufs_bindex_t bstart;
 	struct au_pin pin;
 	struct dentry *dentry;
 	struct super_block *sb;
-	struct inode *inode;
+	struct inode *inode, *h_inode;
 	struct file *h_file;
 
 	dentry = file->f_path.dentry;
@@ -491,8 +493,11 @@ static long aufs_fallocate(struct file *file, int mode, loff_t offset,
 		goto out;
 	}
 
+	bstart = au_fbstart(file);
 	h_file = au_hf_top(file);
 	get_file(h_file);
+	h_inode = file_inode(h_file);
+	blks = h_inode->i_blocks;
 	au_unpin(&pin);
 	di_read_unlock(dentry, AuLock_IR);
 	fi_write_unlock(file);
@@ -502,7 +507,9 @@ static long aufs_fallocate(struct file *file, int mode, loff_t offset,
 	lockdep_on();
 	ii_write_lock_child(inode);
 	au_cpup_attr_timesizes(inode);
-	inode->i_mode = file_inode(h_file)->i_mode;
+	inode->i_mode = h_inode->i_mode;
+	if (err > 0)
+		au_fhsm_wrote(sb, bstart, /*force*/h_inode->i_blocks > blks);
 	ii_write_unlock(inode);
 	fput(h_file);
 
