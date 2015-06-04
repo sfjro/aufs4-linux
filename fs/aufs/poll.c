@@ -35,20 +35,17 @@ unsigned int aufs_poll(struct file *file, poll_table *wait)
 	dentry = file->f_path.dentry;
 	sb = dentry->d_sb;
 	si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLMW);
-	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/0);
-	if (unlikely(err))
-		goto out;
 
-	di_read_unlock(dentry, AuLock_IR);
-	h_file = au_hf_top(file);
-	get_file(h_file);
-	fi_read_unlock(file);
+	h_file = au_read_pre(file, /*keep_fi*/0);
+	err = PTR_ERR(h_file);
+	if (IS_ERR(h_file))
+		goto out;
 
 	/* it is not an error if h_file has no operation */
 	mask = DEFAULT_POLLMASK;
 	if (h_file->f_op->poll)
 		mask = h_file->f_op->poll(h_file, wait);
-	fput(h_file);
+	fput(h_file); /* instead of au_read_post() */
 
 out:
 	si_read_unlock(sb);
