@@ -98,6 +98,7 @@ AuStubVoid(au_h_open_post, struct dentry *dentry, aufs_bindex_t bindex,
 extern const struct file_operations aufs_file_fop;
 int au_do_open_nondir(struct file *file, int flags, struct file *h_file);
 int aufs_release_nondir(struct inode *inode __maybe_unused, struct file *file);
+struct file *au_read_pre(struct file *file, int keep_fi);
 
 /* finfo.c */
 void au_hfput(struct au_hfile *hf, struct file *file);
