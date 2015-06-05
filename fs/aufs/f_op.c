@@ -137,7 +137,7 @@ struct file *au_read_pre(struct file *file, int keep_fi)
 
 	err = au_reval_and_lock_fdi(file, au_reopen_nondir, /*wlock*/0);
 	if (!err) {
-		di_read_unlock(file->f_dentry, AuLock_IR);
+		di_read_unlock(file->f_path.dentry, AuLock_IR);
 		h_file = au_hf_top(file);
 		get_file(h_file);
 		if (!keep_fi)
@@ -178,7 +178,7 @@ static struct file *au_write_pre(struct file *file, int do_ready,
 	if (unlikely(err))
 		goto out;
 
-	dentry = file->f_dentry;
+	dentry = file->f_path.dentry;
 	if (do_ready) {
 		err = au_ready_to_write(file, -1, &pin);
 		if (unlikely(err)) {
