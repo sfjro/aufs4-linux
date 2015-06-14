@@ -411,8 +411,8 @@ static int au_do_fsync_dir(struct file *file, int datasync)
 	if (unlikely(err))
 		goto out;
 
-	sb = file->f_path.dentry->d_sb;
 	inode = file_inode(file);
+	sb = inode->i_sb;
 	bend = au_fbend_dir(file);
 	for (bindex = au_fbstart(file); !err && bindex <= bend; bindex++) {
 		h_file = au_hf_dir(file, bindex);
