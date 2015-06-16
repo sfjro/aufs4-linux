@@ -455,7 +455,6 @@ static int fillvdir(struct dir_context *ctx, const char *__name, int nlen,
 		    || au_nhash_test_known_wh(&arg->whlist, name, nlen))
 			goto out; /* already exists or whiteouted */
 
-		sb = arg->file->f_path.dentry->d_sb;
 		arg->err = au_ino(sb, arg->bindex, h_ino, d_type, &ino);
 		if (!arg->err) {
 			if (unlikely(nlen > AUFS_MAX_NAMELEN))
