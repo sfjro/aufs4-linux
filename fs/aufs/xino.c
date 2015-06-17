@@ -729,7 +729,7 @@ struct file *au_xino_create(struct super_block *sb, char *fname, int silent)
 {
 	struct file *file;
 	struct dentry *h_parent, *d;
-	struct inode *h_dir;
+	struct inode *h_dir, *inode;
 	int err;
 
 	/*
@@ -747,12 +747,16 @@ struct file *au_xino_create(struct super_block *sb, char *fname, int silent)
 	}
 
 	/* keep file count */
+	err = 0;
+	inode = file_inode(file);
 	h_parent = dget_parent(file->f_path.dentry);
 	h_dir = d_inode(h_parent);
 	mutex_lock_nested(&h_dir->i_mutex, AuLsc_I_PARENT);
 	/* mnt_want_write() is unnecessary here */
 	/* no delegation since it is just created */
-	err = vfsub_unlink(h_dir, &file->f_path, /*delegated*/NULL, /*force*/0);
+	if (inode->i_nlink)
+		err = vfsub_unlink(h_dir, &file->f_path, /*delegated*/NULL,
+				   /*force*/0);
 	mutex_unlock(&h_dir->i_mutex);
 	dput(h_parent);
 	if (unlikely(err)) {
