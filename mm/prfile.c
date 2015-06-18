@@ -24,7 +24,6 @@ static inline void prfile_trace(struct file *f, struct file *pr,
 #endif
 }
 
-#ifdef CONFIG_MMU
 void vma_do_file_update_time(struct vm_area_struct *vma, const char func[],
 			     int line)
 {
@@ -64,7 +63,8 @@ void vma_do_fput(struct vm_area_struct *vma, const char func[], int line)
 	if (f && pr)
 		fput(pr);
 }
-#else
+
+#ifndef CONFIG_MMU
 struct file *vmr_do_pr_or_file(struct vm_region *region, const char func[],
 			       int line)
 {
@@ -83,4 +83,4 @@ void vmr_do_fput(struct vm_region *region, const char func[], int line)
 	if (f && pr)
 		fput(pr);
 }
-#endif /* CONFIG_MMU */
+#endif /* !CONFIG_MMU */

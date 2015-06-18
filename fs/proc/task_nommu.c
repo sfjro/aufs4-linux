@@ -162,7 +162,7 @@ static int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma,
 	if (file) {
 		struct inode *inode;
 
-		file = vma_pr_or_file(file);
+		file = vma_pr_or_file(vma);
 		inode = file_inode(file);
 		dev = inode->i_sb->s_dev;
 		ino = inode->i_ino;
