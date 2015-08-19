@@ -1288,6 +1288,54 @@ out:
 	return err;
 }
 
+/* ---------------------------------------------------------------------- */
+
+/*
+ * Assumption:
+ * - the number of symlinks is not so many.
+ *
+ * Structure:
+ * - sbinfo (instead of iinfo) contains an hlist of struct au_symlink.
+ *   If iinfo contained the hlist, then it would be rather large waste of memory
+ *   I am afraid.
+ * - struct au_symlink contains the necessary info for h_inode follow_link() and
+ *   put_link().
+ */
+
+struct au_symlink {
+	union {
+		struct hlist_node hlist;
+		struct rcu_head rcu;
+	};
+
+	struct inode *h_inode;
+	void *h_cookie;
+};
+
+static void au_symlink_add(struct super_block *sb, struct au_symlink *slink,
+			   struct inode *h_inode, void *cookie)
+{
+	struct au_sbinfo *sbinfo;
+
+	ihold(h_inode);
+	slink->h_inode = h_inode;
+	slink->h_cookie = cookie;
+	sbinfo = au_sbi(sb);
+	au_sphl_add(&slink->hlist, &sbinfo->si_symlink);
+}
+
+static void au_symlink_del(struct super_block *sb, struct au_symlink *slink)
+{
+	struct au_sbinfo *sbinfo;
+
+	/* do not iput() within rcu */
+	iput(slink->h_inode);
+	slink->h_inode = NULL;
+	sbinfo = au_sbi(sb);
+	au_sphl_del_rcu(&slink->hlist, &sbinfo->si_symlink);
+	kfree_rcu(slink, rcu);
+}
+
 static void *aufs_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
 	int err;
