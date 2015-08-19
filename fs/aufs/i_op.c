@@ -1242,54 +1242,6 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
-static int h_readlink(struct dentry *dentry, int bindex, char __user *buf,
-		      int bufsiz)
-{
-	int err;
-	struct super_block *sb;
-	struct dentry *h_dentry;
-	struct inode *inode, *h_inode;
-
-	err = -EINVAL;
-	h_dentry = au_h_dptr(dentry, bindex);
-	h_inode = d_inode(h_dentry);
-	if (unlikely(!h_inode->i_op->readlink))
-		goto out;
-
-	err = security_inode_readlink(h_dentry);
-	if (unlikely(err))
-		goto out;
-
-	sb = dentry->d_sb;
-	inode = d_inode(dentry);
-	if (!au_test_ro(sb, bindex, inode)) {
-		vfsub_touch_atime(au_sbr_mnt(sb, bindex), h_dentry);
-		fsstack_copy_attr_atime(inode, h_inode);
-	}
-	err = h_inode->i_op->readlink(h_dentry, buf, bufsiz);
-
-out:
-	return err;
-}
-
-static int aufs_readlink(struct dentry *dentry, char __user *buf, int bufsiz)
-{
-	int err;
-
-	err = aufs_read_lock(dentry, AuLock_IR | AuLock_GEN);
-	if (unlikely(err))
-		goto out;
-	err = au_d_hashed_positive(dentry);
-	if (!err)
-		err = h_readlink(dentry, au_dbstart(dentry), buf, bufsiz);
-	aufs_read_unlock(dentry, AuLock_IR);
-
-out:
-	return err;
-}
-
-/* ---------------------------------------------------------------------- */
-
 /*
  * Assumption:
  * - the number of symlinks is not so many.
@@ -1471,7 +1423,7 @@ struct inode_operations aufs_symlink_iop = {
 	.removexattr	= aufs_removexattr,
 #endif
 
-	.readlink	= aufs_readlink,
+	.readlink	= generic_readlink,
 	.follow_link	= aufs_follow_link,
 	.put_link	= aufs_put_link,
 
