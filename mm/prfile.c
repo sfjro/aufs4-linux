@@ -19,7 +19,7 @@ static inline void prfile_trace(struct file *f, struct file *pr,
 {
 #ifdef PRFILE_TRACE
 	if (pr)
-		pr_info("%s:%d: %s, %p\n", func, line, func2,
+		pr_info("%s:%d: %s, %s\n", func, line, func2,
 			f ? (char *)f->f_path.dentry->d_name.name : "(null)");
 #endif
 }
