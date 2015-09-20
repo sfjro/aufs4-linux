@@ -1297,7 +1297,7 @@ static const char *aufs_follow_link(struct dentry *dentry, void **cookie)
 	int err;
 	aufs_bindex_t bindex;
 
-	ret = NULL; /* supress a warning */
+	ret = NULL; /* suppress a warning */
 	err = aufs_read_lock(dentry, AuLock_IR | AuLock_GEN);
 	if (unlikely(err))
 		goto out;
