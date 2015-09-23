@@ -26,7 +26,7 @@
 #include "aufs.h"
 
 static int h_permission(struct inode *h_inode, int mask,
-			struct vfsmount *h_mnt, int brperm)
+			struct path *h_path, int brperm)
 {
 	int err;
 	const unsigned char write_mask = !!(mask & (MAY_WRITE | MAY_APPEND));
@@ -35,7 +35,7 @@ static int h_permission(struct inode *h_inode, int mask,
 	if ((write_mask && IS_IMMUTABLE(h_inode))
 	    || ((mask & MAY_EXEC)
 		&& S_ISREG(h_inode->i_mode)
-		&& ((h_mnt->mnt_flags & MNT_NOEXEC)
+		&& (path_noexec(h_path)
 		    || !(h_inode->i_mode & S_IXUGO))))
 		goto out;
 
@@ -120,7 +120,7 @@ static int aufs_permission(struct inode *inode, int mask)
 		err = 0;
 		bindex = au_ibtop(inode);
 		br = au_sbr(sb, bindex);
-		err = h_permission(h_inode, mask, au_br_mnt(br), br->br_perm);
+		err = h_permission(h_inode, mask, &br->br_path, br->br_perm);
 		if (write_mask
 		    && !err
 		    && !special_file(h_inode->i_mode)) {
@@ -146,7 +146,7 @@ static int aufs_permission(struct inode *inode, int mask)
 				break;
 
 			br = au_sbr(sb, bindex);
-			err = h_permission(h_inode, mask, au_br_mnt(br),
+			err = h_permission(h_inode, mask, &br->br_path,
 					   br->br_perm);
 		}
 	}
