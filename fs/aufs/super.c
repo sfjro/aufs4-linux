@@ -104,7 +104,7 @@ static int au_show_brs(struct seq_file *seq, struct super_block *sb)
 		path.mnt = au_br_mnt(br);
 		path.dentry = hdp[bindex].hd_dentry;
 		err = au_seq_path(seq, &path);
-		if (err > 0) {
+		if (!err) {
 			au_optstr_br_perm(&perm, br->br_perm);
 			err = seq_printf(seq, "=%s", perm.a);
 			if (err == -1)
