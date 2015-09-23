@@ -554,7 +554,7 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
-static unsigned long long au_farray_cb(void *a,
+static unsigned long long au_farray_cb(struct super_block *sb, void *a,
 				       unsigned long long max __maybe_unused,
 				       void *arg)
 {
@@ -562,7 +562,6 @@ static unsigned long long au_farray_cb(void *a,
 	struct file **p, *f;
 	struct au_sphlhead *files;
 	struct au_finfo *finfo;
-	struct super_block *sb = arg;
 
 	n = 0;
 	p = a;
@@ -587,7 +586,7 @@ static struct file **au_farray_alloc(struct super_block *sb,
 				     unsigned long long *max)
 {
 	*max = atomic_long_read(&au_sbi(sb)->si_nfiles);
-	return au_array_alloc(max, au_farray_cb, sb);
+	return au_array_alloc(max, au_farray_cb, sb, /*arg*/NULL);
 }
 
 static void au_farray_free(struct file **a, unsigned long long max)
@@ -985,8 +984,8 @@ static void au_br_do_del(struct super_block *sb, aufs_bindex_t bindex,
 	au_br_do_free(br);
 }
 
-static unsigned long long empty_cb(void *array, unsigned long long max,
-				   void *arg)
+static unsigned long long empty_cb(struct super_block *sb, void *array,
+				   unsigned long long max, void *arg)
 {
 	return max;
 }
@@ -1031,7 +1030,7 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 	br_id = br->br_id;
 	opened = atomic_read(&br->br_count);
 	if (unlikely(opened)) {
-		to_free = au_array_alloc(&opened, empty_cb, NULL);
+		to_free = au_array_alloc(&opened, empty_cb, sb, NULL);
 		err = PTR_ERR(to_free);
 		if (IS_ERR(to_free))
 			goto out;

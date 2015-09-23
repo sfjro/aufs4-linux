@@ -77,14 +77,14 @@ static void sysrq_sb(struct super_block *sb)
 		struct inode *i;
 
 		pr("isolated inode\n");
-		spin_lock(&inode_sb_list_lock);
+		spin_lock(&sb->s_inode_list_lock);
 		list_for_each_entry(i, &sb->s_inodes, i_sb_list) {
 			spin_lock(&i->i_lock);
 			if (1 || hlist_empty(&i->i_dentry))
 				au_dpri_inode(i);
 			spin_unlock(&i->i_lock);
 		}
-		spin_unlock(&inode_sb_list_lock);
+		spin_unlock(&sb->s_inode_list_lock);
 	}
 #endif
 	pr("files\n");

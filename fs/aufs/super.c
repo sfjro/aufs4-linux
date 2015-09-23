@@ -479,7 +479,8 @@ void au_array_free(void *array)
 	}
 }
 
-void *au_array_alloc(unsigned long long *hint, au_arraycb_t cb, void *arg)
+void *au_array_alloc(unsigned long long *hint, au_arraycb_t cb,
+		     struct super_block *sb, void *arg)
 {
 	void *array;
 	unsigned long long n, sz;
@@ -504,7 +505,7 @@ void *au_array_alloc(unsigned long long *hint, au_arraycb_t cb, void *arg)
 		goto out;
 	}
 
-	n = cb(array, *hint, arg);
+	n = cb(sb, array, *hint, arg);
 	AuDebugOn(n > *hint);
 
 out:
@@ -512,7 +513,7 @@ out:
 	return array;
 }
 
-static unsigned long long au_iarray_cb(void *a,
+static unsigned long long au_iarray_cb(struct super_block *sb, void *a,
 				       unsigned long long max __maybe_unused,
 				       void *arg)
 {
@@ -523,7 +524,7 @@ static unsigned long long au_iarray_cb(void *a,
 	n = 0;
 	p = a;
 	head = arg;
-	spin_lock(&inode_sb_list_lock);
+	spin_lock(&sb->s_inode_list_lock);
 	list_for_each_entry(inode, head, i_sb_list) {
 		if (!is_bad_inode(inode)
 		    && au_ii(inode)->ii_bstart >= 0) {
@@ -537,7 +538,7 @@ static unsigned long long au_iarray_cb(void *a,
 			spin_unlock(&inode->i_lock);
 		}
 	}
-	spin_unlock(&inode_sb_list_lock);
+	spin_unlock(&sb->s_inode_list_lock);
 
 	return n;
 }
@@ -545,7 +546,7 @@ static unsigned long long au_iarray_cb(void *a,
 struct inode **au_iarray_alloc(struct super_block *sb, unsigned long long *max)
 {
 	*max = atomic_long_read(&au_sbi(sb)->si_ninodes);
-	return au_array_alloc(max, au_iarray_cb, &sb->s_inodes);
+	return au_array_alloc(max, au_iarray_cb, sb, &sb->s_inodes);
 }
 
 void au_iarray_free(struct inode **a, unsigned long long max)
