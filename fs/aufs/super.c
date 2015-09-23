@@ -106,13 +106,13 @@ static int au_show_brs(struct seq_file *seq, struct super_block *sb)
 		err = au_seq_path(seq, &path);
 		if (!err) {
 			au_optstr_br_perm(&perm, br->br_perm);
-			err = seq_printf(seq, "=%s", perm.a);
-			if (err == -1)
-				err = -E2BIG;
+			seq_printf(seq, "=%s", perm.a);
+			if (bindex != bend)
+				seq_putc(seq, ':');
 		}
-		if (!err && bindex != bend)
-			err = seq_putc(seq, ':');
 	}
+	if (unlikely(err || seq_has_overflowed(seq)))
+		err = -E2BIG;
 
 	return err;
 }
