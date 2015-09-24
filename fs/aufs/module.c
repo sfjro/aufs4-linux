@@ -106,7 +106,15 @@ static char au_esc_chars[0x20 + 3]; /* 0x01-0x20, backslash, del, and NULL */
 
 int au_seq_path(struct seq_file *seq, struct path *path)
 {
-	return seq_path(seq, path, au_esc_chars);
+	int err;
+
+	err = seq_path(seq, path, au_esc_chars);
+	if (err > 0)
+		err = 0;
+	else if (err < 0)
+		err = -ENOMEM;
+
+	return err;
 }
 
 /* ---------------------------------------------------------------------- */
