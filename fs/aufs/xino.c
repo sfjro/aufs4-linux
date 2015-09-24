@@ -1307,10 +1307,9 @@ int au_xino_path(struct seq_file *seq, struct file *file)
 	int err;
 
 	err = au_seq_path(seq, &file->f_path);
-	if (unlikely(err < 0))
+	if (unlikely(err))
 		goto out;
 
-	err = 0;
 #define Deleted "\\040(deleted)"
 	seq->count -= sizeof(Deleted) - 1;
 	AuDebugOn(memcmp(seq->buf + seq->count, Deleted,
