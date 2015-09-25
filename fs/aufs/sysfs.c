@@ -61,9 +61,11 @@ static int sysaufs_si_br(struct seq_file *seq, struct super_block *sb,
 	case AuBrSysfs_BR:
 		path.mnt = au_br_mnt(br);
 		path.dentry = au_h_dptr(root, bindex);
-		au_seq_path(seq, &path);
-		au_optstr_br_perm(&perm, br->br_perm);
-		err = seq_printf(seq, "=%s\n", perm.a);
+		err = au_seq_path(seq, &path);
+		if (!err) {
+			au_optstr_br_perm(&perm, br->br_perm);
+			err = seq_printf(seq, "=%s\n", perm.a);
+		}
 		break;
 	case AuBrSysfs_BRID:
 		err = seq_printf(seq, "%d\n", br->br_id);
@@ -224,7 +226,9 @@ static int au_brinfo(struct super_block *sb, union aufs_brinfo __user *arg)
 		if (unlikely(err))
 			break;
 
-		au_seq_path(seq, &br->br_path);
+		err = au_seq_path(seq, &br->br_path);
+		if (unlikely(err))
+			break;
 		err = seq_putc(seq, '\0');
 		if (!err && seq->count <= sz) {
 			err = copy_to_user(arg->path, seq->buf, seq->count);
