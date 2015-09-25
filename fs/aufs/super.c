@@ -93,13 +93,13 @@ static int au_show_brs(struct seq_file *seq, struct super_block *sb)
 		err = au_seq_path(seq, &path);
 		if (!err) {
 			au_optstr_br_perm(&perm, br->br_perm);
-			err = seq_printf(seq, "=%s", perm.a);
-			if (err == -1)
-				err = -E2BIG;
+			seq_printf(seq, "=%s", perm.a);
+			if (bindex != bend)
+				seq_putc(seq, ':');
 		}
-		if (!err && bindex != bend)
-			err = seq_putc(seq, ':');
 	}
+	if (unlikely(err || seq_has_overflowed(seq)))
+		err = -E2BIG;
 
 	return err;
 }
@@ -466,7 +466,8 @@ void au_array_free(void *array)
 	}
 }
 
-void *au_array_alloc(unsigned long long *hint, au_arraycb_t cb, void *arg)
+void *au_array_alloc(unsigned long long *hint, au_arraycb_t cb,
+		     struct super_block *sb, void *arg)
 {
 	void *array;
 	unsigned long long n, sz;
@@ -491,7 +492,7 @@ void *au_array_alloc(unsigned long long *hint, au_arraycb_t cb, void *arg)
 		goto out;
 	}
 
-	n = cb(array, *hint, arg);
+	n = cb(sb, array, *hint, arg);
 	AuDebugOn(n > *hint);
 
 out:
@@ -499,7 +500,7 @@ out:
 	return array;
 }
 
-static unsigned long long au_iarray_cb(void *a,
+static unsigned long long au_iarray_cb(struct super_block *sb, void *a,
 				       unsigned long long max __maybe_unused,
 				       void *arg)
 {
@@ -510,7 +511,7 @@ static unsigned long long au_iarray_cb(void *a,
 	n = 0;
 	p = a;
 	head = arg;
-	spin_lock(&inode_sb_list_lock);
+	spin_lock(&sb->s_inode_list_lock);
 	list_for_each_entry(inode, head, i_sb_list) {
 		if (!is_bad_inode(inode)
 		    && au_ii(inode)->ii_bstart >= 0) {
@@ -524,7 +525,7 @@ static unsigned long long au_iarray_cb(void *a,
 			spin_unlock(&inode->i_lock);
 		}
 	}
-	spin_unlock(&inode_sb_list_lock);
+	spin_unlock(&sb->s_inode_list_lock);
 
 	return n;
 }
@@ -532,7 +533,7 @@ static unsigned long long au_iarray_cb(void *a,
 struct inode **au_iarray_alloc(struct super_block *sb, unsigned long long *max)
 {
 	*max = atomic_long_read(&au_sbi(sb)->si_ninodes);
-	return au_array_alloc(max, au_iarray_cb, &sb->s_inodes);
+	return au_array_alloc(max, au_iarray_cb, sb, &sb->s_inodes);
 }
 
 void au_iarray_free(struct inode **a, unsigned long long max)
