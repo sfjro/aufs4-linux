@@ -183,6 +183,7 @@ static inline void vfsub_file_accessed(struct file *h_file)
 }
 #endif
 
+#if 0 /* reserved */
 static inline void vfsub_touch_atime(struct vfsmount *h_mnt,
 				     struct dentry *h_dentry)
 {
@@ -193,6 +194,7 @@ static inline void vfsub_touch_atime(struct vfsmount *h_mnt,
 	touch_atime(&h_path);
 	vfsub_update_h_iattr(&h_path, /*did*/NULL); /*ignore*/
 }
+#endif
 
 static inline int vfsub_update_time(struct inode *h_inode, struct timespec *ts,
 				    int flags)
