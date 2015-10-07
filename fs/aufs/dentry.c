@@ -194,7 +194,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 		if (dirperm1)
 			au_fset_lkup(args.flags, IGNORE_PERM);
 
-		if (au_dbwh(dentry) >= 0)
+		if (au_dbwh(dentry) == bindex)
 			break;
 		if (!h_dentry)
 			continue;
