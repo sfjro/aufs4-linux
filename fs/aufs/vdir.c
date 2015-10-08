@@ -53,7 +53,7 @@ static unsigned char *last_deblk(struct au_vdir *vdir)
 
 /* ---------------------------------------------------------------------- */
 
-/* estimate the apropriate size for name hash table */
+/* estimate the appropriate size for name hash table */
 unsigned int au_rdhash_est(loff_t sz)
 {
 	unsigned int n;
@@ -379,7 +379,7 @@ static struct au_vdir *alloc_vdir(struct file *file)
 
 	vdir->vd_deblk_sz = au_sbi(sb)->si_rdblk;
 	if (!vdir->vd_deblk_sz) {
-		/* estimate the apropriate size for deblk */
+		/* estimate the appropriate size for deblk */
 		vdir->vd_deblk_sz = au_dir_size(file, /*dentry*/NULL);
 		/* pr_info("vd_deblk_sz %u\n", vdir->vd_deblk_sz); */
 	}
