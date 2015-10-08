@@ -59,11 +59,10 @@ static void au_cache_fin(void)
 
 	/* excluding AuCache_HNOTIFY */
 	BUILD_BUG_ON(AuCache_HNOTIFY + 1 != AuCache_Last);
-	for (i = 0; i < AuCache_HNOTIFY; i++)
-		if (au_cachep[i]) {
-			kmem_cache_destroy(au_cachep[i]);
-			au_cachep[i] = NULL;
-		}
+	for (i = 0; i < AuCache_HNOTIFY; i++) {
+		kmem_cache_destroy(au_cachep[i]);
+		au_cachep[i] = NULL;
+	}
 }
 
 /* ---------------------------------------------------------------------- */
