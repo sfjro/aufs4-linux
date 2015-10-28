@@ -366,6 +366,12 @@ static int au_do_mvdown(const unsigned char dmsg, struct au_mvd_args *a)
 		au_set_dbstart(a->dentry, a->mvd_bdst);
 		au_set_h_iptr(a->inode, a->mvd_bsrc, NULL, /*flags*/0);
 		au_set_ibstart(a->inode, a->mvd_bdst);
+	} else {
+		/* hide the lower */
+		au_set_h_dptr(a->dentry, a->mvd_bdst, NULL);
+		au_set_dbend(a->dentry, a->mvd_bsrc);
+		au_set_h_iptr(a->inode, a->mvd_bdst, NULL, /*flags*/0);
+		au_set_ibend(a->inode, a->mvd_bsrc);
 	}
 	if (au_dbend(a->dentry) < a->mvd_bdst)
 		au_set_dbend(a->dentry, a->mvd_bdst);
