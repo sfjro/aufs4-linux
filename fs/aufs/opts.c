@@ -1799,6 +1799,7 @@ out:
 int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 {
 	int err, rerr;
+	unsigned char no_dreval;
 	struct inode *dir;
 	struct au_opt_xino *opt_xino;
 	struct au_opt *opt;
@@ -1806,9 +1807,9 @@ int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 
 	SiMustWriteLock(sb);
 
+	err = 0;
 	dir = sb->s_root->d_inode;
 	sbinfo = au_sbi(sb);
-	err = 0;
 	opt_xino = NULL;
 	opt = opts->opt;
 	while (err >= 0 && opt->type != Opt_tail) {
@@ -1824,9 +1825,13 @@ int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 	AuTraceErr(err);
 	/* go on even err */
 
+	no_dreval = !!au_ftest_si(sbinfo, NO_DREVAL);
 	rerr = au_opts_verify(sb, opts->sb_flags, /*pending*/0);
 	if (unlikely(rerr && !err))
 		err = rerr;
+
+	if (no_dreval != !!au_ftest_si(sbinfo, NO_DREVAL))
+		au_fset_opts(opts->flags, REFRESH_DOP);
 
 	if (au_ftest_opts(opts->flags, TRUNC_XIB)) {
 		rerr = au_xib_trunc(sb);
@@ -1836,7 +1841,10 @@ int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 
 	/* will be handled by the caller */
 	if (!au_ftest_opts(opts->flags, REFRESH)
-	    && (opts->given_udba || au_opt_test(sbinfo->si_mntflags, XINO)))
+	    && (opts->given_udba
+		|| au_opt_test(sbinfo->si_mntflags, XINO)
+		|| au_ftest_opts(opts->flags, REFRESH_DOP)
+		    ))
 		au_fset_opts(opts->flags, REFRESH);
 
 	AuDbg("status 0x%x\n", opts->flags);
