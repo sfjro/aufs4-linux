@@ -868,6 +868,7 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 {
 	int err;
 	struct au_opts opts;
+	struct au_sbinfo *sbinfo;
 	struct dentry *root;
 	struct inode *inode;
 	char *arg = raw_data;
@@ -889,6 +890,7 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 	err = au_si_alloc(sb);
 	if (unlikely(err))
 		goto out_opts;
+	sbinfo = au_sbi(sb);
 
 	/* all timestamps always follow the ones on the branch */
 	sb->s_flags |= MS_NOATIME | MS_NODIRATIME;
@@ -924,6 +926,11 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 	aufs_write_lock(root);
 	err = au_opts_mount(sb, &opts);
 	au_opts_free(&opts);
+	if (!err && au_ftest_si(sbinfo, NO_DREVAL)) {
+		sb->s_d_op = &aufs_dop_noreval;
+		pr_info("%pf\n", sb->s_d_op);
+		au_refresh_dop(root, /*force_reval*/0);
+	}
 	aufs_write_unlock(root);
 	mutex_unlock(&inode->i_mutex);
 	if (!err)
@@ -933,8 +940,8 @@ out_root:
 	dput(root);
 	sb->s_root = NULL;
 out_info:
-	dbgaufs_si_fin(au_sbi(sb));
-	kobject_put(&au_sbi(sb)->si_kobj);
+	dbgaufs_si_fin(sbinfo);
+	kobject_put(&sbinfo->si_kobj);
 	sb->s_fs_info = NULL;
 out_opts:
 	free_page((unsigned long)opts.opt);
