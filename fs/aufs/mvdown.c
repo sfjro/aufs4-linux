@@ -679,7 +679,8 @@ int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *uarg)
 
 	au_cpup_attr_timesizes(args->dir);
 	au_cpup_attr_timesizes(args->inode);
-	au_cpup_igen(args->inode, au_h_iptr(args->inode, args->mvd_bdst));
+	if (!(args->mvdown.flags & AUFS_MVDOWN_KUPPER))
+		au_cpup_igen(args->inode, au_h_iptr(args->inode, args->mvd_bdst));
 	/* au_digen_dec(dentry); */
 
 out_parent:
