@@ -714,9 +714,9 @@ static int au_cpup_single(struct au_cp_generic *cpg, struct dentry *dst_parent)
 				goto out_parent;
 			if (unlikely(!h_src->d_inode)) {
 				err = -EIO;
-				AuIOErr("i%lu exists on a upper branch "
+				AuIOErr("i%lu exists on b%d "
 					"but not pseudo-linked\n",
-					inode->i_ino);
+					inode->i_ino, cpg->bdst);
 				dput(h_src);
 				goto out_parent;
 			}
