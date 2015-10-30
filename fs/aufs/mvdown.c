@@ -366,6 +366,12 @@ static int au_do_mvdown(const unsigned char dmsg, struct au_mvd_args *a)
 		au_set_dbstart(a->dentry, a->mvd_bdst);
 		au_set_h_iptr(a->inode, a->mvd_bsrc, NULL, /*flags*/0);
 		au_set_ibstart(a->inode, a->mvd_bdst);
+	} else {
+		/* hide the lower */
+		au_set_h_dptr(a->dentry, a->mvd_bdst, NULL);
+		au_set_dbend(a->dentry, a->mvd_bsrc);
+		au_set_h_iptr(a->inode, a->mvd_bdst, NULL, /*flags*/0);
+		au_set_ibend(a->inode, a->mvd_bsrc);
 	}
 	if (au_dbend(a->dentry) < a->mvd_bdst)
 		au_set_dbend(a->dentry, a->mvd_bdst);
@@ -621,7 +627,9 @@ int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *uarg)
 	int err, e;
 	unsigned char dmsg;
 	struct au_mvd_args *args;
+	struct inode *inode;
 
+	inode = dentry->d_inode;
 	err = -EPERM;
 	if (unlikely(!capable(CAP_SYS_ADMIN)))
 		goto out;
@@ -643,7 +651,7 @@ int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *uarg)
 	args->mvdown.flags &= ~(AUFS_MVDOWN_ROLOWER_R | AUFS_MVDOWN_ROUPPER_R);
 	args->mvdown.au_errno = 0;
 	args->dentry = dentry;
-	args->inode = dentry->d_inode;
+	args->inode = inode;
 	args->sb = dentry->d_sb;
 
 	err = -ENOENT;
@@ -657,7 +665,7 @@ int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *uarg)
 		goto out_dir;
 	}
 
-	mutex_lock_nested(&args->inode->i_mutex, I_MUTEX_CHILD);
+	mutex_lock_nested(&inode->i_mutex, I_MUTEX_CHILD);
 	err = aufs_read_lock(dentry, AuLock_DW | AuLock_FLUSH);
 	if (unlikely(err))
 		goto out_inode;
@@ -672,15 +680,16 @@ int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *uarg)
 		goto out_parent;
 
 	au_cpup_attr_timesizes(args->dir);
-	au_cpup_attr_timesizes(args->inode);
-	au_cpup_igen(args->inode, au_h_iptr(args->inode, args->mvd_bdst));
+	au_cpup_attr_timesizes(inode);
+	if (!(args->mvdown.flags & AUFS_MVDOWN_KUPPER))
+		au_cpup_igen(inode, au_h_iptr(inode, args->mvd_bdst));
 	/* au_digen_dec(dentry); */
 
 out_parent:
 	di_write_unlock(args->parent);
 	aufs_read_unlock(dentry, AuLock_DW);
 out_inode:
-	mutex_unlock(&args->inode->i_mutex);
+	mutex_unlock(&inode->i_mutex);
 out_dir:
 	mutex_unlock(&args->dir->i_mutex);
 out_free:

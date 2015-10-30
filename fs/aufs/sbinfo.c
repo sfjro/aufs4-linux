@@ -244,7 +244,10 @@ int aufs_read_lock(struct dentry *dentry, int flags)
 
 	if (au_ftest_lock(flags, GEN)) {
 		err = au_digen_test(dentry, au_sigen(sb));
-		AuDebugOn(!err && au_dbrange_test(dentry));
+		if (!au_opt_test(au_mntflags(sb), UDBA_NONE))
+			AuDebugOn(!err && au_dbrange_test(dentry));
+		else if (!err)
+			err = au_dbrange_test(dentry);
 		if (unlikely(err))
 			aufs_read_unlock(dentry, flags);
 	}

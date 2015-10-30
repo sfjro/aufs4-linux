@@ -798,9 +798,11 @@ static void aufs_invalidatepage(struct page *page, unsigned int offset,
 { AuUnsupport(); }
 static int aufs_releasepage(struct page *page, gfp_t gfp)
 { AuUnsupport(); return 0; }
+#if 0 /* called by memory compaction regardless file */
 static int aufs_migratepage(struct address_space *mapping, struct page *newpage,
 			    struct page *page, enum migrate_mode mode)
 { AuUnsupport(); return 0; }
+#endif
 static int aufs_launder_page(struct page *page)
 { AuUnsupport(); return 0; }
 static int aufs_is_partially_uptodate(struct page *page,
@@ -833,7 +835,8 @@ const struct address_space_operations aufs_aop = {
 	/* no bmap, no block device */
 	.invalidatepage		= aufs_invalidatepage,
 	.releasepage		= aufs_releasepage,
-	.migratepage		= aufs_migratepage,
+	/* is fallback_migrate_page ok? */
+	/* .migratepage		= aufs_migratepage, */
 	.launder_page		= aufs_launder_page,
 	.is_partially_uptodate	= aufs_is_partially_uptodate,
 	.is_dirty_writeback	= aufs_is_dirty_writeback,

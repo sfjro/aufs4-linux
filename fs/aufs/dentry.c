@@ -1045,8 +1045,10 @@ static int aufs_d_revalidate(struct dentry *dentry, unsigned int flags)
 	if (!(flags & (LOOKUP_OPEN | LOOKUP_EMPTY))
 	    && inode
 	    && !(inode->i_state && I_LINKABLE)
-	    && (IS_DEADDIR(inode) || !inode->i_nlink))
+	    && (IS_DEADDIR(inode) || !inode->i_nlink)) {
+		AuTraceErr(err);
 		goto out_inval;
+	}
 
 	do_udba = !au_opt_test(au_mntflags(sb), UDBA_NONE);
 	if (do_udba && inode) {
@@ -1055,8 +1057,10 @@ static int aufs_d_revalidate(struct dentry *dentry, unsigned int flags)
 
 		if (bstart >= 0) {
 			h_inode = au_h_iptr(inode, bstart);
-			if (h_inode && au_test_higen(inode, h_inode))
+			if (h_inode && au_test_higen(inode, h_inode)) {
+				AuTraceErr(err);
 				goto out_inval;
+			}
 		}
 	}
 
