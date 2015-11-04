@@ -1555,10 +1555,10 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 {
 	int err, fhsm;
 	aufs_bindex_t bindex, bend;
-	unsigned char do_plink, skip, do_free;
+	unsigned char do_plink, skip, do_free, can_no_dreval;
 	struct au_branch *br;
 	struct au_wbr *wbr;
-	struct dentry *root;
+	struct dentry *root, *dentry;
 	struct inode *dir, *h_dir;
 	struct au_sbinfo *sbinfo;
 	struct au_hinode *hdir;
@@ -1588,6 +1588,8 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 	root = sb->s_root;
 	dir = d_inode(root);
 	do_plink = !!au_opt_test(sbinfo->si_mntflags, PLINK);
+	can_no_dreval = !!au_opt_test((sbinfo->si_mntflags | pending),
+				      UDBA_NONE);
 	bend = au_sbend(sb);
 	for (bindex = 0; !err && bindex <= bend; bindex++) {
 		skip = 0;
@@ -1636,6 +1638,15 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		if (wbr)
 			wbr_wh_read_unlock(wbr);
 
+		if (can_no_dreval) {
+			dentry = br->br_path.dentry;
+			spin_lock(&dentry->d_lock);
+			if (dentry->d_flags &
+			    (DCACHE_OP_REVALIDATE | DCACHE_OP_WEAK_REVALIDATE))
+				can_no_dreval = 0;
+			spin_unlock(&dentry->d_lock);
+		}
+
 		if (au_br_fhsm(br->br_perm)) {
 			fhsm++;
 			AuDebugOn(!br->br_fhsm);
@@ -1658,6 +1669,11 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 			br->br_wbr = NULL;
 		}
 	}
+
+	if (can_no_dreval)
+		au_fset_si(sbinfo, NO_DREVAL);
+	else
+		au_fclr_si(sbinfo, NO_DREVAL);
 
 	if (fhsm >= 2) {
 		au_fset_si(sbinfo, FHSM);
@@ -1770,6 +1786,7 @@ out:
 int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 {
 	int err, rerr;
+	unsigned char no_dreval;
 	struct inode *dir;
 	struct au_opt_xino *opt_xino;
 	struct au_opt *opt;
@@ -1777,9 +1794,9 @@ int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 
 	SiMustWriteLock(sb);
 
+	err = 0;
 	dir = d_inode(sb->s_root);
 	sbinfo = au_sbi(sb);
-	err = 0;
 	opt_xino = NULL;
 	opt = opts->opt;
 	while (err >= 0 && opt->type != Opt_tail) {
@@ -1795,9 +1812,13 @@ int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 	AuTraceErr(err);
 	/* go on even err */
 
+	no_dreval = !!au_ftest_si(sbinfo, NO_DREVAL);
 	rerr = au_opts_verify(sb, opts->sb_flags, /*pending*/0);
 	if (unlikely(rerr && !err))
 		err = rerr;
+
+	if (no_dreval != !!au_ftest_si(sbinfo, NO_DREVAL))
+		au_fset_opts(opts->flags, REFRESH_DOP);
 
 	if (au_ftest_opts(opts->flags, TRUNC_XIB)) {
 		rerr = au_xib_trunc(sb);
@@ -1807,7 +1828,10 @@ int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 
 	/* will be handled by the caller */
 	if (!au_ftest_opts(opts->flags, REFRESH)
-	    && (opts->given_udba || au_opt_test(sbinfo->si_mntflags, XINO)))
+	    && (opts->given_udba
+		|| au_opt_test(sbinfo->si_mntflags, XINO)
+		|| au_ftest_opts(opts->flags, REFRESH_DOP)
+		    ))
 		au_fset_opts(opts->flags, REFRESH);
 
 	AuDbg("status 0x%x\n", opts->flags);
