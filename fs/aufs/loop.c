@@ -140,6 +140,7 @@ int au_loopback_init(void)
 
 void au_loopback_fin(void)
 {
-	symbol_put(loop_backing_file);
+	if (backing_file_func)
+		symbol_put(loop_backing_file);
 	kfree(au_warn_loopback_array);
 }

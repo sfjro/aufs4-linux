@@ -224,6 +224,7 @@ struct au_sbinfo {
 #define AuSi_FAILED_REFRESH_DIR	1
 
 #define AuSi_FHSM		(1 << 1)	/* fhsm is active now */
+#define AuSi_NO_DREVAL		(1 << 2)	/* disable all d_revalidate */
 
 #ifndef CONFIG_AUFS_FHSM
 #undef AuSi_FHSM
