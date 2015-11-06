@@ -569,7 +569,7 @@ static int au_do_refresh(struct dentry *dentry, unsigned int dir_flags,
 
 static int au_do_refresh_d(struct dentry *dentry, unsigned int sigen,
 			   struct au_sbinfo *sbinfo,
-			   const unsigned int dir_flags)
+			   const unsigned int dir_flags, unsigned int do_dop)
 {
 	int err;
 	struct dentry *parent;
@@ -592,11 +592,17 @@ static int au_do_refresh_d(struct dentry *dentry, unsigned int sigen,
 	}
 	dput(parent);
 
+	if (!err) {
+		if (do_dop)
+			au_refresh_dop(dentry, /*force_reval*/0);
+	} else
+		au_refresh_dop(dentry, /*force_reval*/1);
+
 	AuTraceErr(err);
 	return err;
 }
 
-static int au_refresh_d(struct super_block *sb)
+static int au_refresh_d(struct super_block *sb, unsigned int do_dop)
 {
 	int err, i, j, ndentry, e;
 	unsigned int sigen;
@@ -606,6 +612,9 @@ static int au_refresh_d(struct super_block *sb)
 	struct au_sbinfo *sbinfo;
 	struct dentry *root = sb->s_root;
 	const unsigned int dir_flags = au_hi_flags(d_inode(root), /*isdir*/1);
+
+	if (do_dop)
+		au_refresh_dop(root, /*force_reval*/0);
 
 	err = au_dpages_init(&dpages, GFP_NOFS);
 	if (unlikely(err))
@@ -622,7 +631,8 @@ static int au_refresh_d(struct super_block *sb)
 		ndentry = dpage->ndentry;
 		for (j = 0; j < ndentry; j++) {
 			d = dentries[j];
-			e = au_do_refresh_d(d, sigen, sbinfo, dir_flags);
+			e = au_do_refresh_d(d, sigen, sbinfo, dir_flags,
+					    do_dop);
 			if (unlikely(e && !err))
 				err = e;
 			/* go on even err */
@@ -672,7 +682,7 @@ out:
 	return err;
 }
 
-static void au_remount_refresh(struct super_block *sb)
+static void au_remount_refresh(struct super_block *sb, unsigned int do_dop)
 {
 	int err, e;
 	unsigned int udba;
@@ -680,9 +690,11 @@ static void au_remount_refresh(struct super_block *sb)
 	struct dentry *root;
 	struct inode *inode;
 	struct au_branch *br;
+	struct au_sbinfo *sbi;
 
 	au_sigen_inc(sb);
-	au_fclr_si(au_sbi(sb), FAILED_REFRESH_DIR);
+	sbi = au_sbi(sb);
+	au_fclr_si(sbi, FAILED_REFRESH_DIR);
 
 	root = sb->s_root;
 	DiMustNoWaiters(root);
@@ -701,8 +713,19 @@ static void au_remount_refresh(struct super_block *sb)
 	}
 	au_hn_reset(inode, au_hi_flags(inode, /*isdir*/1));
 
+	if (do_dop) {
+		if (au_ftest_si(sbi, NO_DREVAL)) {
+			AuDebugOn(sb->s_d_op == &aufs_dop_noreval);
+			sb->s_d_op = &aufs_dop_noreval;
+		} else {
+			AuDebugOn(sb->s_d_op == &aufs_dop);
+			sb->s_d_op = &aufs_dop;
+		}
+		pr_info("reset to %pf\n", sb->s_d_op);
+	}
+
 	di_write_unlock(root);
-	err = au_refresh_d(sb);
+	err = au_refresh_d(sb, do_dop);
 	e = au_refresh_i(sb);
 	if (unlikely(e && !err))
 		err = e;
@@ -778,7 +801,7 @@ static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 	au_opts_free(&opts);
 
 	if (au_ftest_opts(opts.flags, REFRESH))
-		au_remount_refresh(sb);
+		au_remount_refresh(sb, au_ftest_opts(opts.flags, REFRESH_DOP));
 
 	if (au_ftest_opts(opts.flags, REFRESH_DYAOP)) {
 		mntflags = au_mntflags(sb);
@@ -854,6 +877,7 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 {
 	int err;
 	struct au_opts opts;
+	struct au_sbinfo *sbinfo;
 	struct dentry *root;
 	struct inode *inode;
 	char *arg = raw_data;
@@ -875,6 +899,7 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 	err = au_si_alloc(sb);
 	if (unlikely(err))
 		goto out_opts;
+	sbinfo = au_sbi(sb);
 
 	/* all timestamps always follow the ones on the branch */
 	sb->s_flags |= MS_NOATIME | MS_NODIRATIME;
@@ -910,6 +935,11 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 	aufs_write_lock(root);
 	err = au_opts_mount(sb, &opts);
 	au_opts_free(&opts);
+	if (!err && au_ftest_si(sbinfo, NO_DREVAL)) {
+		sb->s_d_op = &aufs_dop_noreval;
+		pr_info("%pf\n", sb->s_d_op);
+		au_refresh_dop(root, /*force_reval*/0);
+	}
 	aufs_write_unlock(root);
 	mutex_unlock(&inode->i_mutex);
 	if (!err)
@@ -919,8 +949,8 @@ out_root:
 	dput(root);
 	sb->s_root = NULL;
 out_info:
-	dbgaufs_si_fin(au_sbi(sb));
-	kobject_put(&au_sbi(sb)->si_kobj);
+	dbgaufs_si_fin(sbinfo);
+	kobject_put(&sbinfo->si_kobj);
 	sb->s_fs_info = NULL;
 out_opts:
 	free_page((unsigned long)opts.opt);
@@ -969,7 +999,7 @@ static void aufs_kill_sb(struct super_block *sb)
 			sbinfo->si_wbr_create_ops->fin(sb);
 		if (au_opt_test(sbinfo->si_mntflags, UDBA_HNOTIFY)) {
 			au_opt_set_udba(sbinfo->si_mntflags, UDBA_NONE);
-			au_remount_refresh(sb);
+			au_remount_refresh(sb, /*do_dop*/0);
 		}
 		if (au_opt_test(sbinfo->si_mntflags, PLINK))
 			au_plink_put(sb, /*verbose*/1);
