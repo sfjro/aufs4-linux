@@ -151,7 +151,14 @@ static inline int au_wh_ino(struct super_block *sb, aufs_bindex_t bindex,
 }
 
 /* i_op.c */
-extern struct inode_operations aufs_iop, aufs_symlink_iop, aufs_dir_iop;
+enum {
+	AuIop_SYMLINK,
+	AuIop_DIR,
+	AuIop_OTHER,
+	AuIop_Last
+};
+extern struct inode_operations aufs_iop[AuIop_Last],
+	aufs_iop_nogetattr[AuIop_Last];
 
 /* au_wr_dir flags */
 #define AuWrDir_ADD_ENTRY	1

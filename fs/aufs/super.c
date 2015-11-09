@@ -862,7 +862,7 @@ static int alloc_root(struct super_block *sb)
 	if (IS_ERR(inode))
 		goto out;
 
-	inode->i_op = &aufs_dir_iop;
+	inode->i_op = aufs_iop + AuIop_DIR; /* with getattr by default */
 	inode->i_fop = &aufs_dir_fop;
 	inode->i_mode = S_IFDIR;
 	set_nlink(inode, 2);

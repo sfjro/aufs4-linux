@@ -192,6 +192,9 @@ struct au_sbinfo {
 	/* file list */
 	struct au_sphlhead	si_files;
 
+	/* with/without getattr, brother of sb->s_d_op */
+	struct inode_operations *si_iop_array;
+
 	/*
 	 * sysfs and lifetime management.
 	 * this is not a small structure and it may be a waste of memory in case

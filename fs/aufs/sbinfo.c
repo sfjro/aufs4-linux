@@ -122,6 +122,9 @@ int au_si_alloc(struct super_block *sb)
 
 	au_sphl_init(&sbinfo->si_files);
 
+	/* with getattr by default */
+	sbinfo->si_iop_array = aufs_iop;
+
 	/* leave other members for sysaufs and si_mnt. */
 	sbinfo->si_sb = sb;
 	sb->s_fs_info = sbinfo;
