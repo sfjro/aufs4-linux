@@ -117,7 +117,7 @@ static void au_do_dir_ts(void *arg)
 	if (!dir)
 		goto out;
 	/* no dir->i_mutex lock */
-	aufs_read_lock(a->dentry, AuLock_DW | AuLock_DIR); /* noflush */
+	aufs_read_lock(a->dentry, AuLock_DW); /* noflush */
 
 	bstart = au_ibstart(dir);
 	bindex = au_br_index(sb, a->brid);
