@@ -130,6 +130,7 @@ static inline struct au_iinfo *au_ii(struct inode *inode)
 
 /* inode.c */
 struct inode *au_igrab(struct inode *inode);
+void au_refresh_iop(struct inode *inode, int force_getattr);
 int au_refresh_hinode_self(struct inode *inode);
 int au_refresh_hinode(struct inode *inode, struct dentry *dentry);
 int au_ino(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,

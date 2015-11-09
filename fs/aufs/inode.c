@@ -100,6 +100,32 @@ out:
 	return err;
 }
 
+void au_refresh_iop(struct inode *inode, int force_getattr)
+{
+	int type;
+	struct au_sbinfo *sbi = au_sbi(inode->i_sb);
+	const struct inode_operations *iop
+		= force_getattr ? aufs_iop : sbi->si_iop_array;
+
+	if (inode->i_op == iop)
+		return;
+
+	switch (inode->i_mode & S_IFMT) {
+	case S_IFDIR:
+		type = AuIop_DIR;
+		break;
+	case S_IFLNK:
+		type = AuIop_SYMLINK;
+		break;
+	default:
+		type = AuIop_OTHER;
+		break;
+	}
+
+	inode->i_op = iop + type;
+	/* unnecessary smp_wmb() */
+}
+
 int au_refresh_hinode_self(struct inode *inode)
 {
 	int err, update;
