@@ -288,7 +288,7 @@ int aufs_read_and_write_lock2(struct dentry *d1, struct dentry *d2, int flags)
 	if (unlikely(err))
 		goto out;
 
-	di_write_lock2_child(d1, d2, au_ftest_lock(flags, DIR));
+	di_write_lock2_child(d1, d2, au_ftest_lock(flags, DIRS));
 
 	if (au_ftest_lock(flags, GEN)) {
 		sigen = au_sigen(sb);
