@@ -223,7 +223,6 @@ struct au_sbinfo {
  * if it is false, refreshing dirs at access time is unnecesary
  */
 #define AuSi_FAILED_REFRESH_DIR	1
-
 #define AuSi_FHSM		(1 << 1)	/* fhsm is active now */
 #define AuSi_NO_DREVAL		(1 << 2)	/* disable all d_revalidate */
 
