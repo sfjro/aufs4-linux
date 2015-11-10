@@ -191,6 +191,9 @@ struct au_sbinfo {
 	/* file list */
 	struct au_sphlhead	si_files;
 
+	/* with/without getattr, brother of sb->s_d_op */
+	struct inode_operations *si_iop_array;
+
 	/*
 	 * sysfs and lifetime management.
 	 * this is not a small structure and it may be a waste of memory in case
@@ -222,7 +225,6 @@ struct au_sbinfo {
  * if it is false, refreshing dirs at access time is unnecesary
  */
 #define AuSi_FAILED_REFRESH_DIR	1
-
 #define AuSi_FHSM		(1 << 1)	/* fhsm is active now */
 #define AuSi_NO_DREVAL		(1 << 2)	/* disable all d_revalidate */
 
@@ -260,7 +262,7 @@ static inline unsigned char au_do_ftest_si(struct au_sbinfo *sbi,
 #define AuLock_IR		(1 << 1)	/* read-lock inode */
 #define AuLock_IW		(1 << 2)	/* write-lock inode */
 #define AuLock_FLUSH		(1 << 3)	/* wait for 'nowait' tasks */
-#define AuLock_DIR		(1 << 4)	/* target is a dir */
+#define AuLock_DIRS		(1 << 4)	/* target is a pair of dirs */
 #define AuLock_NOPLM		(1 << 5)	/* return err in plm mode */
 #define AuLock_NOPLMW		(1 << 6)	/* wait for plm mode ends */
 #define AuLock_GEN		(1 << 7)	/* test digen/iigen */
