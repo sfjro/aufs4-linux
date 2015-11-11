@@ -130,6 +130,7 @@ static inline struct au_iinfo *au_ii(struct inode *inode)
 
 /* inode.c */
 struct inode *au_igrab(struct inode *inode);
+void au_refresh_iop(struct inode *inode, int force_getattr);
 int au_refresh_hinode_self(struct inode *inode);
 int au_refresh_hinode(struct inode *inode, struct dentry *dentry);
 int au_ino(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
@@ -151,7 +152,14 @@ static inline int au_wh_ino(struct super_block *sb, aufs_bindex_t bindex,
 }
 
 /* i_op.c */
-extern struct inode_operations aufs_iop, aufs_symlink_iop, aufs_dir_iop;
+enum {
+	AuIop_SYMLINK,
+	AuIop_DIR,
+	AuIop_OTHER,
+	AuIop_Last
+};
+extern struct inode_operations aufs_iop[AuIop_Last],
+	aufs_iop_nogetattr[AuIop_Last];
 
 /* au_wr_dir flags */
 #define AuWrDir_ADD_ENTRY	1
