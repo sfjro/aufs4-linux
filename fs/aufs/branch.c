@@ -589,7 +589,7 @@ static void au_farray_free(struct file **a, unsigned long long max)
 	for (ull = 0; ull < max; ull++)
 		if (a[ull])
 			fput(a[ull]);
-	au_array_free(a);
+	kvfree(a);
 }
 
 /* ---------------------------------------------------------------------- */

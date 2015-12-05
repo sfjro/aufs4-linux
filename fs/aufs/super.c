@@ -469,16 +469,6 @@ static void aufs_put_super(struct super_block *sb)
 
 /* ---------------------------------------------------------------------- */
 
-void au_array_free(void *array)
-{
-	if (array) {
-		if (!is_vmalloc_addr(array))
-			kfree(array);
-		else
-			vfree(array);
-	}
-}
-
 void *au_array_alloc(unsigned long long *hint, au_arraycb_t cb, void *arg)
 {
 	void *array;
@@ -554,7 +544,7 @@ void au_iarray_free(struct inode **a, unsigned long long max)
 
 	for (ull = 0; ull < max; ull++)
 		iput(a[ull]);
-	au_array_free(a);
+	kvfree(a);
 }
 
 /* ---------------------------------------------------------------------- */
