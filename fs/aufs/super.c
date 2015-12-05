@@ -771,7 +771,9 @@ static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 {
 	int err, do_dx;
 	unsigned int mntflags;
-	struct au_opts opts;
+	struct au_opts opts = {
+		.opt = NULL
+	};
 	struct dentry *root;
 	struct inode *inode;
 	struct au_sbinfo *sbinfo;
@@ -789,7 +791,6 @@ static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 	}
 
 	err = -ENOMEM;
-	memset(&opts, 0, sizeof(opts));
 	opts.opt = (void *)__get_free_page(GFP_NOFS);
 	if (unlikely(!opts.opt))
 		goto out;
@@ -890,7 +891,9 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 			   int silent __maybe_unused)
 {
 	int err;
-	struct au_opts opts;
+	struct au_opts opts = {
+		.opt = NULL
+	};
 	struct au_sbinfo *sbinfo;
 	struct dentry *root;
 	struct inode *inode;
@@ -903,7 +906,6 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 	}
 
 	err = -ENOMEM;
-	memset(&opts, 0, sizeof(opts));
 	opts.opt = (void *)__get_free_page(GFP_NOFS);
 	if (unlikely(!opts.opt))
 		goto out;
