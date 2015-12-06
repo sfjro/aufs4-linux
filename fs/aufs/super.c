@@ -469,16 +469,6 @@ static void aufs_put_super(struct super_block *sb)
 
 /* ---------------------------------------------------------------------- */
 
-void au_array_free(void *array)
-{
-	if (array) {
-		if (!is_vmalloc_addr(array))
-			kfree(array);
-		else
-			vfree(array);
-	}
-}
-
 void *au_array_alloc(unsigned long long *hint, au_arraycb_t cb, void *arg)
 {
 	void *array;
@@ -554,7 +544,7 @@ void au_iarray_free(struct inode **a, unsigned long long max)
 
 	for (ull = 0; ull < max; ull++)
 		iput(a[ull]);
-	au_array_free(a);
+	kvfree(a);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -781,7 +771,9 @@ static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 {
 	int err, do_dx;
 	unsigned int mntflags;
-	struct au_opts opts;
+	struct au_opts opts = {
+		.opt = NULL
+	};
 	struct dentry *root;
 	struct inode *inode;
 	struct au_sbinfo *sbinfo;
@@ -799,7 +791,6 @@ static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 	}
 
 	err = -ENOMEM;
-	memset(&opts, 0, sizeof(opts));
 	opts.opt = (void *)__get_free_page(GFP_NOFS);
 	if (unlikely(!opts.opt))
 		goto out;
@@ -900,7 +891,9 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 			   int silent __maybe_unused)
 {
 	int err;
-	struct au_opts opts;
+	struct au_opts opts = {
+		.opt = NULL
+	};
 	struct au_sbinfo *sbinfo;
 	struct dentry *root;
 	struct inode *inode;
@@ -913,7 +906,6 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 	}
 
 	err = -ENOMEM;
-	memset(&opts, 0, sizeof(opts));
 	opts.opt = (void *)__get_free_page(GFP_NOFS);
 	if (unlikely(!opts.opt))
 		goto out;
