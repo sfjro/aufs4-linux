@@ -59,12 +59,12 @@ struct au_hinode {
 	do { (flags) &= ~AuIG_##name; } while (0)
 
 struct au_iigen {
+	spinlock_t	ig_spin;
 	__u32		ig_generation, ig_flags;
 };
 
 struct au_vdir;
 struct au_iinfo {
-	spinlock_t		ii_genspin;
 	struct au_iigen		ii_generation;
 	struct super_block	*ii_hsb1;	/* no get/put */
 
@@ -422,17 +422,19 @@ static inline void au_icntnr_init(struct au_icntnr *c)
 #endif
 }
 
-static inline unsigned int au_iigen(struct inode *inode, struct au_iigen *iigen)
+static inline unsigned int au_iigen(struct inode *inode, struct au_iigen *iigen_arg)
 {
 	unsigned int gen;
 	struct au_iinfo *iinfo;
+	struct au_iigen *iigen;
 
 	iinfo = au_ii(inode);
-	spin_lock(&iinfo->ii_genspin);
-	if (iigen)
-		*iigen = iinfo->ii_generation;
-	gen = iinfo->ii_generation.ig_generation;
-	spin_unlock(&iinfo->ii_genspin);
+	iigen = &iinfo->ii_generation;
+	spin_lock(&iigen->ig_spin);
+	if (iigen_arg)
+		*iigen_arg = *iigen;
+	gen = iigen->ig_generation;
+	spin_unlock(&iigen->ig_spin);
 
 	return gen;
 }
@@ -452,11 +454,13 @@ static inline int au_test_higen(struct inode *inode, struct inode *h_inode)
 static inline void au_iigen_dec(struct inode *inode)
 {
 	struct au_iinfo *iinfo;
+	struct au_iigen *iigen;
 
 	iinfo = au_ii(inode);
-	spin_lock(&iinfo->ii_genspin);
-	iinfo->ii_generation.ig_generation--;
-	spin_unlock(&iinfo->ii_genspin);
+	iigen = &iinfo->ii_generation;
+	spin_lock(&iigen->ig_spin);
+	iigen->ig_generation--;
+	spin_unlock(&iigen->ig_spin);
 }
 
 static inline int au_iigen_test(struct inode *inode, unsigned int sigen)
