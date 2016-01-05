@@ -106,7 +106,7 @@ git://git.kernel.org/.../torvalds/linux.git.
 And you cannot select CONFIG_AUFS_FS=m for this version, eg. you cannot
 build aufs4 as an external kernel module.
 Several extra patches are not included in this tree. Only
-aufs4-standalone tree contains them. They are describe in the later
+aufs4-standalone tree contains them. They are described in the later
 section "Configuration and Compilation."
 
 On the other hand, the aufs4-standalone tree has only aufs source files
@@ -262,6 +262,13 @@ optional. When you meet some problems, they will help you.
   duplication of inode number, which is important for backup tools and
   other utilities. When you find aufs XINO files for tmpfs branch
   growing too much, try this patch.
+- lockdep-debug.patch
+  Because aufs is not only an ordinary filesystem (callee of VFS), but
+  also a caller of VFS functions for branch filesystems, subclassing of
+  the internal locks for LOCKDEP is necessary. LOCKDEP is a debugging
+  feature of linux kernel. If you enable CONFIG_LOCKDEP, then you will
+  need to apply this debug patch to expand several constant values.
+  If don't know what LOCKDEP, then you don't have apply this patch.
 
 
 4. Usage
