@@ -53,6 +53,9 @@ ssize_t xino_fread(vfs_readf_t func, struct file *file, void *kbuf, size_t size,
 
 /* ---------------------------------------------------------------------- */
 
+static ssize_t xino_fwrite_wkq(vfs_writef_t func, struct file *file, void *buf,
+			       size_t size, loff_t *pos);
+
 static ssize_t do_xino_fwrite(vfs_writef_t func, struct file *file, void *kbuf,
 			      size_t size, loff_t *pos)
 {
@@ -62,14 +65,26 @@ static ssize_t do_xino_fwrite(vfs_writef_t func, struct file *file, void *kbuf,
 		void *k;
 		const char __user *u;
 	} buf;
+	int i;
+	const int prevent_endless = 10;
 
+	i = 0;
 	buf.k = kbuf;
 	oldfs = get_fs();
 	set_fs(KERNEL_DS);
 	do {
-		/* todo: signal_pending? */
 		err = func(file, buf.u, size, pos);
-	} while (err == -EAGAIN || err == -EINTR);
+		if (err == -EINTR
+		    && !au_wkq_test()
+		    && fatal_signal_pending(current)) {
+			set_fs(oldfs);
+			err = xino_fwrite_wkq(func, file, kbuf, size, pos);
+			BUG_ON(err == -EINTR);
+			oldfs = get_fs();
+			set_fs(KERNEL_DS);
+		}
+	} while (i++ < prevent_endless
+		 && (err == -EAGAIN || err == -EINTR));
 	set_fs(oldfs);
 
 #if 0 /* reserved for future use */
@@ -95,35 +110,42 @@ static void call_do_xino_fwrite(void *args)
 	*a->errp = do_xino_fwrite(a->func, a->file, a->buf, a->size, a->pos);
 }
 
+static ssize_t xino_fwrite_wkq(vfs_writef_t func, struct file *file, void *buf,
+			       size_t size, loff_t *pos)
+{
+	ssize_t err;
+	int wkq_err;
+	struct do_xino_fwrite_args args = {
+		.errp	= &err,
+		.func	= func,
+		.file	= file,
+		.buf	= buf,
+		.size	= size,
+		.pos	= pos
+	};
+
+	/*
+	 * it breaks RLIMIT_FSIZE and normal user's limit,
+	 * users should care about quota and real 'filesystem full.'
+	 */
+	wkq_err = au_wkq_wait(call_do_xino_fwrite, &args);
+	if (unlikely(wkq_err))
+		err = wkq_err;
+
+	return err;
+}
+
 ssize_t xino_fwrite(vfs_writef_t func, struct file *file, void *buf,
 		    size_t size, loff_t *pos)
 {
 	ssize_t err;
 
-	/* todo: signal block and no wkq? */
 	if (rlimit(RLIMIT_FSIZE) == RLIM_INFINITY) {
 		lockdep_off();
 		err = do_xino_fwrite(func, file, buf, size, pos);
 		lockdep_on();
-	} else {
-		/*
-		 * it breaks RLIMIT_FSIZE and normal user's limit,
-		 * users should care about quota and real 'filesystem full.'
-		 */
-		int wkq_err;
-		struct do_xino_fwrite_args args = {
-			.errp	= &err,
-			.func	= func,
-			.file	= file,
-			.buf	= buf,
-			.size	= size,
-			.pos	= pos
-		};
-
-		wkq_err = au_wkq_wait(call_do_xino_fwrite, &args);
-		if (unlikely(wkq_err))
-			err = wkq_err;
-	}
+	} else
+		err = xino_fwrite_wkq(func, file, buf, size, pos);
 
 	return err;
 }
