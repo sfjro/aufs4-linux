@@ -284,8 +284,7 @@ out:
 static int reval_inode(struct inode *inode, struct dentry *dentry)
 {
 	int err;
-	unsigned int gen;
-	struct au_iigen iigen;
+	unsigned int gen, igflags;
 	aufs_bindex_t bindex, bend;
 	struct inode *h_inode, *h_dinode;
 
@@ -308,9 +307,9 @@ static int reval_inode(struct inode *inode, struct dentry *dentry)
 			continue;
 
 		err = 0;
-		gen = au_iigen(inode, &iigen);
+		gen = au_iigen(inode, &igflags);
 		if (gen == au_digen(dentry)
-		    && !au_ig_ftest(iigen.ig_flags, HALF_REFRESHED))
+		    && !au_ig_ftest(igflags, HALF_REFRESHED))
 			break;
 
 		/* fully refresh inode using dentry */
