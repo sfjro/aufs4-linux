@@ -409,7 +409,7 @@ static inline void au_icntnr_init(struct au_icntnr *c)
 #endif
 }
 
-static inline unsigned int au_iigen(struct inode *inode, struct au_iigen *iigen_arg)
+static inline unsigned int au_iigen(struct inode *inode, unsigned int *igflags)
 {
 	unsigned int gen;
 	struct au_iinfo *iinfo;
@@ -418,8 +418,8 @@ static inline unsigned int au_iigen(struct inode *inode, struct au_iigen *iigen_
 	iinfo = au_ii(inode);
 	iigen = &iinfo->ii_generation;
 	spin_lock(&iigen->ig_spin);
-	if (iigen_arg)
-		*iigen_arg = *iigen;
+	if (igflags)
+		*igflags = iigen->ig_flags;
 	gen = iigen->ig_generation;
 	spin_unlock(&iigen->ig_spin);
 
