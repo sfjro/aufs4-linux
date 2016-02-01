@@ -88,9 +88,9 @@ static int au_do_cpup_xattr(struct dentry *h_dst, struct dentry *h_src,
 
 	/* unlock it temporary */
 	h_idst = d_inode(h_dst);
-	mutex_unlock(&h_idst->i_mutex);
+	inode_unlock(h_idst);
 	err = vfsub_setxattr(h_dst, name, *buf, ssz, /*flags*/0);
-	mutex_lock_nested(&h_idst->i_mutex, AuLsc_I_CHILD2);
+	inode_lock_nested(h_idst, AuLsc_I_CHILD2);
 	if (unlikely(err)) {
 		if (verbose || au_debug_test())
 			pr_err("%s, err %d\n", name, err);
@@ -113,9 +113,9 @@ int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
 	/* there should not be the parent-child relationship between them */
 	h_isrc = d_inode(h_src);
 	h_idst = d_inode(h_dst);
-	mutex_unlock(&h_idst->i_mutex);
-	mutex_lock_nested(&h_isrc->i_mutex, AuLsc_I_CHILD);
-	mutex_lock_nested(&h_idst->i_mutex, AuLsc_I_CHILD2);
+	inode_unlock(h_idst);
+	inode_lock_nested(h_isrc, AuLsc_I_CHILD);
+	inode_lock_nested(h_idst, AuLsc_I_CHILD2);
 	unlocked = 0;
 
 	/* some filesystems don't list POSIX ACL, for example tmpfs */
@@ -140,7 +140,7 @@ int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
 			goto out;
 		err = vfs_listxattr(h_src, p, ssz);
 	}
-	mutex_unlock(&h_isrc->i_mutex);
+	inode_unlock(h_isrc);
 	unlocked = 1;
 	AuDbg("err %d, ssz %zd\n", err, ssz);
 	if (unlikely(err < 0))
@@ -182,7 +182,7 @@ out_free:
 	kfree(o);
 out:
 	if (!unlocked)
-		mutex_unlock(&h_isrc->i_mutex);
+		inode_unlock(h_isrc);
 	AuTraceErr(err);
 	return err;
 }

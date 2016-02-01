@@ -427,10 +427,10 @@ static int au_wr_dir_cpup(struct dentry *dentry, struct dentry *parent,
 	if (!err && add_entry && !au_ftest_wrdir(add_entry, TMPFILE)) {
 		h_parent = au_h_dptr(parent, bcpup);
 		h_dir = d_inode(h_parent);
-		mutex_lock_nested(&h_dir->i_mutex, AuLsc_I_PARENT);
+		inode_lock_nested(h_dir, AuLsc_I_PARENT);
 		err = au_lkup_neg(dentry, bcpup, /*wh*/0);
 		/* todo: no unlock here */
-		mutex_unlock(&h_dir->i_mutex);
+		inode_unlock(h_dir);
 
 		AuDbg("bcpup %d\n", bcpup);
 		if (!err) {
@@ -814,10 +814,10 @@ int au_pin_and_icpup(struct dentry *dentry, struct iattr *ia,
 	sz = -1;
 	a->h_inode = d_inode(a->h_path.dentry);
 	if (ia && (ia->ia_valid & ATTR_SIZE)) {
-		mutex_lock_nested(&a->h_inode->i_mutex, AuLsc_I_CHILD);
+		inode_lock_nested(a->h_inode, AuLsc_I_CHILD);
 		if (ia->ia_size < i_size_read(a->h_inode))
 			sz = ia->ia_size;
-		mutex_unlock(&a->h_inode->i_mutex);
+		inode_unlock(a->h_inode);
 	}
 
 	hi_wh = NULL;
@@ -877,7 +877,7 @@ out_parent:
 	}
 out:
 	if (!err)
-		mutex_lock_nested(&a->h_inode->i_mutex, AuLsc_I_CHILD);
+		inode_lock_nested(a->h_inode, AuLsc_I_CHILD);
 	return err;
 }
 
@@ -961,9 +961,9 @@ static int aufs_setattr(struct dentry *dentry, struct iattr *ia)
 		f = NULL;
 		if (ia->ia_valid & ATTR_FILE)
 			f = ia->ia_file;
-		mutex_unlock(&a->h_inode->i_mutex);
+		inode_unlock(a->h_inode);
 		err = vfsub_trunc(&a->h_path, ia->ia_size, ia->ia_valid, f);
-		mutex_lock_nested(&a->h_inode->i_mutex, AuLsc_I_CHILD);
+		inode_lock_nested(a->h_inode, AuLsc_I_CHILD);
 	} else {
 		delegated = NULL;
 		while (1) {
@@ -980,7 +980,7 @@ static int aufs_setattr(struct dentry *dentry, struct iattr *ia)
 		au_cpup_attr_changeable(inode);
 
 out_unlock:
-	mutex_unlock(&a->h_inode->i_mutex);
+	inode_unlock(a->h_inode);
 	au_unpin(&a->pin);
 	if (unlikely(err))
 		au_update_dbstart(dentry);
@@ -1056,7 +1056,7 @@ ssize_t au_srxattr(struct dentry *dentry, struct au_srxattr *arg)
 	if (unlikely(err))
 		goto out_di;
 
-	mutex_unlock(&a->h_inode->i_mutex);
+	inode_unlock(a->h_inode);
 	switch (arg->type) {
 	case AU_XATTR_SET:
 		err = vfsub_setxattr(h_path.dentry,

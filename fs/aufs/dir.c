@@ -436,13 +436,11 @@ static int aufs_fsync_dir(struct file *file, loff_t start, loff_t end,
 	struct dentry *dentry;
 	struct inode *inode;
 	struct super_block *sb;
-	struct mutex *mtx;
 
 	err = 0;
 	dentry = file->f_path.dentry;
 	inode = d_inode(dentry);
-	mtx = &inode->i_mutex;
-	mutex_lock(mtx);
+	inode_lock(inode);
 	sb = dentry->d_sb;
 	si_noflush_read_lock(sb);
 	if (file)
@@ -457,7 +455,7 @@ static int aufs_fsync_dir(struct file *file, loff_t start, loff_t end,
 		fi_write_unlock(file);
 
 	si_read_unlock(sb);
-	mutex_unlock(mtx);
+	inode_unlock(inode);
 	return err;
 }
 
@@ -631,9 +629,9 @@ static int sio_test_empty(struct dentry *dentry, struct test_empty_arg *arg)
 	h_dentry = au_h_dptr(dentry, arg->bindex);
 	h_inode = d_inode(h_dentry);
 	/* todo: i_mode changes anytime? */
-	mutex_lock_nested(&h_inode->i_mutex, AuLsc_I_CHILD);
+	inode_lock_nested(h_inode, AuLsc_I_CHILD);
 	err = au_test_h_perm_sio(h_inode, MAY_EXEC | MAY_READ);
-	mutex_unlock(&h_inode->i_mutex);
+	inode_unlock(h_inode);
 	if (!err)
 		err = do_test_empty(dentry, arg);
 	else {

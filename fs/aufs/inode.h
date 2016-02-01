@@ -664,21 +664,21 @@ static inline void au_hn_resume(struct au_hinode *hdir)
 
 static inline void au_hn_imtx_lock(struct au_hinode *hdir)
 {
-	mutex_lock(&hdir->hi_inode->i_mutex);
+	inode_lock(hdir->hi_inode);
 	au_hn_suspend(hdir);
 }
 
 static inline void au_hn_imtx_lock_nested(struct au_hinode *hdir,
 					  unsigned int sc __maybe_unused)
 {
-	mutex_lock_nested(&hdir->hi_inode->i_mutex, sc);
+	inode_lock_nested(hdir->hi_inode, sc);
 	au_hn_suspend(hdir);
 }
 
 static inline void au_hn_imtx_unlock(struct au_hinode *hdir)
 {
 	au_hn_resume(hdir);
-	mutex_unlock(&hdir->hi_inode->i_mutex);
+	inode_unlock(hdir->hi_inode);
 }
 
 #endif /* __KERNEL__ */

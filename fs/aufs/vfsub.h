@@ -51,7 +51,7 @@ enum {
 
 /* to debug easier, do not make them inlined functions */
 #define MtxMustLock(mtx)	AuDebugOn(!mutex_is_locked(mtx))
-#define IMustLock(i)		MtxMustLock(&(i)->i_mutex)
+#define IMustLock(i)		AuDebugOn(!inode_is_locked(i))
 
 /* ---------------------------------------------------------------------- */
 

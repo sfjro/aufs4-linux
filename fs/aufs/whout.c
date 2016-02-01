@@ -942,7 +942,7 @@ int au_whtmp_rmdir(struct inode *dir, aufs_bindex_t bindex,
 
 	br = au_sbr(dir->i_sb, bindex);
 	wh_inode = d_inode(wh_dentry);
-	mutex_lock_nested(&wh_inode->i_mutex, AuLsc_I_CHILD);
+	inode_lock_nested(wh_inode, AuLsc_I_CHILD);
 
 	/*
 	 * someone else might change some whiteouts while we were sleeping.
@@ -964,7 +964,7 @@ int au_whtmp_rmdir(struct inode *dir, aufs_bindex_t bindex,
 		if (unlikely(wkq_err))
 			err = wkq_err;
 	}
-	mutex_unlock(&wh_inode->i_mutex);
+	inode_unlock(wh_inode);
 
 	if (!err) {
 		h_tmp.dentry = wh_dentry;
@@ -1000,7 +1000,7 @@ static void call_rmdir_whtmp(void *args)
 	struct au_hinode *hdir;
 
 	/* rmdir by nfsd may cause deadlock with this i_mutex */
-	/* mutex_lock(&a->dir->i_mutex); */
+	/* inode_lock(a->dir); */
 	err = -EROFS;
 	sb = a->dir->i_sb;
 	si_read_lock(sb, !AuLock_FLUSH);
@@ -1030,7 +1030,7 @@ out_mnt:
 	dput(h_parent);
 	ii_write_unlock(a->dir);
 out:
-	/* mutex_unlock(&a->dir->i_mutex); */
+	/* inode_unlock(a->dir); */
 	au_whtmp_rmdir_free(a);
 	si_read_unlock(sb);
 	au_nwt_done(&au_sbi(sb)->si_nowait);

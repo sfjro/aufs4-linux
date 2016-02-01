@@ -140,17 +140,17 @@ static int au_cpdown_dir(struct dentry *dentry, aufs_bindex_t bdst,
 	if (!au_ftest_cpdown(*flags, PARENT_OPQ) && bopq <= bdst)
 		au_fset_cpdown(*flags, PARENT_OPQ);
 	h_inode = d_inode(h_path.dentry);
-	mutex_lock_nested(&h_inode->i_mutex, AuLsc_I_CHILD);
+	inode_lock_nested(h_inode, AuLsc_I_CHILD);
 	if (au_ftest_cpdown(*flags, WHED)) {
 		err = au_cpdown_dir_opq(dentry, bdst, flags);
 		if (unlikely(err)) {
-			mutex_unlock(&h_inode->i_mutex);
+			inode_unlock(h_inode);
 			goto out_dir;
 		}
 	}
 
 	err = au_cpdown_attr(&h_path, au_h_dptr(dentry, bstart));
-	mutex_unlock(&h_inode->i_mutex);
+	inode_unlock(h_inode);
 	if (unlikely(err))
 		goto out_opq;
 
@@ -171,9 +171,9 @@ static int au_cpdown_dir(struct dentry *dentry, aufs_bindex_t bdst,
 	/* revert */
 out_opq:
 	if (au_ftest_cpdown(*flags, DIROPQ)) {
-		mutex_lock_nested(&h_inode->i_mutex, AuLsc_I_CHILD);
+		inode_lock_nested(h_inode, AuLsc_I_CHILD);
 		rerr = au_diropq_remove(dentry, bdst);
-		mutex_unlock(&h_inode->i_mutex);
+		inode_unlock(h_inode);
 		if (unlikely(rerr)) {
 			AuIOErr("failed removing diropq for %pd b%d (%d)\n",
 				dentry, bdst, rerr);

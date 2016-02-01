@@ -414,7 +414,7 @@ int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 	};
 
 	/* copy-up may happen */
-	mutex_lock(&dir->i_mutex);
+	inode_lock(dir);
 
 	sb = dir->i_sb;
 	err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
@@ -511,7 +511,7 @@ out_parent:
 out_si:
 	si_read_unlock(sb);
 out:
-	mutex_unlock(&dir->i_mutex);
+	inode_unlock(dir);
 	return err;
 }
 
@@ -830,7 +830,7 @@ int aufs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	unsigned char diropq;
 	struct path h_path;
 	struct dentry *wh_dentry, *parent, *opq_dentry;
-	struct mutex *h_mtx;
+	struct inode *h_inode;
 	struct super_block *sb;
 	struct {
 		struct au_pin pin;
@@ -873,12 +873,12 @@ int aufs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	/* make the dir opaque */
 	diropq = 0;
-	h_mtx = &d_inode(h_path.dentry)->i_mutex;
+	h_inode = d_inode(h_path.dentry);
 	if (wh_dentry
 	    || au_opt_test(au_mntflags(sb), ALWAYS_DIROPQ)) {
-		mutex_lock_nested(h_mtx, AuLsc_I_CHILD);
+		inode_lock_nested(h_inode, AuLsc_I_CHILD);
 		opq_dentry = au_diropq_create(dentry, bindex);
-		mutex_unlock(h_mtx);
+		inode_unlock(h_inode);
 		err = PTR_ERR(opq_dentry);
 		if (IS_ERR(opq_dentry))
 			goto out_dir;
@@ -895,9 +895,9 @@ int aufs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	/* revert */
 	if (diropq) {
 		AuLabel(revert opq);
-		mutex_lock_nested(h_mtx, AuLsc_I_CHILD);
+		inode_lock_nested(h_inode, AuLsc_I_CHILD);
 		rerr = au_diropq_remove(dentry, bindex);
-		mutex_unlock(h_mtx);
+		inode_unlock(h_inode);
 		if (rerr) {
 			AuIOErr("%pd reverting diropq failed(%d, %d)\n",
 				dentry, err, rerr);
