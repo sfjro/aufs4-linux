@@ -143,9 +143,6 @@ struct au_sbinfo {
 	/* include/asm-ia64/siginfo.h defines a macro named si_flags */
 	unsigned int		si_mntflags;
 
-	/* symlink to follow_link() and put_link() */
-	struct au_sphlhead	si_symlink;
-
 	/* external inode number (bitmap and translation table) */
 	vfs_readf_t		si_xread;
 	vfs_writef_t		si_xwrite;

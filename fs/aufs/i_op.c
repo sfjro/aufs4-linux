@@ -1241,62 +1241,20 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
-/*
- * Assumption:
- * - the number of symlinks is not so many.
- *
- * Structure:
- * - sbinfo (instead of iinfo) contains an hlist of struct au_symlink.
- *   If iinfo contained the hlist, then it would be rather large waste of memory
- *   I am afraid.
- * - struct au_symlink contains the necessary info for h_inode follow_link() and
- *   put_link().
- */
-
-struct au_symlink {
-	union {
-		struct hlist_node hlist;
-		struct rcu_head rcu;
-	};
-
-	struct inode *h_inode;
-	void *h_cookie;
-};
-
-static void au_symlink_add(struct super_block *sb, struct au_symlink *slink,
-			   struct inode *h_inode, void *cookie)
-{
-	struct au_sbinfo *sbinfo;
-
-	ihold(h_inode);
-	slink->h_inode = h_inode;
-	slink->h_cookie = cookie;
-	sbinfo = au_sbi(sb);
-	au_sphl_add(&slink->hlist, &sbinfo->si_symlink);
-}
-
-static void au_symlink_del(struct super_block *sb, struct au_symlink *slink)
-{
-	struct au_sbinfo *sbinfo;
-
-	/* do not iput() within rcu */
-	iput(slink->h_inode);
-	slink->h_inode = NULL;
-	sbinfo = au_sbi(sb);
-	au_sphl_del_rcu(&slink->hlist, &sbinfo->si_symlink);
-	kfree_rcu(slink, rcu);
-}
-
-static const char *aufs_follow_link(struct dentry *dentry, void **cookie)
+static const char *aufs_get_link(struct dentry *dentry, struct inode *inode,
+				 struct delayed_call *done)
 {
 	const char *ret;
-	struct inode *inode, *h_inode;
 	struct dentry *h_dentry;
-	struct au_symlink *slink;
+	struct inode *h_inode;
 	int err;
 	aufs_bindex_t bindex;
 
 	ret = NULL; /* suppress a warning */
+	err = -ECHILD;
+	if (!dentry)
+		goto out;
+
 	err = aufs_read_lock(dentry, AuLock_IR | AuLock_GEN);
 	if (unlikely(err))
 		goto out;
@@ -1309,12 +1267,7 @@ static const char *aufs_follow_link(struct dentry *dentry, void **cookie)
 	inode = d_inode(dentry);
 	bindex = au_ibstart(inode);
 	h_inode = au_h_iptr(inode, bindex);
-	if (unlikely(!h_inode->i_op->follow_link))
-		goto out_unlock;
-
-	err = -ENOMEM;
-	slink = kmalloc(sizeof(*slink), GFP_NOFS);
-	if (unlikely(!slink))
+	if (unlikely(!h_inode->i_op->get_link))
 		goto out_unlock;
 
 	err = -EBUSY;
@@ -1328,28 +1281,20 @@ static const char *aufs_follow_link(struct dentry *dentry, void **cookie)
 		h_dentry = d_find_any_alias(h_inode);
 		if (IS_ERR(h_dentry)) {
 			err = PTR_ERR(h_dentry);
-			goto out_free;
+			goto out_unlock;
 		}
 	}
 	if (unlikely(!h_dentry))
-		goto out_free;
+		goto out_unlock;
 
 	err = 0;
-	AuDbg("%pf\n", h_inode->i_op->follow_link);
+	AuDbg("%pf\n", h_inode->i_op->get_link);
 	AuDbgDentry(h_dentry);
-	ret = h_inode->i_op->follow_link(h_dentry, cookie);
+	ret = h_inode->i_op->get_link(h_dentry, h_inode, done);
 	dput(h_dentry);
+	if (IS_ERR(ret))
+		err = PTR_ERR(ret);
 
-	if (!IS_ERR_OR_NULL(ret)) {
-		au_symlink_add(inode->i_sb, slink, h_inode, *cookie);
-		*cookie = slink;
-		AuDbg("slink %p\n", slink);
-		goto out_unlock; /* success */
-	}
-
-out_free:
-	slink->h_inode = NULL;
-	kfree_rcu(slink, rcu);
 out_unlock:
 	aufs_read_unlock(dentry, AuLock_IR);
 out:
@@ -1357,21 +1302,6 @@ out:
 		ret = ERR_PTR(err);
 	AuTraceErrPtr(ret);
 	return ret;
-}
-
-static void aufs_put_link(struct inode *inode, void *cookie)
-{
-	struct au_symlink *slink;
-	struct inode *h_inode;
-
-	slink = cookie;
-	AuDbg("slink %p\n", slink);
-	h_inode = slink->h_inode;
-	AuDbg("%pf\n", h_inode->i_op->put_link);
-	AuDbgInode(h_inode);
-	if (h_inode->i_op->put_link)
-		h_inode->i_op->put_link(h_inode, slink->h_cookie);
-	au_symlink_del(inode->i_sb, slink);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1426,8 +1356,7 @@ struct inode_operations aufs_iop_nogetattr[AuIop_Last],
 #endif
 
 		.readlink	= generic_readlink,
-		.follow_link	= aufs_follow_link,
-		.put_link	= aufs_put_link,
+		.get_link	= aufs_get_link,
 
 		/* .update_time	= aufs_update_time */
 	},
