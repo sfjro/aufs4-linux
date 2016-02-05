@@ -791,7 +791,7 @@ static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 
 	sbinfo = au_sbi(sb);
 	inode = d_inode(root);
-	mutex_lock(&inode->i_mutex);
+	inode_lock(inode);
 	err = si_write_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
 	if (unlikely(err))
 		goto out_mtx;
@@ -814,7 +814,7 @@ static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 	aufs_write_unlock(root);
 
 out_mtx:
-	mutex_unlock(&inode->i_mutex);
+	inode_unlock(inode);
 out_opts:
 	free_page((unsigned long)opts.opt);
 out:
@@ -933,7 +933,7 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 		goto out_root;
 
 	/* lock vfs_inode first, then aufs. */
-	mutex_lock(&inode->i_mutex);
+	inode_lock(inode);
 	aufs_write_lock(root);
 	err = au_opts_mount(sb, &opts);
 	au_opts_free(&opts);
@@ -945,7 +945,7 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 		au_refresh_iop(inode, /*force_getattr*/0);
 	}
 	aufs_write_unlock(root);
-	mutex_unlock(&inode->i_mutex);
+	inode_unlock(inode);
 	if (!err)
 		goto out_opts; /* success */
 

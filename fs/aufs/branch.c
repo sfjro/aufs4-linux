@@ -282,7 +282,7 @@ static int au_br_init_wh(struct super_block *sb, struct au_branch *br,
 {
 	int err, old_perm;
 	aufs_bindex_t bindex;
-	struct mutex *h_mtx;
+	struct inode *h_inode;
 	struct au_wbr *wbr;
 	struct au_hinode *hdir;
 	struct dentry *h_dentry;
@@ -295,15 +295,15 @@ static int au_br_init_wh(struct super_block *sb, struct au_branch *br,
 	old_perm = br->br_perm;
 	br->br_perm = new_perm;
 	hdir = NULL;
-	h_mtx = NULL;
+	h_inode = NULL;
 	bindex = au_br_index(sb, br->br_id);
 	if (0 <= bindex) {
 		hdir = au_hi(d_inode(sb->s_root), bindex);
 		au_hn_imtx_lock_nested(hdir, AuLsc_I_PARENT);
 	} else {
 		h_dentry = au_br_dentry(br);
-		h_mtx = &d_inode(h_dentry)->i_mutex;
-		mutex_lock_nested(h_mtx, AuLsc_I_PARENT);
+		h_inode = d_inode(h_dentry);
+		inode_lock_nested(h_inode, AuLsc_I_PARENT);
 	}
 	if (!wbr)
 		err = au_wh_init(br, sb);
@@ -315,7 +315,7 @@ static int au_br_init_wh(struct super_block *sb, struct au_branch *br,
 	if (hdir)
 		au_hn_imtx_unlock(hdir);
 	else
-		mutex_unlock(h_mtx);
+		inode_unlock(h_inode);
 	vfsub_mnt_drop_write(au_br_mnt(br));
 	br->br_perm = old_perm;
 
