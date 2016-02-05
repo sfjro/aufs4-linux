@@ -92,6 +92,8 @@ int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
 		      struct vfsub_aopen_args *args, struct au_branch *br);
 int vfsub_kern_path(const char *name, unsigned int flags, struct path *path);
 
+struct dentry *vfsub_lookup_one_len_unlocked(const char *name,
+					     struct dentry *parent, int len);
 struct dentry *vfsub_lookup_one_len(const char *name, struct dentry *parent,
 				    int len);
 
