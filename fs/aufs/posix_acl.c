@@ -59,7 +59,7 @@ int aufs_set_acl(struct inode *inode, struct posix_acl *acl, int type)
 		},
 	};
 
-	mutex_lock(&inode->i_mutex);
+	inode_lock(inode);
 	if (inode->i_ino == AUFS_ROOT_INO)
 		dentry = dget(inode->i_sb->s_root);
 	else {
@@ -81,6 +81,6 @@ int aufs_set_acl(struct inode *inode, struct posix_acl *acl, int type)
 		err = 0;
 
 out:
-	mutex_unlock(&inode->i_mutex);
+	inode_unlock(inode);
 	return err;
 }

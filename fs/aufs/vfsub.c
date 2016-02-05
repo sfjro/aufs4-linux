@@ -124,6 +124,24 @@ int vfsub_kern_path(const char *name, unsigned int flags, struct path *path)
 	return err;
 }
 
+struct dentry *vfsub_lookup_one_len_unlocked(const char *name,
+					     struct dentry *parent, int len)
+{
+	struct path path = {
+		.mnt = NULL
+	};
+
+	path.dentry = lookup_one_len_unlocked(name, parent, len);
+	if (IS_ERR(path.dentry))
+		goto out;
+	if (d_is_positive(path.dentry))
+		vfsub_update_h_iattr(&path, /*did*/NULL); /*ignore*/
+
+out:
+	AuTraceErrPtr(path.dentry);
+	return path.dentry;
+}
+
 struct dentry *vfsub_lookup_one_len(const char *name, struct dentry *parent,
 				    int len)
 {

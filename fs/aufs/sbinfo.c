@@ -22,8 +22,6 @@ void au_si_free(struct kobject *kobj)
 		AuDebugOn(!hlist_empty(&sbinfo->si_plink[i].head));
 	AuDebugOn(atomic_read(&sbinfo->si_nowait.nw_len));
 
-	AuDebugOn(!hlist_empty(&sbinfo->si_symlink.head));
-
 	au_rw_write_lock(&sbinfo->si_rwsem);
 	au_br_free(sbinfo);
 	au_rw_write_unlock(&sbinfo->si_rwsem);
@@ -89,8 +87,6 @@ int au_si_alloc(struct super_block *sb)
 	au_fhsm_init(sbinfo);
 
 	sbinfo->si_mntflags = au_opts_plink(AuOpt_Def);
-
-	au_sphl_init(&sbinfo->si_symlink);
 
 	sbinfo->si_xino_jiffy = jiffies;
 	sbinfo->si_xino_expire
