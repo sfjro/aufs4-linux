@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2015 Junjiro R. Okajima
+ * Copyright (C) 2005-2016 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 
 #include <linux/fs_stack.h>
 #include <linux/mm.h>
+#include <linux/task_work.h>
 #include "aufs.h"
 
 void au_cpup_attr_flags(struct inode *dst, unsigned int iflags)
@@ -393,6 +394,7 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		}
 	};
 	struct super_block *sb;
+	struct task_struct *tsk = current;
 
 	/* bsrc branch can be ro/rw. */
 	sb = cpg->dentry->d_sb;
@@ -410,7 +412,21 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 	IMustLock(file[SRC].dentry->d_inode);
 	err = au_copy_file(file[DST].file, file[SRC].file, cpg->len);
 
-	fput(file[DST].file);
+	/* i wonder if we had O_NO_DELAY_FPUT flag */
+	if (tsk->flags & PF_KTHREAD)
+		__fput_sync(file[DST].file);
+	else {
+		WARN(1, "%pD\nPlease report this warning to aufs-users ML",
+		     file[DST].file);
+		fput(file[DST].file);
+		/*
+		 * too bad.
+		 * we have to call both since we don't know which place the file
+		 * was added to.
+		 */
+		task_work_run();
+		flush_delayed_fput();
+	}
 	au_sbr_put(sb, file[DST].bindex);
 
 out_src:
