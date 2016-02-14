@@ -253,6 +253,7 @@ static inline int au_test_hfsplus(struct super_block *sb __maybe_unused)
 static inline int au_test_fs_unsuppoted(struct super_block *sb)
 {
 	return
+		au_test_fuse(sb) ||	/* for a security reason, temporarily */
 #ifndef CONFIG_AUFS_BR_RAMFS
 		au_test_ramfs(sb) ||
 #endif
