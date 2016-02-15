@@ -517,9 +517,42 @@ out:
 	return err;
 }
 
-static void au_do_cpup_dir(struct au_cp_generic *cpg, struct dentry *dst_parent)
+/*
+ * regardless 'acl' option, reset all ACL.
+ * All ACL will be copied up later from the original entry on the lower branch.
+ */
+static int au_reset_acl(struct inode *h_dir, struct path *h_path, umode_t mode)
 {
+	int err;
+	struct dentry *h_dentry;
+	struct inode *h_inode;
+
+	h_dentry = h_path->dentry;
+	h_inode = h_dentry->d_inode;
+	/* forget_all_cached_acls(h_inode)); */
+	err = vfsub_removexattr(h_dentry, XATTR_NAME_POSIX_ACL_ACCESS);
+	AuTraceErr(err);
+	if (!err)
+		err = vfsub_acl_chmod(h_inode, mode);
+	if (err == -EOPNOTSUPP)
+		err = 0;
+
+	AuTraceErr(err);
+	return err;
+}
+
+static int au_do_cpup_dir(struct au_cp_generic *cpg, struct dentry *dst_parent,
+			  struct inode *h_dir, struct path *h_path)
+{
+	int err;
 	struct inode *dir;
+
+	err = vfsub_removexattr(h_path->dentry, XATTR_NAME_POSIX_ACL_DEFAULT);
+	AuTraceErr(err);
+	if (err == -EOPNOTSUPP)
+		err = 0;
+	if (unlikely(err))
+		goto out;
 
 	/*
 	 * strange behaviour from the users view,
@@ -529,6 +562,9 @@ static void au_do_cpup_dir(struct au_cp_generic *cpg, struct dentry *dst_parent)
 	if (au_ibstart(dir) == cpg->bdst)
 		au_cpup_attr_nlink(dir, /*force*/1);
 	au_cpup_attr_nlink(cpg->dentry->d_inode, /*force*/1);
+
+out:
+	return err;
 }
 
 static noinline_for_stack
@@ -584,7 +620,7 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 		isdir = 1;
 		err = vfsub_mkdir(h_dir, &h_path, mode);
 		if (!err)
-			au_do_cpup_dir(cpg, dst_parent);
+			err = au_do_cpup_dir(cpg, dst_parent, h_dir, &h_path);
 		break;
 	case S_IFLNK:
 		err = au_do_cpup_symlink(&h_path, h_src, h_dir);
@@ -602,7 +638,7 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 		err = -EIO;
 	}
 	if (!err)
-		err = vfsub_acl_chmod(h_path.dentry->d_inode, mode);
+		err = au_reset_acl(h_dir, &h_path, mode);
 
 	mnt_flags = au_mntflags(sb);
 	if (!au_opt_test(mnt_flags, UDBA_NONE)
