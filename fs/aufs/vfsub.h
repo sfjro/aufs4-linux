@@ -77,6 +77,12 @@ static inline int vfsub_native_ro(struct inode *inode)
 		|| IS_IMMUTABLE(inode);
 }
 
+#ifdef CONFIG_AUFS_BR_FUSE
+int vfsub_test_mntns(struct vfsmount *mnt, struct super_block *h_sb);
+#else
+AuStubInt0(vfsub_test_mntns, struct vfsmount *mnt, struct super_block *h_sb);
+#endif
+
 /* ---------------------------------------------------------------------- */
 
 int vfsub_update_h_iattr(struct path *h_path, int *did);

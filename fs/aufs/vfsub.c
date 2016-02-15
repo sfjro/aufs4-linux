@@ -20,9 +20,27 @@
  */
 
 #include <linux/namei.h>
+#include <linux/nsproxy.h>
 #include <linux/security.h>
 #include <linux/splice.h>
+#include "../fs/mount.h"
 #include "aufs.h"
+
+#ifdef CONFIG_AUFS_BR_FUSE
+int vfsub_test_mntns(struct vfsmount *mnt, struct super_block *h_sb)
+{
+	struct nsproxy *ns;
+
+	if (!au_test_fuse(h_sb) || !au_userns)
+		return 0;
+
+	ns = current->nsproxy;
+	/* no {get,put}_nsproxy(ns) */
+	return real_mount(mnt)->mnt_ns == ns->mnt_ns ? 0 : -EACCES;
+}
+#endif
+
+/* ---------------------------------------------------------------------- */
 
 int vfsub_update_h_iattr(struct path *h_path, int *did)
 {

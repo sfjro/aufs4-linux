@@ -250,11 +250,13 @@ static int do_open_dir(struct file *file, int flags, struct file *h_file)
 	int err;
 	aufs_bindex_t bindex, btail;
 	struct dentry *dentry, *h_dentry;
+	struct vfsmount *mnt;
 
 	FiMustWriteLock(file);
 	AuDebugOn(h_file);
 
 	err = 0;
+	mnt = file->f_path.mnt;
 	dentry = file->f_path.dentry;
 	file->f_version = dentry->d_inode->i_version;
 	bindex = au_dbstart(dentry);
@@ -266,6 +268,9 @@ static int do_open_dir(struct file *file, int flags, struct file *h_file)
 		if (!h_dentry)
 			continue;
 
+		err = vfsub_test_mntns(mnt, h_dentry->d_sb);
+		if (unlikely(err))
+			break;
 		h_file = au_h_open(dentry, bindex, flags, file, /*force_wr*/0);
 		if (IS_ERR(h_file)) {
 			err = PTR_ERR(h_file);
