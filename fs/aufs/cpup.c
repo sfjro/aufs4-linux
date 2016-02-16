@@ -601,6 +601,8 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 		AuIOErr("Unknown inode type 0%o\n", mode);
 		err = -EIO;
 	}
+	if (!err)
+		err = vfsub_acl_chmod(h_path.dentry->d_inode, mode);
 
 	mnt_flags = au_mntflags(sb);
 	if (!au_opt_test(mnt_flags, UDBA_NONE)

@@ -978,6 +978,12 @@ static int aufs_setattr(struct dentry *dentry, struct iattr *ia)
 			break;
 		}
 	}
+	/*
+	 * regardless aufs 'acl' option setting.
+	 * why don't all acl-aware fs call this func from their ->setattr()?
+	 */
+	if (!err && (ia->ia_valid & ATTR_MODE))
+		err = vfsub_acl_chmod(a->h_inode, ia->ia_mode);
 	if (!err)
 		au_cpup_attr_changeable(inode);
 
