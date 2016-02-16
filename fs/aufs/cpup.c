@@ -517,6 +517,20 @@ out:
 	return err;
 }
 
+static void au_do_cpup_dir(struct au_cp_generic *cpg, struct dentry *dst_parent)
+{
+	struct inode *dir;
+
+	/*
+	 * strange behaviour from the users view,
+	 * particularry setattr case
+	 */
+	dir = dst_parent->d_inode;
+	if (au_ibstart(dir) == cpg->bdst)
+		au_cpup_attr_nlink(dir, /*force*/1);
+	au_cpup_attr_nlink(cpg->dentry->d_inode, /*force*/1);
+}
+
 static noinline_for_stack
 int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 	       struct au_cpup_reg_attr *h_src_attr)
@@ -569,16 +583,8 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 	case S_IFDIR:
 		isdir = 1;
 		err = vfsub_mkdir(h_dir, &h_path, mode);
-		if (!err) {
-			/*
-			 * strange behaviour from the users view,
-			 * particularry setattr case
-			 */
-			if (au_ibstart(dst_parent->d_inode) == cpg->bdst)
-				au_cpup_attr_nlink(dst_parent->d_inode,
-						   /*force*/1);
-			au_cpup_attr_nlink(cpg->dentry->d_inode, /*force*/1);
-		}
+		if (!err)
+			au_do_cpup_dir(cpg, dst_parent);
 		break;
 	case S_IFLNK:
 		err = au_do_cpup_symlink(&h_path, h_src, h_dir);
