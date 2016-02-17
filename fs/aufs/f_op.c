@@ -49,7 +49,7 @@ int au_do_open_nondir(struct file *file, int flags, struct file *h_file)
 			goto out;
 		h_file = au_h_open(dentry, bindex, flags, file, /*force_wr*/0);
 	} else {
-		h_dentry = h_file->f_dentry;
+		h_dentry = h_file->f_path.dentry;
 		err = vfsub_test_mntns(file->f_path.mnt, h_dentry->d_sb);
 		if (unlikely(err))
 			goto out;
