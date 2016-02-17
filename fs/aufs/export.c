@@ -610,7 +610,7 @@ aufs_fh_to_dentry(struct super_block *sb, struct fid *fid, int fh_len,
 	ino = decode_ino(fh + Fh_ino);
 	/* it should never happen */
 	if (unlikely(ino == AUFS_ROOT_INO))
-		goto out;
+		goto out_unlock;
 
 	dir_ino = decode_ino(fh + Fh_dir_ino);
 	dentry = decode_by_ino(sb, ino, dir_ino);
