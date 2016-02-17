@@ -18,6 +18,7 @@ struct seq_file;
 
 /* module parameters */
 extern int sysaufs_brs;
+extern bool au_userns;
 
 /* ---------------------------------------------------------------------- */
 
