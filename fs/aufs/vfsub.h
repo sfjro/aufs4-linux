@@ -26,6 +26,7 @@
 
 #include <linux/fs.h>
 #include <linux/mount.h>
+#include <linux/posix_acl.h>
 #include <linux/xattr.h>
 #include "debug.h"
 
@@ -76,6 +77,12 @@ static inline int vfsub_native_ro(struct inode *inode)
 		/* || IS_APPEND(inode) */
 		|| IS_IMMUTABLE(inode);
 }
+
+#ifdef CONFIG_AUFS_BR_FUSE
+int vfsub_test_mntns(struct vfsmount *mnt, struct super_block *h_sb);
+#else
+AuStubInt0(vfsub_test_mntns, struct vfsmount *mnt, struct super_block *h_sb);
+#endif
 
 /* ---------------------------------------------------------------------- */
 
@@ -213,6 +220,20 @@ static inline int vfsub_update_time(struct inode *h_inode, struct timespec *ts,
 	return generic_update_time(h_inode, ts, flags);
 	/* no vfsub_update_h_iattr() since we don't have struct path */
 }
+
+#ifdef CONFIG_FS_POSIX_ACL
+static inline int vfsub_acl_chmod(struct inode *h_inode, umode_t h_mode)
+{
+	int err;
+
+	err = posix_acl_chmod(h_inode, h_mode);
+	if (err == -EOPNOTSUPP)
+		err = 0;
+	return err;
+}
+#else
+AuStubInt0(vfsub_acl_chmod, struct inode *h_inode, umode_t h_mode);
+#endif
 
 long vfsub_splice_to(struct file *in, loff_t *ppos,
 		     struct pipe_inode_info *pipe, size_t len,

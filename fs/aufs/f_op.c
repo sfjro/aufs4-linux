@@ -29,7 +29,7 @@ int au_do_open_nondir(struct file *file, int flags, struct file *h_file)
 {
 	int err;
 	aufs_bindex_t bindex;
-	struct dentry *dentry;
+	struct dentry *dentry, *h_dentry;
 	struct au_finfo *finfo;
 	struct inode *h_inode;
 
@@ -42,10 +42,19 @@ int au_do_open_nondir(struct file *file, int flags, struct file *h_file)
 	memset(&finfo->fi_htop, 0, sizeof(finfo->fi_htop));
 	atomic_set(&finfo->fi_mmapped, 0);
 	bindex = au_dbstart(dentry);
-	if (!h_file)
+	if (!h_file) {
+		h_dentry = au_h_dptr(dentry, bindex);
+		err = vfsub_test_mntns(file->f_path.mnt, h_dentry->d_sb);
+		if (unlikely(err))
+			goto out;
 		h_file = au_h_open(dentry, bindex, flags, file, /*force_wr*/0);
-	else
+	} else {
+		h_dentry = h_file->f_path.dentry;
+		err = vfsub_test_mntns(file->f_path.mnt, h_dentry->d_sb);
+		if (unlikely(err))
+			goto out;
 		get_file(h_file);
+	}
 	if (IS_ERR(h_file))
 		err = PTR_ERR(h_file);
 	else {
@@ -63,6 +72,7 @@ int au_do_open_nondir(struct file *file, int flags, struct file *h_file)
 		/* file->f_ra = h_file->f_ra; */
 	}
 
+out:
 	return err;
 }
 
