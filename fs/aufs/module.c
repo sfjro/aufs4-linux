@@ -95,7 +95,7 @@ MODULE_PARM_DESC(brs, "use <sysfs>/fs/aufs/si_*/brN");
 module_param_named(brs, sysaufs_brs, int, S_IRUGO);
 
 /* this module parameter has no meaning when USER_NS is disabled */
-static bool au_userns;
+bool au_userns;
 MODULE_PARM_DESC(allow_userns, "allow unprivileged to mount under userns");
 module_param_named(allow_userns, au_userns, bool, S_IRUGO);
 
