@@ -7,7 +7,6 @@
  */
 
 #include <linux/fs.h>
-#include <linux/posix_acl.h>
 #include "aufs.h"
 
 struct posix_acl *aufs_get_acl(struct inode *inode, int type)
