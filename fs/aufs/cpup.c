@@ -534,8 +534,6 @@ static int au_reset_acl(struct inode *h_dir, struct path *h_path, umode_t mode)
 	AuTraceErr(err);
 	if (!err)
 		err = vfsub_acl_chmod(h_inode, mode);
-	if (err == -EOPNOTSUPP)
-		err = 0;
 
 	AuTraceErr(err);
 	return err;
