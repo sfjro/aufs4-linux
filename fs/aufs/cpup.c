@@ -611,7 +611,7 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		isreg = 1;
-		err = vfsub_create(h_dir, &h_path, mode | S_IWUSR,
+		err = vfsub_create(h_dir, &h_path, S_IRUSR | S_IWUSR,
 				   /*want_excl*/true);
 		if (!err)
 			err = au_do_cpup_regular(cpg, h_src_attr);
