@@ -532,6 +532,8 @@ static int au_reset_acl(struct inode *h_dir, struct path *h_path, umode_t mode)
 	/* forget_all_cached_acls(h_inode)); */
 	err = vfsub_removexattr(h_dentry, XATTR_NAME_POSIX_ACL_ACCESS);
 	AuTraceErr(err);
+	if (err == -EOPNOTSUPP)
+		err = 0;
 	if (!err)
 		err = vfsub_acl_chmod(h_inode, mode);
 
