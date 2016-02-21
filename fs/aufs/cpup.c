@@ -532,6 +532,8 @@ static int au_reset_acl(struct inode *h_dir, struct path *h_path, umode_t mode)
 	/* forget_all_cached_acls(h_inode)); */
 	err = vfsub_removexattr(h_dentry, XATTR_NAME_POSIX_ACL_ACCESS);
 	AuTraceErr(err);
+	if (err == -EOPNOTSUPP)
+		err = 0;
 	if (!err)
 		err = vfsub_acl_chmod(h_inode, mode);
 
@@ -609,7 +611,7 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		isreg = 1;
-		err = vfsub_create(h_dir, &h_path, mode | S_IWUSR,
+		err = vfsub_create(h_dir, &h_path, S_IRUSR | S_IWUSR,
 				   /*want_excl*/true);
 		if (!err)
 			err = au_do_cpup_regular(cpg, h_src_attr);
