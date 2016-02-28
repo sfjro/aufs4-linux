@@ -717,7 +717,7 @@ static int aufs_setfl(struct file *file, unsigned long arg)
 	struct file *h_file;
 	struct super_block *sb;
 
-	sb = file->f_dentry->d_sb;
+	sb = file->f_path.dentry->d_sb;
 	si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLMW);
 
 	h_file = au_read_pre(file, /*keep_fi*/0);
