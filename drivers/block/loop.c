@@ -554,7 +554,7 @@ struct file *loop_backing_file(struct super_block *sb)
 	}
 	return ret;
 }
-EXPORT_SYMBOL(loop_backing_file);
+EXPORT_SYMBOL_GPL(loop_backing_file);
 
 /* loop sysfs attributes */
 
