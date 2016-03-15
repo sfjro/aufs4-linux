@@ -217,7 +217,7 @@ out:
 struct au_xino_lock_dir {
 	struct au_hinode *hdir;
 	struct dentry *parent;
-	struct mutex *mtx;
+	struct inode *dir;
 };
 
 static void au_xino_lock_dir(struct super_block *sb, struct file *xino,
@@ -235,8 +235,8 @@ static void au_xino_lock_dir(struct super_block *sb, struct file *xino,
 		au_hn_imtx_lock_nested(ldir->hdir, AuLsc_I_PARENT);
 	} else {
 		ldir->parent = dget_parent(xino->f_path.dentry);
-		ldir->mtx = &d_inode(ldir->parent)->i_mutex;
-		mutex_lock_nested(ldir->mtx, AuLsc_I_PARENT);
+		ldir->dir = d_inode(ldir->parent);
+		inode_lock_nested(ldir->dir, AuLsc_I_PARENT);
 	}
 }
 
@@ -245,7 +245,7 @@ static void au_xino_unlock_dir(struct au_xino_lock_dir *ldir)
 	if (ldir->hdir)
 		au_hn_imtx_unlock(ldir->hdir);
 	else {
-		mutex_unlock(ldir->mtx);
+		inode_unlock(ldir->dir);
 		dput(ldir->parent);
 	}
 }
@@ -760,13 +760,13 @@ struct file *au_xino_create(struct super_block *sb, char *fname, int silent)
 	inode = file_inode(file);
 	h_parent = dget_parent(file->f_path.dentry);
 	h_dir = d_inode(h_parent);
-	mutex_lock_nested(&h_dir->i_mutex, AuLsc_I_PARENT);
+	inode_lock_nested(h_dir, AuLsc_I_PARENT);
 	/* mnt_want_write() is unnecessary here */
 	/* no delegation since it is just created */
 	if (inode->i_nlink)
 		err = vfsub_unlink(h_dir, &file->f_path, /*delegated*/NULL,
 				   /*force*/0);
-	mutex_unlock(&h_dir->i_mutex);
+	inode_unlock(h_dir);
 	dput(h_parent);
 	if (unlikely(err)) {
 		if (!silent)
@@ -1201,14 +1201,14 @@ int au_xino_set(struct super_block *sb, struct au_opt_xino *xino, int remount)
 
 	au_opt_set(sbinfo->si_mntflags, XINO);
 	dir = d_inode(parent);
-	mutex_lock_nested(&dir->i_mutex, AuLsc_I_PARENT);
+	inode_lock_nested(dir, AuLsc_I_PARENT);
 	/* mnt_want_write() is unnecessary here */
 	err = au_xino_set_xib(sb, xino->file);
 	if (!err)
 		err = au_xigen_set(sb, xino->file);
 	if (!err)
 		err = au_xino_set_br(sb, xino->file);
-	mutex_unlock(&dir->i_mutex);
+	inode_unlock(dir);
 	if (!err)
 		goto out; /* success */
 

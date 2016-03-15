@@ -763,7 +763,7 @@ static void au_ren_dt(struct au_ren_args *a)
 static void au_ren_rev_dt(int err, struct au_ren_args *a)
 {
 	struct dentry *h_d;
-	struct mutex *h_mtx;
+	struct inode *h_inode;
 
 	au_dtime_revert(a->src_dt + AuPARENT);
 	if (!au_ftest_ren(a->flags, ISSAMEDIR))
@@ -771,17 +771,17 @@ static void au_ren_rev_dt(int err, struct au_ren_args *a)
 
 	if (au_ftest_ren(a->flags, ISDIR) && err != -EIO) {
 		h_d = a->src_dt[AuCHILD].dt_h_path.dentry;
-		h_mtx = &d_inode(h_d)->i_mutex;
-		mutex_lock_nested(h_mtx, AuLsc_I_CHILD);
+		h_inode = d_inode(h_d);
+		inode_lock_nested(h_inode, AuLsc_I_CHILD);
 		au_dtime_revert(a->src_dt + AuCHILD);
-		mutex_unlock(h_mtx);
+		inode_unlock(h_inode);
 
 		if (au_ftest_ren(a->flags, DT_DSTDIR)) {
 			h_d = a->dst_dt[AuCHILD].dt_h_path.dentry;
-			h_mtx = &d_inode(h_d)->i_mutex;
-			mutex_lock_nested(h_mtx, AuLsc_I_CHILD);
+			h_inode = d_inode(h_d);
+			inode_lock_nested(h_inode, AuLsc_I_CHILD);
 			au_dtime_revert(a->dst_dt + AuCHILD);
-			mutex_unlock(h_mtx);
+			inode_unlock(h_inode);
 		}
 	}
 }

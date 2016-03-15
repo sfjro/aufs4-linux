@@ -645,14 +645,14 @@ int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *uarg)
 	dmsg = !!(args->mvdown.flags & AUFS_MVDOWN_DMSG);
 	args->parent = dget_parent(dentry);
 	args->dir = d_inode(args->parent);
-	mutex_lock_nested(&args->dir->i_mutex, I_MUTEX_PARENT);
+	inode_lock_nested(args->dir, I_MUTEX_PARENT);
 	dput(args->parent);
 	if (unlikely(args->parent != dentry->d_parent)) {
 		AU_MVD_PR(dmsg, "parent dir is moved\n");
 		goto out_dir;
 	}
 
-	mutex_lock_nested(&inode->i_mutex, I_MUTEX_CHILD);
+	inode_lock_nested(inode, I_MUTEX_CHILD);
 	err = aufs_read_lock(dentry, AuLock_DW | AuLock_FLUSH | AuLock_NOPLMW);
 	if (unlikely(err))
 		goto out_inode;
@@ -676,9 +676,9 @@ out_parent:
 	di_write_unlock(args->parent);
 	aufs_read_unlock(dentry, AuLock_DW);
 out_inode:
-	mutex_unlock(&inode->i_mutex);
+	inode_unlock(inode);
 out_dir:
-	mutex_unlock(&args->dir->i_mutex);
+	inode_unlock(args->dir);
 out_free:
 	e = copy_to_user(uarg, &args->mvdown, sizeof(args->mvdown));
 	if (unlikely(e))

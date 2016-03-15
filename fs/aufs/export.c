@@ -393,9 +393,7 @@ static struct dentry *au_lkup_by_ino(struct path *path, ino_t ino,
 
 	/* do not call vfsub_lkup_one() */
 	dir = d_inode(parent);
-	mutex_lock(&dir->i_mutex);
-	dentry = vfsub_lookup_one_len(arg.name, parent, arg.namelen);
-	mutex_unlock(&dir->i_mutex);
+	dentry = vfsub_lookup_one_len_unlocked(arg.name, parent, arg.namelen);
 	AuTraceErrPtr(dentry);
 	if (IS_ERR(dentry))
 		goto out_name;
