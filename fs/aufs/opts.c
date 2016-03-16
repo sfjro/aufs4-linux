@@ -1572,16 +1572,16 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		if (unlikely(!au_br_writable(au_sbr_perm(sb, 0))))
 			pr_warn("first branch should be rw\n");
 		if (unlikely(au_opt_test(sbinfo->si_mntflags, SHWH)))
-			pr_warn("shwh should be used with ro\n");
+			pr_warn_once("shwh should be used with ro\n");
 	}
 
 	if (au_opt_test((sbinfo->si_mntflags | pending), UDBA_HNOTIFY)
 	    && !au_opt_test(sbinfo->si_mntflags, XINO))
-		pr_warn("udba=*notify requires xino\n");
+		pr_warn_once("udba=*notify requires xino\n");
 
 	if (au_opt_test(sbinfo->si_mntflags, DIRPERM1))
-		pr_warn("dirperm1 breaks the protection"
-			" by the permission bits on the lower branch\n");
+		pr_warn_once("dirperm1 breaks the protection"
+			     " by the permission bits on the lower branch\n");
 
 	err = 0;
 	fhsm = 0;
