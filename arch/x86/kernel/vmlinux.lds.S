@@ -81,11 +81,11 @@ PHDRS {
 SECTIONS
 {
 #ifdef CONFIG_X86_32
-        . = LOAD_OFFSET + LOAD_PHYSICAL_ADDR;
-        phys_startup_32 = startup_32 - LOAD_OFFSET;
+	. = LOAD_OFFSET + LOAD_PHYSICAL_ADDR;
+	phys_startup_32 = ABSOLUTE(startup_32 - LOAD_OFFSET);
 #else
-        . = __START_KERNEL;
-        phys_startup_64 = startup_64 - LOAD_OFFSET;
+	. = __START_KERNEL;
+	phys_startup_64 = ABSOLUTE(startup_64 - LOAD_OFFSET);
 #endif
 
 	/* Text and read-only data */
@@ -191,6 +191,17 @@ SECTIONS
 #ifdef CONFIG_X86_64
 	:init
 #endif
+
+	/*
+	 * Section for code used exclusively before alternatives are run. All
+	 * references to such code must be patched out by alternatives, normally
+	 * by using X86_FEATURE_ALWAYS CPU feature bit.
+	 *
+	 * See static_cpu_has() for an example.
+	 */
+	.altinstr_aux : AT(ADDR(.altinstr_aux) - LOAD_OFFSET) {
+		*(.altinstr_aux)
+	}
 
 	INIT_DATA_SECTION(16)
 
