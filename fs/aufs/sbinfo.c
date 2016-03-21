@@ -39,13 +39,10 @@ void au_si_free(struct kobject *kobj)
 	au_br_free(sbinfo);
 	au_rw_write_unlock(&sbinfo->si_rwsem);
 
-	AuDebugOn(radix_tree_gang_lookup
-		  (&sbinfo->au_si_pid.tree, (void **)&locked,
-		   /*first_index*/PID_MAX_DEFAULT - 1,
-		   /*max_items*/sizeof(locked)/sizeof(*locked)));
-
 	kfree(sbinfo->si_branch);
-	kfree(sbinfo->au_si_pid.bitmap);
+	for (i = 0; i < AU_NPIDMAP; i++)
+		kfree(sbinfo->au_si_pid.pid_bitmap[i]);
+	mutex_destroy(&sbinfo->au_si_pid.pid_mtx);
 	mutex_destroy(&sbinfo->si_xib_mtx);
 	AuRwDestroy(&sbinfo->si_rwsem);
 
@@ -63,18 +60,10 @@ int au_si_alloc(struct super_block *sb)
 	if (unlikely(!sbinfo))
 		goto out;
 
-	BUILD_BUG_ON(sizeof(unsigned long) !=
-		     sizeof(*sbinfo->au_si_pid.bitmap));
-	sbinfo->au_si_pid.bitmap = kcalloc(BITS_TO_LONGS(PID_MAX_DEFAULT),
-					sizeof(*sbinfo->au_si_pid.bitmap),
-					GFP_NOFS);
-	if (unlikely(!sbinfo->au_si_pid.bitmap))
-		goto out_sbinfo;
-
 	/* will be reallocated separately */
 	sbinfo->si_branch = kzalloc(sizeof(*sbinfo->si_branch), GFP_NOFS);
 	if (unlikely(!sbinfo->si_branch))
-		goto out_pidmap;
+		goto out_sbinfo;
 
 	err = sysaufs_si_init(sbinfo);
 	if (unlikely(err))
@@ -83,8 +72,7 @@ int au_si_alloc(struct super_block *sb)
 	au_nwt_init(&sbinfo->si_nowait);
 	au_rw_init_wlock(&sbinfo->si_rwsem);
 	au_rw_class(&sbinfo->si_rwsem, &aufs_si);
-	spin_lock_init(&sbinfo->au_si_pid.tree_lock);
-	INIT_RADIX_TREE(&sbinfo->au_si_pid.tree, GFP_ATOMIC | __GFP_NOFAIL);
+	mutex_init(&sbinfo->au_si_pid.pid_mtx);
 
 	atomic_long_set(&sbinfo->si_ninodes, 0);
 	atomic_long_set(&sbinfo->si_nfiles, 0);
@@ -133,8 +121,6 @@ int au_si_alloc(struct super_block *sb)
 
 out_br:
 	kfree(sbinfo->si_branch);
-out_pidmap:
-	kfree(sbinfo->au_si_pid.bitmap);
 out_sbinfo:
 	kfree(sbinfo);
 out:
@@ -317,44 +303,46 @@ void aufs_read_and_write_unlock2(struct dentry *d1, struct dentry *d2)
 
 /* ---------------------------------------------------------------------- */
 
-int si_pid_test_slow(struct super_block *sb)
+static void si_pid_alloc(struct au_si_pid *au_si_pid, int idx)
 {
-	void *p;
+	unsigned long *p;
 
-	rcu_read_lock();
-	p = radix_tree_lookup(&au_sbi(sb)->au_si_pid.tree, current->pid);
-	rcu_read_unlock();
+	BUILD_BUG_ON(sizeof(unsigned long) !=
+		     sizeof(*au_si_pid->pid_bitmap));
 
-	return (long)!!p;
+	mutex_lock(&au_si_pid->pid_mtx);
+	p = au_si_pid->pid_bitmap[idx];
+	while (!p) {
+		/*
+		 * bad approach.
+		 * but keeping 'si_pid_set()' void is more important.
+		 */
+		p = kcalloc(BITS_TO_LONGS(AU_PIDSTEP),
+			    sizeof(*au_si_pid->pid_bitmap),
+			    GFP_NOFS);
+		if (p)
+			break;
+		cond_resched();
+	}
+	au_si_pid->pid_bitmap[idx] = p;
+	mutex_unlock(&au_si_pid->pid_mtx);
 }
 
-void si_pid_set_slow(struct super_block *sb)
+void si_pid_set(struct super_block *sb)
 {
-	int err;
-	struct au_sbinfo *sbinfo;
+	pid_t bit;
+	int idx;
+	unsigned long *bitmap;
+	struct au_si_pid *au_si_pid;
 
-	AuDebugOn(si_pid_test_slow(sb));
-
-	sbinfo = au_sbi(sb);
-	err = radix_tree_preload(GFP_NOFS | __GFP_NOFAIL);
-	AuDebugOn(err);
-	spin_lock(&sbinfo->au_si_pid.tree_lock);
-	err = radix_tree_insert(&sbinfo->au_si_pid.tree, current->pid,
-				/*any valid ptr*/sb);
-	spin_unlock(&sbinfo->au_si_pid.tree_lock);
-	AuDebugOn(err);
-	radix_tree_preload_end();
-}
-
-void si_pid_clr_slow(struct super_block *sb)
-{
-	void *p;
-	struct au_sbinfo *sbinfo;
-
-	AuDebugOn(!si_pid_test_slow(sb));
-
-	sbinfo = au_sbi(sb);
-	spin_lock(&sbinfo->au_si_pid.tree_lock);
-	p = radix_tree_delete(&sbinfo->au_si_pid.tree, current->pid);
-	spin_unlock(&sbinfo->au_si_pid.tree_lock);
+	si_pid_idx_bit(&idx, &bit);
+	au_si_pid = &au_sbi(sb)->au_si_pid;
+	bitmap = au_si_pid->pid_bitmap[idx];
+	if (!bitmap) {
+		si_pid_alloc(au_si_pid, idx);
+		bitmap = au_si_pid->pid_bitmap[idx];
+	}
+	AuDebugOn(test_bit(bit, bitmap));
+	set_bit(bit, bitmap);
+	/* smp_mb(); */
 }
