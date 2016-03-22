@@ -87,6 +87,13 @@ struct au_fhsm {
 #endif
 };
 
+#define AU_PIDSTEP	(int)(BITS_TO_LONGS(PID_MAX_DEFAULT) * BITS_PER_LONG)
+#define AU_NPIDMAP	(int)DIV_ROUND_UP(PID_MAX_LIMIT, AU_PIDSTEP)
+struct au_si_pid {
+	unsigned long	*pid_bitmap[AU_NPIDMAP];
+	struct mutex	pid_mtx;
+};
+
 struct au_branch;
 struct au_sbinfo {
 	/* nowait tasks in the system-wide workqueue */
@@ -99,11 +106,7 @@ struct au_sbinfo {
 	struct au_rwsem		si_rwsem;
 
 	/* prevent recursive locking in deleting inode */
-	struct {
-		unsigned long		*bitmap;
-		spinlock_t		tree_lock;
-		struct radix_tree_root	tree;
-	} au_si_pid;
+	struct au_si_pid	au_si_pid;
 
 	/*
 	 * dirty approach to protect sb->sb_inodes and ->s_files (gone) from
@@ -301,10 +304,6 @@ void aufs_write_unlock(struct dentry *dentry);
 int aufs_read_and_write_lock2(struct dentry *d1, struct dentry *d2, int flags);
 void aufs_read_and_write_unlock2(struct dentry *d1, struct dentry *d2);
 
-int si_pid_test_slow(struct super_block *sb);
-void si_pid_set_slow(struct super_block *sb);
-void si_pid_clr_slow(struct super_block *sb);
-
 /* wbr_policy.c */
 extern struct au_wbr_copyup_operations au_wbr_copyup_ops[];
 extern struct au_wbr_create_operations au_wbr_create_ops[];
@@ -452,47 +451,42 @@ static inline void dbgaufs_si_null(struct au_sbinfo *sbinfo)
 
 /* ---------------------------------------------------------------------- */
 
-static inline pid_t si_pid_bit(void)
+static inline void si_pid_idx_bit(int *idx, pid_t *bit)
 {
 	/* the origin of pid is 1, but the bitmap's is 0 */
-	return current->pid - 1;
+	*bit = current->pid - 1;
+	*idx = *bit / AU_PIDSTEP;
+	*bit %= AU_PIDSTEP;
 }
 
 static inline int si_pid_test(struct super_block *sb)
 {
 	pid_t bit;
+	int idx;
+	unsigned long *bitmap;
 
-	bit = si_pid_bit();
-	if (bit < PID_MAX_DEFAULT)
-		return test_bit(bit, au_sbi(sb)->au_si_pid.bitmap);
-	return si_pid_test_slow(sb);
-}
-
-static inline void si_pid_set(struct super_block *sb)
-{
-	pid_t bit;
-
-	bit = si_pid_bit();
-	if (bit < PID_MAX_DEFAULT) {
-		AuDebugOn(test_bit(bit, au_sbi(sb)->au_si_pid.bitmap));
-		set_bit(bit, au_sbi(sb)->au_si_pid.bitmap);
-		/* smp_mb(); */
-	} else
-		si_pid_set_slow(sb);
+	si_pid_idx_bit(&idx, &bit);
+	bitmap = au_sbi(sb)->au_si_pid.pid_bitmap[idx];
+	if (bitmap)
+		return test_bit(bit, bitmap);
+	return 0;
 }
 
 static inline void si_pid_clr(struct super_block *sb)
 {
 	pid_t bit;
+	int idx;
+	unsigned long *bitmap;
 
-	bit = si_pid_bit();
-	if (bit < PID_MAX_DEFAULT) {
-		AuDebugOn(!test_bit(bit, au_sbi(sb)->au_si_pid.bitmap));
-		clear_bit(bit, au_sbi(sb)->au_si_pid.bitmap);
-		/* smp_mb(); */
-	} else
-		si_pid_clr_slow(sb);
+	si_pid_idx_bit(&idx, &bit);
+	bitmap = au_sbi(sb)->au_si_pid.pid_bitmap[idx];
+	BUG_ON(!bitmap);
+	AuDebugOn(!test_bit(bit, bitmap));
+	clear_bit(bit, bitmap);
+	/* smp_mb(); */
 }
+
+void si_pid_set(struct super_block *sb);
 
 /* ---------------------------------------------------------------------- */
 
