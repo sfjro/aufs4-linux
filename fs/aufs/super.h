@@ -62,14 +62,6 @@ struct au_wbr_mfs {
 	unsigned long long	mfsrr_watermark;
 };
 
-struct pseudo_link {
-	union {
-		struct hlist_node hlist;
-		struct rcu_head rcu;
-	};
-	struct inode *inode;
-};
-
 #define AuPlink_NHASH 100
 static inline int au_plink_hash(ino_t ino)
 {
