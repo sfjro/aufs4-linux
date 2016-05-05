@@ -105,7 +105,7 @@ static void au_sysrq(int key __maybe_unused)
 
 	lockdep_off();
 	au_sbilist_lock();
-	list_for_each_entry(sbinfo, &au_sbilist.head, si_list)
+	hlist_for_each_entry(sbinfo, &au_sbilist.head, si_list)
 		sysrq_sb(sbinfo->si_sb);
 	au_sbilist_unlock();
 	lockdep_on();
