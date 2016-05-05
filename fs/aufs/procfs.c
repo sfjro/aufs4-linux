@@ -44,7 +44,7 @@ static int au_procfs_plm_write_si(struct file *file, unsigned long id)
 	sb = NULL;
 	/* don't use au_sbilist_lock() here */
 	spin_lock(&au_sbilist.spin);
-	list_for_each_entry(sbinfo, &au_sbilist.head, si_list)
+	hlist_for_each_entry(sbinfo, &au_sbilist.head, si_list)
 		if (id == sysaufs_si_id(sbinfo)) {
 			kobject_get(&sbinfo->si_kobj);
 			sb = sbinfo->si_sb;
