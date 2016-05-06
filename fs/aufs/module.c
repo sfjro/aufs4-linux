@@ -74,7 +74,7 @@ int au_dir_roflags;
  * iterate_supers_type() doesn't protect us from
  * remounting (branch management)
  */
-struct au_splhead au_sbilist;
+struct au_sphlhead au_sbilist;
 #endif
 
 struct lock_class_key au_lc_key[AuLcKey_Last];
