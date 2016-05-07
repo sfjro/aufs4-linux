@@ -45,14 +45,6 @@ struct au_wbr_mfs {
 	unsigned long long	mfsrr_watermark;
 };
 
-struct pseudo_link {
-	union {
-		struct hlist_node hlist;
-		struct rcu_head rcu;
-	};
-	struct inode *inode;
-};
-
 #define AuPlink_NHASH 100
 static inline int au_plink_hash(ino_t ino)
 {
@@ -198,7 +190,7 @@ struct au_sbinfo {
 #endif
 
 #ifdef CONFIG_AUFS_SBILIST
-	struct list_head	si_list;
+	struct hlist_node	si_list;
 #endif
 
 	/* dirty, necessary for unmounting, sysfs and sysrq */
@@ -372,21 +364,21 @@ AuStub(int, au_busy_or_stale, return -EBUSY, void)
 
 #ifdef CONFIG_AUFS_SBILIST
 /* module.c */
-extern struct au_splhead au_sbilist;
+extern struct au_sphlhead au_sbilist;
 
 static inline void au_sbilist_init(void)
 {
-	au_spl_init(&au_sbilist);
+	au_sphl_init(&au_sbilist);
 }
 
 static inline void au_sbilist_add(struct super_block *sb)
 {
-	au_spl_add(&au_sbi(sb)->si_list, &au_sbilist);
+	au_sphl_add(&au_sbi(sb)->si_list, &au_sbilist);
 }
 
 static inline void au_sbilist_del(struct super_block *sb)
 {
-	au_spl_del(&au_sbi(sb)->si_list, &au_sbilist);
+	au_sphl_del(&au_sbi(sb)->si_list, &au_sbilist);
 }
 
 #ifdef CONFIG_AUFS_MAGIC_SYSRQ
