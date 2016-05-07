@@ -105,7 +105,7 @@ out_unlock:
 	if (IS_ERR(h_file))
 		goto out_fd;
 
-	atomic_dec(&br->br_count); /* cf. au_h_open() */
+	au_br_put(br); /* cf. au_h_open() */
 	fd_install(fd, h_file);
 	err = fd;
 	goto out; /* success */

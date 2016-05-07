@@ -38,7 +38,8 @@ static void au_br_do_free(struct au_branch *br)
 		fput(br->br_xino.xi_file);
 	mutex_destroy(&br->br_xino.xi_nondir_mtx);
 
-	AuDebugOn(atomic_read(&br->br_count));
+	AuDebugOn(au_br_count(br));
+	au_br_count_fin(br);
 
 	wbr = br->br_wbr;
 	if (wbr) {
@@ -376,7 +377,7 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	br->br_perm = add->perm;
 	br->br_path = add->path; /* set first, path_get() later */
 	spin_lock_init(&br->br_dykey_lock);
-	atomic_set(&br->br_count, 0);
+	au_br_count_init(br);
 	atomic_set(&br->br_xino_running, 0);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
@@ -1015,7 +1016,7 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 	AuDebugOn(!path_equal(&br->br_path, &del->h_path));
 
 	br_id = br->br_id;
-	opened = atomic_read(&br->br_count);
+	opened = au_br_count(br);
 	if (unlikely(opened)) {
 		to_free = au_array_alloc(&opened, empty_cb, NULL);
 		err = PTR_ERR(to_free);

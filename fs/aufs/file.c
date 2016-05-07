@@ -85,7 +85,7 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 		}
 	}
 	flags &= ~O_CREAT;
-	atomic_inc(&br->br_count);
+	au_br_get(br);
 	h_path.dentry = h_dentry;
 	h_path.mnt = au_br_mnt(br);
 	h_file = vfsub_dentry_open(&h_path, flags);
@@ -104,7 +104,7 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 	goto out; /* success */
 
 out_br:
-	atomic_dec(&br->br_count);
+	au_br_put(br);
 out:
 	return h_file;
 }
@@ -319,7 +319,7 @@ int au_reopen_nondir(struct file *file)
 	err = PTR_ERR(h_file);
 	if (IS_ERR(h_file)) {
 		if (h_file_tmp) {
-			atomic_inc(&au_sbr(dentry->d_sb, bstart)->br_count);
+			au_sbr_get(dentry->d_sb, bstart);
 			au_set_h_fptr(file, bstart, h_file_tmp);
 			h_file_tmp = NULL;
 		}

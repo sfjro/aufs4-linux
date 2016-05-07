@@ -28,7 +28,7 @@ void au_hfput(struct au_hfile *hf, struct file *file)
 		allow_write_access(hf->hf_file);
 	fput(hf->hf_file);
 	hf->hf_file = NULL;
-	atomic_dec(&hf->hf_br->br_count);
+	au_br_put(hf->hf_br);
 	hf->hf_br = NULL;
 }
 
