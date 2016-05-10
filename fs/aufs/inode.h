@@ -263,9 +263,10 @@ void au_update_iigen(struct inode *inode, int half);
 void au_update_ibrange(struct inode *inode, int do_put_zero);
 
 void au_icntnr_init_once(void *_c);
+void au_hinode_init(struct au_hinode *hinode);
 int au_iinfo_init(struct inode *inode);
 void au_iinfo_fin(struct inode *inode);
-int au_ii_realloc(struct au_iinfo *iinfo, int nbr);
+int au_hinode_realloc(struct au_iinfo *iinfo, int nbr);
 
 #ifdef CONFIG_PROC_FS
 /* plink.c */
@@ -473,11 +474,17 @@ static inline int au_iigen_test(struct inode *inode, unsigned int sigen)
 
 /* ---------------------------------------------------------------------- */
 
+static inline struct au_hinode *au_hinode(struct au_iinfo *iinfo,
+					  aufs_bindex_t bindex)
+{
+	return iinfo->ii_hinode + bindex;
+}
+
 static inline aufs_bindex_t au_ii_br_id(struct inode *inode,
 					aufs_bindex_t bindex)
 {
 	IiMustAnyLock(inode);
-	return au_ii(inode)->ii_hinode[0 + bindex].hi_id;
+	return au_hinode(au_ii(inode), bindex)->hi_id;
 }
 
 static inline aufs_bindex_t au_ibtop(struct inode *inode)
@@ -501,7 +508,7 @@ static inline struct au_vdir *au_ivdir(struct inode *inode)
 static inline struct dentry *au_hi_wh(struct inode *inode, aufs_bindex_t bindex)
 {
 	IiMustAnyLock(inode);
-	return au_ii(inode)->ii_hinode[0 + bindex].hi_whdentry;
+	return au_hinode(au_ii(inode), bindex)->hi_whdentry;
 }
 
 static inline void au_set_ibtop(struct inode *inode, aufs_bindex_t bindex)
@@ -525,7 +532,7 @@ static inline void au_set_ivdir(struct inode *inode, struct au_vdir *vdir)
 static inline struct au_hinode *au_hi(struct inode *inode, aufs_bindex_t bindex)
 {
 	IiMustAnyLock(inode);
-	return au_ii(inode)->ii_hinode + bindex;
+	return au_hinode(au_ii(inode), bindex);
 }
 
 /* ---------------------------------------------------------------------- */

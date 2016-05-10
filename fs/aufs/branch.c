@@ -156,7 +156,7 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 	if (!err)
 		err = au_di_realloc(au_di(root), new_nbranch);
 	if (!err)
-		err = au_ii_realloc(au_ii(root->d_inode), new_nbranch);
+		err = au_hinode_realloc(au_ii(root->d_inode), new_nbranch);
 	if (!err)
 		return add_branch; /* success */
 
@@ -445,10 +445,9 @@ static void au_br_do_add_hip(struct au_iinfo *iinfo, aufs_bindex_t bindex,
 
 	AuRwMustWriteLock(&iinfo->ii_rwsem);
 
-	hip = iinfo->ii_hinode + bindex;
+	hip = au_hinode(iinfo, bindex);
 	memmove(hip + 1, hip, sizeof(*hip) * amount);
-	hip->hi_inode = NULL;
-	au_hn_init(hip);
+	au_hinode_init(hip);
 	iinfo->ii_bbot++;
 	if (unlikely(bbot < 0))
 		iinfo->ii_btop = 0;
@@ -927,11 +926,10 @@ static void au_br_do_del_hip(struct au_iinfo *iinfo, const aufs_bindex_t bindex,
 
 	AuRwMustWriteLock(&iinfo->ii_rwsem);
 
-	hip = iinfo->ii_hinode + bindex;
+	hip = au_hinode(iinfo, bindex);
 	if (bindex < bbot)
 		memmove(hip, hip + 1, sizeof(*hip) * (bbot - bindex));
-	iinfo->ii_hinode[0 + bbot].hi_inode = NULL;
-	au_hn_init(iinfo->ii_hinode + bbot);
+	/* au_hinode_init(au_hinode(iinfo, bbot)); */
 	iinfo->ii_bbot--;
 
 	p = krealloc(iinfo->ii_hinode, sizeof(*p) * bbot, AuGFP_SBILIST);

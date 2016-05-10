@@ -141,6 +141,7 @@ static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode, int hn,
 void au_dpri_inode(struct inode *inode)
 {
 	struct au_iinfo *iinfo;
+	struct au_hinode *hi;
 	aufs_bindex_t bindex;
 	int err, hn;
 
@@ -155,9 +156,9 @@ void au_dpri_inode(struct inode *inode)
 		return;
 	hn = 0;
 	for (bindex = iinfo->ii_btop; bindex <= iinfo->ii_bbot; bindex++) {
-		hn = !!au_hn(iinfo->ii_hinode + bindex);
-		do_pri_inode(bindex, iinfo->ii_hinode[0 + bindex].hi_inode, hn,
-			     iinfo->ii_hinode[0 + bindex].hi_whdentry);
+		hi = au_hinode(iinfo, bindex);
+		hn = !!au_hn(hi);
+		do_pri_inode(bindex, hi->hi_inode, hn, hi->hi_whdentry);
 	}
 }
 
@@ -176,6 +177,7 @@ static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 	struct dentry *wh = NULL;
 	int hn;
 	struct au_iinfo *iinfo;
+	struct au_hinode *hi;
 
 	if (!dentry || IS_ERR(dentry)) {
 		dpri("d%d: err %ld\n", bindex, PTR_ERR(dentry));
@@ -192,8 +194,9 @@ static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 	if (bindex >= 0 && dentry->d_inode && au_test_aufs(dentry->d_sb)
 	    && !is_bad_inode(dentry->d_inode)) {
 		iinfo = au_ii(dentry->d_inode);
-		hn = !!au_hn(iinfo->ii_hinode + bindex);
-		wh = iinfo->ii_hinode[0 + bindex].hi_whdentry;
+		hi = au_hinode(iinfo, bindex);
+		hn = !!au_hn(hi);
+		wh = hi->hi_whdentry;
 	}
 	do_pri_inode(bindex, dentry->d_inode, hn, wh);
 	return 0;

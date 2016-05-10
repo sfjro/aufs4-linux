@@ -54,12 +54,12 @@ static int au_ii_refresh(struct inode *inode, int *update)
 	sb = inode->i_sb;
 	type = inode->i_mode & S_IFMT;
 	iinfo = au_ii(inode);
-	err = au_ii_realloc(iinfo, au_sbbot(sb) + 1);
+	err = au_hinode_realloc(iinfo, au_sbbot(sb) + 1);
 	if (unlikely(err))
 		goto out;
 
 	AuDebugOn(iinfo->ii_btop < 0);
-	p = iinfo->ii_hinode + iinfo->ii_btop;
+	p = au_hinode(iinfo, iinfo->ii_btop);
 	for (bindex = iinfo->ii_btop; bindex <= iinfo->ii_bbot;
 	     bindex++, p++) {
 		if (!p->hi_inode)
@@ -82,7 +82,7 @@ static int au_ii_refresh(struct inode *inode, int *update)
 		if (iinfo->ii_bbot < new_bindex)
 			iinfo->ii_bbot = new_bindex;
 		/* swap two lower inode, and loop again */
-		q = iinfo->ii_hinode + new_bindex;
+		q = au_hinode(iinfo, new_bindex);
 		tmp = *q;
 		*q = *p;
 		*p = tmp;
@@ -155,7 +155,7 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 
 	update = 0;
 	iinfo = au_ii(inode);
-	p = iinfo->ii_hinode + iinfo->ii_btop;
+	p = au_hinode(iinfo, iinfo->ii_btop);
 	mode = (inode->i_mode & S_IFMT);
 	isdir = S_ISDIR(mode);
 	flags = au_hi_flags(inode, isdir);
