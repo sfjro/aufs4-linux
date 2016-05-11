@@ -119,12 +119,8 @@ void au_pin_hdir_release(struct au_pin *p);
 
 static inline struct au_iinfo *au_ii(struct inode *inode)
 {
-	struct au_iinfo *iinfo;
-
-	iinfo = &(container_of(inode, struct au_icntnr, vfs_inode)->iinfo);
-	if (iinfo->ii_hinode)
-		return iinfo;
-	return NULL; /* debugging bad_inode case */
+	BUG_ON(is_bad_inode(inode));
+	return &(container_of(inode, struct au_icntnr, vfs_inode)->iinfo);
 }
 
 /* ---------------------------------------------------------------------- */

@@ -52,7 +52,8 @@ static void aufs_destroy_inode_cb(struct rcu_head *head)
 
 static void aufs_destroy_inode(struct inode *inode)
 {
-	au_iinfo_fin(inode);
+	if (!is_bad_inode(inode))
+		au_iinfo_fin(inode);
 	call_rcu(&inode->i_rcu, aufs_destroy_inode_cb);
 }
 

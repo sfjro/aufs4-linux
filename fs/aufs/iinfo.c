@@ -133,12 +133,10 @@ void au_update_ibrange(struct inode *inode, int do_put_zero)
 	struct au_iinfo *iinfo;
 	aufs_bindex_t bindex, bend;
 
-	iinfo = au_ii(inode);
-	if (!iinfo)
-		return;
-
+	AuDebugOn(is_bad_inode(inode));
 	IiMustWriteLock(inode);
 
+	iinfo = au_ii(inode);
 	if (do_put_zero && iinfo->ii_bstart >= 0) {
 		for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend;
 		     bindex++) {
@@ -235,10 +233,7 @@ void au_iinfo_fin(struct inode *inode)
 	aufs_bindex_t bindex, bend;
 	const unsigned char unlinked = !inode->i_nlink;
 
-	iinfo = au_ii(inode);
-	/* bad_inode case */
-	if (!iinfo)
-		return;
+	AuDebugOn(is_bad_inode(inode));
 
 	sb = inode->i_sb;
 	au_ninodes_dec(sb);
@@ -256,6 +251,7 @@ void au_iinfo_fin(struct inode *inode)
 		lockdep_on();
 	}
 
+	iinfo = au_ii(inode);
 	if (iinfo->ii_vdir)
 		au_vdir_free(iinfo->ii_vdir);
 

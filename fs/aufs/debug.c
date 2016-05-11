@@ -145,12 +145,10 @@ void au_dpri_inode(struct inode *inode)
 	int err, hn;
 
 	err = do_pri_inode(-1, inode, -1, NULL);
-	if (err || !au_test_aufs(inode->i_sb))
+	if (err || !au_test_aufs(inode->i_sb) || is_bad_inode(inode))
 		return;
 
 	iinfo = au_ii(inode);
-	if (!iinfo)
-		return;
 	dpri("i-1: bstart %d, bend %d, gen %d\n",
 	     iinfo->ii_bstart, iinfo->ii_bend, au_iigen(inode, NULL));
 	if (iinfo->ii_bstart < 0)
@@ -191,12 +189,11 @@ static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 	     au_dcount(dentry), dentry->d_flags,
 	     d_unhashed(dentry) ? "un" : "");
 	hn = -1;
-	if (bindex >= 0 && dentry->d_inode && au_test_aufs(dentry->d_sb)) {
+	if (bindex >= 0 && dentry->d_inode && au_test_aufs(dentry->d_sb)
+	    && !is_bad_inode(dentry->d_inode)) {
 		iinfo = au_ii(dentry->d_inode);
-		if (iinfo) {
-			hn = !!au_hn(iinfo->ii_hinode + bindex);
-			wh = iinfo->ii_hinode[0 + bindex].hi_whdentry;
-		}
+		hn = !!au_hn(iinfo->ii_hinode + bindex);
+		wh = iinfo->ii_hinode[0 + bindex].hi_whdentry;
 	}
 	do_pri_inode(bindex, dentry->d_inode, hn, wh);
 	return 0;
