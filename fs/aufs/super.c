@@ -91,16 +91,16 @@ out:
 static int au_show_brs(struct seq_file *seq, struct super_block *sb)
 {
 	int err;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	struct path path;
 	struct au_hdentry *hdp;
 	struct au_branch *br;
 	au_br_perm_str_t perm;
 
 	err = 0;
-	bend = au_sbbot(sb);
+	bbot = au_sbbot(sb);
 	hdp = au_di(sb->s_root)->di_hdentry;
-	for (bindex = 0; !err && bindex <= bend; bindex++) {
+	for (bindex = 0; !err && bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		path.mnt = au_br_mnt(br);
 		path.dentry = hdp[bindex].hd_dentry;
@@ -111,7 +111,7 @@ static int au_show_brs(struct seq_file *seq, struct super_block *sb)
 			if (err == -1)
 				err = -E2BIG;
 		}
-		if (!err && bindex != bend)
+		if (!err && bindex != bbot)
 			err = seq_putc(seq, ':');
 	}
 
@@ -332,7 +332,7 @@ static int au_statfs_sum(struct super_block *sb, struct kstatfs *buf)
 	int err;
 	long bsize, factor;
 	u64 blocks, bfree, bavail, files, ffree;
-	aufs_bindex_t bend, bindex, i;
+	aufs_bindex_t bbot, bindex, i;
 	unsigned char shared;
 	struct path h_path;
 	struct super_block *h_sb;
@@ -344,8 +344,8 @@ static int au_statfs_sum(struct super_block *sb, struct kstatfs *buf)
 	blocks = 0;
 	bfree = 0;
 	bavail = 0;
-	bend = au_sbbot(sb);
-	for (bindex = 0; bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (bindex = 0; bindex <= bbot; bindex++) {
 		h_path.mnt = au_sbr_mnt(sb, bindex);
 		h_sb = h_path.mnt->mnt_sb;
 		shared = 0;
@@ -428,14 +428,14 @@ static int aufs_statfs(struct dentry *dentry, struct kstatfs *buf)
 static int aufs_sync_fs(struct super_block *sb, int wait)
 {
 	int err, e;
-	aufs_bindex_t bend, bindex;
+	aufs_bindex_t bbot, bindex;
 	struct au_branch *br;
 	struct super_block *h_sb;
 
 	err = 0;
 	si_noflush_read_lock(sb);
-	bend = au_sbbot(sb);
-	for (bindex = 0; bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (bindex = 0; bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		if (!au_br_writable(br->br_perm))
 			continue;
@@ -696,7 +696,7 @@ static void au_remount_refresh(struct super_block *sb, unsigned int do_idop)
 {
 	int err, e;
 	unsigned int udba;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	struct dentry *root;
 	struct inode *inode;
 	struct au_branch *br;
@@ -712,8 +712,8 @@ static void au_remount_refresh(struct super_block *sb, unsigned int do_idop)
 	IiMustNoWaiters(inode);
 
 	udba = au_opt_udba(sb);
-	bend = au_sbbot(sb);
-	for (bindex = 0; bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (bindex = 0; bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		err = au_hnotify_reset_br(udba, br, br->br_perm);
 		if (unlikely(err))

@@ -66,27 +66,27 @@ struct au_mvd_args {
 static int find_lower_writable(struct au_mvd_args *a)
 {
 	struct super_block *sb;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	struct au_branch *br;
 
 	sb = a->sb;
 	bindex = a->mvd_bsrc;
-	bend = au_sbbot(sb);
+	bbot = au_sbbot(sb);
 	if (a->mvdown.flags & AUFS_MVDOWN_FHSM_LOWER)
-		for (bindex++; bindex <= bend; bindex++) {
+		for (bindex++; bindex <= bbot; bindex++) {
 			br = au_sbr(sb, bindex);
 			if (au_br_fhsm(br->br_perm)
 			    && (!(au_br_sb(br)->s_flags & MS_RDONLY)))
 				return bindex;
 		}
 	else if (!(a->mvdown.flags & AUFS_MVDOWN_ROLOWER))
-		for (bindex++; bindex <= bend; bindex++) {
+		for (bindex++; bindex <= bbot; bindex++) {
 			br = au_sbr(sb, bindex);
 			if (!au_br_rdonly(br))
 				return bindex;
 		}
 	else
-		for (bindex++; bindex <= bend; bindex++) {
+		for (bindex++; bindex <= bbot; bindex++) {
 			br = au_sbr(sb, bindex);
 			if (!(au_br_sb(br)->s_flags & MS_RDONLY)) {
 				if (au_br_rdonly(br))

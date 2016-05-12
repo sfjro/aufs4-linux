@@ -240,7 +240,7 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 		      struct simple_arg *arg)
 {
 	int err, rerr;
-	aufs_bindex_t bstart;
+	aufs_bindex_t btop;
 	unsigned char created;
 	const unsigned char try_aopen
 		= (arg->type == Creat && arg->u.c.try_aopen);
@@ -283,10 +283,10 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	if (IS_ERR(wh_dentry))
 		goto out_parent;
 
-	bstart = au_dbtop(dentry);
+	btop = au_dbtop(dentry);
 	sb = dentry->d_sb;
-	br = au_sbr(sb, bstart);
-	a->h_path.dentry = au_h_dptr(dentry, bstart);
+	br = au_sbr(sb, btop);
+	a->h_path.dentry = au_h_dptr(dentry, btop);
 	a->h_path.mnt = au_br_mnt(br);
 	h_dir = au_pinned_h_dir(&a->pin);
 	switch (arg->type) {
@@ -311,7 +311,7 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	}
 	created = !err;
 	if (!err)
-		err = epilog(dir, bstart, wh_dentry, dentry);
+		err = epilog(dir, btop, wh_dentry, dentry);
 
 	/* revert */
 	if (unlikely(created && err && a->h_path.dentry->d_inode)) {
@@ -553,7 +553,7 @@ static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
 {
 	int err;
 	unsigned char plink;
-	aufs_bindex_t bend;
+	aufs_bindex_t bbot;
 	struct dentry *h_src_dentry;
 	struct inode *h_inode, *inode, *delegated;
 	struct super_block *sb;
@@ -567,8 +567,8 @@ static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
 		h_inode = au_h_iptr(inode, a->bdst);
 	if (!h_inode || !h_inode->i_nlink) {
 		/* copyup src_dentry as the name of dentry. */
-		bend = au_dbbot(dentry);
-		if (bend < a->bsrc)
+		bbot = au_dbbot(dentry);
+		if (bbot < a->bsrc)
 			au_set_dbbot(dentry, a->bsrc);
 		au_set_h_dptr(dentry, a->bsrc,
 			      dget(au_h_dptr(src_dentry, a->bsrc)));
@@ -604,7 +604,7 @@ static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
 		spin_unlock(&dentry->d_lock);
 		AuDbg("temporary d_inode...done\n");
 		au_set_h_dptr(dentry, a->bsrc, NULL);
-		au_set_dbbot(dentry, bend);
+		au_set_dbbot(dentry, bbot);
 	} else {
 		/* the inode of src_dentry already exists on a.bdst branch */
 		h_src_dentry = d_find_alias(h_inode);

@@ -131,7 +131,7 @@ void au_update_iigen(struct inode *inode, int half)
 void au_update_ibrange(struct inode *inode, int do_put_zero)
 {
 	struct au_iinfo *iinfo;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 
 	AuDebugOn(is_bad_inode(inode));
 	IiMustWriteLock(inode);
@@ -152,14 +152,14 @@ void au_update_ibrange(struct inode *inode, int do_put_zero)
 
 	iinfo->ii_btop = -1;
 	iinfo->ii_bbot = -1;
-	bend = au_sbbot(inode->i_sb);
-	for (bindex = 0; bindex <= bend; bindex++)
+	bbot = au_sbbot(inode->i_sb);
+	for (bindex = 0; bindex <= bbot; bindex++)
 		if (iinfo->ii_hinode[0 + bindex].hi_inode) {
 			iinfo->ii_btop = bindex;
 			break;
 		}
 	if (iinfo->ii_btop >= 0)
-		for (bindex = bend; bindex >= iinfo->ii_btop; bindex--)
+		for (bindex = bbot; bindex >= iinfo->ii_btop; bindex--)
 			if (iinfo->ii_hinode[0 + bindex].hi_inode) {
 				iinfo->ii_bbot = bindex;
 				break;
@@ -230,7 +230,7 @@ void au_iinfo_fin(struct inode *inode)
 	struct au_iinfo *iinfo;
 	struct au_hinode *hi;
 	struct super_block *sb;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	const unsigned char unlinked = !inode->i_nlink;
 
 	AuDebugOn(is_bad_inode(inode));
@@ -258,8 +258,8 @@ void au_iinfo_fin(struct inode *inode)
 	bindex = iinfo->ii_btop;
 	if (bindex >= 0) {
 		hi = iinfo->ii_hinode + bindex;
-		bend = iinfo->ii_bbot;
-		while (bindex++ <= bend) {
+		bbot = iinfo->ii_bbot;
+		while (bindex++ <= bbot) {
 			if (hi->hi_inode)
 				au_hiput(hi);
 			hi++;

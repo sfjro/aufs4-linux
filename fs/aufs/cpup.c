@@ -49,7 +49,7 @@ void au_cpup_attr_nlink(struct inode *inode, int force)
 {
 	struct inode *h_inode;
 	struct super_block *sb;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 
 	sb = inode->i_sb;
 	bindex = au_ibtop(inode);
@@ -75,8 +75,8 @@ void au_cpup_attr_nlink(struct inode *inode, int force)
 	 * it may includes whplink directory.
 	 */
 	if (S_ISDIR(h_inode->i_mode)) {
-		bend = au_ibbot(inode);
-		for (bindex++; bindex <= bend; bindex++) {
+		bbot = au_ibbot(inode);
+		for (bindex++; bindex <= bbot; bindex++) {
 			h_inode = au_h_iptr(inode, bindex);
 			if (h_inode)
 				au_add_nlink(inode, h_inode);
@@ -1053,20 +1053,20 @@ out:
 
 int au_sio_cpup_simple(struct au_cp_generic *cpg)
 {
-	aufs_bindex_t bsrc, bend;
+	aufs_bindex_t bsrc, bbot;
 	struct dentry *dentry, *h_dentry;
 
 	if (cpg->bsrc < 0) {
 		dentry = cpg->dentry;
-		bend = au_dbbot(dentry);
-		for (bsrc = cpg->bdst + 1; bsrc <= bend; bsrc++) {
+		bbot = au_dbbot(dentry);
+		for (bsrc = cpg->bdst + 1; bsrc <= bbot; bsrc++) {
 			h_dentry = au_h_dptr(dentry, bsrc);
 			if (h_dentry) {
 				AuDebugOn(!h_dentry->d_inode);
 				break;
 			}
 		}
-		AuDebugOn(bsrc > bend);
+		AuDebugOn(bsrc > bbot);
 		cpg->bsrc = bsrc;
 	}
 	AuDebugOn(cpg->bsrc <= cpg->bdst);

@@ -88,7 +88,7 @@ out:
 static int aufs_permission(struct inode *inode, int mask)
 {
 	int err;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	const unsigned char isdir = !!S_ISDIR(inode->i_mode),
 		write_mask = !!(mask & (MAY_WRITE | MAY_APPEND));
 	struct inode *h_inode;
@@ -138,8 +138,8 @@ static int aufs_permission(struct inode *inode, int mask)
 
 	/* non-write to dir */
 	err = 0;
-	bend = au_ibbot(inode);
-	for (bindex = au_ibtop(inode); !err && bindex <= bend; bindex++) {
+	bbot = au_ibbot(inode);
+	for (bindex = au_ibtop(inode); !err && bindex <= bbot; bindex++) {
 		h_inode = au_h_iptr(inode, bindex);
 		if (h_inode) {
 			err = au_busy_or_stale();
@@ -326,7 +326,7 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 
 	parent = dentry->d_parent;	/* dir is locked */
 	di_write_lock_parent(parent);
-	err = au_lkup_dentry(dentry, /*bstart*/0, /*type*/0);
+	err = au_lkup_dentry(dentry, /*btop*/0, /*type*/0);
 	if (unlikely(err))
 		goto out_unlock;
 
@@ -393,7 +393,7 @@ out:
 
 static int au_wr_dir_cpup(struct dentry *dentry, struct dentry *parent,
 			  const unsigned char add_entry, aufs_bindex_t bcpup,
-			  aufs_bindex_t bstart)
+			  aufs_bindex_t btop)
 {
 	int err;
 	struct dentry *h_parent;
@@ -406,9 +406,9 @@ static int au_wr_dir_cpup(struct dentry *dentry, struct dentry *parent,
 
 	err = 0;
 	if (!au_h_dptr(parent, bcpup)) {
-		if (bstart > bcpup)
+		if (btop > bcpup)
 			err = au_cpup_dirs(dentry, bcpup);
-		else if (bstart < bcpup)
+		else if (btop < bcpup)
 			err = au_cpdown_dirs(dentry, bcpup);
 		else
 			BUG();
@@ -424,7 +424,7 @@ static int au_wr_dir_cpup(struct dentry *dentry, struct dentry *parent,
 		AuDbg("bcpup %d\n", bcpup);
 		if (!err) {
 			if (!dentry->d_inode)
-				au_set_h_dptr(dentry, bstart, NULL);
+				au_set_h_dptr(dentry, btop, NULL);
 			au_update_dbrange(dentry, /*do_put_zero*/0);
 		}
 	}
@@ -448,7 +448,7 @@ int au_wr_dir(struct dentry *dentry, struct dentry *src_dentry,
 {
 	int err;
 	unsigned int flags;
-	aufs_bindex_t bcpup, bstart, src_bstart;
+	aufs_bindex_t bcpup, btop, src_btop;
 	const unsigned char add_entry
 		= au_ftest_wrdir(args->flags, ADD_ENTRY)
 		| au_ftest_wrdir(args->flags, TMPFILE);
@@ -459,13 +459,13 @@ int au_wr_dir(struct dentry *dentry, struct dentry *src_dentry,
 	sb = dentry->d_sb;
 	sbinfo = au_sbi(sb);
 	parent = dget_parent(dentry);
-	bstart = au_dbtop(dentry);
-	bcpup = bstart;
+	btop = au_dbtop(dentry);
+	bcpup = btop;
 	if (args->force_btgt < 0) {
 		if (src_dentry) {
-			src_bstart = au_dbtop(src_dentry);
-			if (src_bstart < bstart)
-				bcpup = src_bstart;
+			src_btop = au_dbtop(src_dentry);
+			if (src_btop < btop)
+				bcpup = src_btop;
 		} else if (add_entry) {
 			flags = 0;
 			if (au_ftest_wrdir(args->flags, ISDIR))
@@ -494,16 +494,16 @@ int au_wr_dir(struct dentry *dentry, struct dentry *src_dentry,
 		AuDebugOn(au_test_ro(sb, bcpup, dentry->d_inode));
 	}
 
-	AuDbg("bstart %d, bcpup %d\n", bstart, bcpup);
+	AuDbg("btop %d, bcpup %d\n", btop, bcpup);
 	err = bcpup;
-	if (bcpup == bstart)
+	if (bcpup == btop)
 		goto out; /* success */
 
 	/* copyup the new parent into the branch we process */
-	err = au_wr_dir_cpup(dentry, parent, add_entry, bcpup, bstart);
+	err = au_wr_dir_cpup(dentry, parent, add_entry, bcpup, btop);
 	if (err >= 0) {
 		if (!dentry->d_inode) {
-			au_set_h_dptr(dentry, bstart, NULL);
+			au_set_h_dptr(dentry, btop, NULL);
 			au_set_dbtop(dentry, bcpup);
 			au_set_dbbot(dentry, bcpup);
 		}
@@ -764,7 +764,7 @@ int au_pin_and_icpup(struct dentry *dentry, struct iattr *ia,
 {
 	int err;
 	loff_t sz;
-	aufs_bindex_t bstart, ibtop;
+	aufs_bindex_t btop, ibtop;
 	struct dentry *hi_wh, *parent;
 	struct inode *inode;
 	struct au_wr_dir_args wr_dir_args = {
@@ -775,16 +775,16 @@ int au_pin_and_icpup(struct dentry *dentry, struct iattr *ia,
 	if (d_is_dir(dentry))
 		au_fset_wrdir(wr_dir_args.flags, ISDIR);
 	/* plink or hi_wh() case */
-	bstart = au_dbtop(dentry);
+	btop = au_dbtop(dentry);
 	inode = dentry->d_inode;
 	ibtop = au_ibtop(inode);
-	if (bstart != ibtop && !au_test_ro(inode->i_sb, ibtop, inode))
+	if (btop != ibtop && !au_test_ro(inode->i_sb, ibtop, inode))
 		wr_dir_args.force_btgt = ibtop;
 	err = au_wr_dir(dentry, /*src_dentry*/NULL, &wr_dir_args);
 	if (unlikely(err < 0))
 		goto out;
 	a->btgt = err;
-	if (err != bstart)
+	if (err != btop)
 		au_fset_icpup(a->flags, DID_CPUP);
 
 	err = 0;
@@ -800,7 +800,7 @@ int au_pin_and_icpup(struct dentry *dentry, struct iattr *ia,
 	if (unlikely(err))
 		goto out_parent;
 
-	a->h_path.dentry = au_h_dptr(dentry, bstart);
+	a->h_path.dentry = au_h_dptr(dentry, btop);
 	a->h_inode = a->h_path.dentry->d_inode;
 	sz = -1;
 	if (ia && (ia->ia_valid & ATTR_SIZE)) {
@@ -842,7 +842,7 @@ int au_pin_and_icpup(struct dentry *dentry, struct iattr *ia,
 		struct au_cp_generic cpg = {
 			.dentry	= dentry,
 			.bdst	= a->btgt,
-			.bsrc	= bstart,
+			.bsrc	= btop,
 			.len	= sz,
 			.pin	= &a->pin,
 			.flags	= AuCpup_DTIME | AuCpup_HOPEN

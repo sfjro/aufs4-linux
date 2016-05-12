@@ -132,7 +132,7 @@ static int au_test_shwh(struct super_block *sb, const struct qstr *name)
  * otherwise an error.
  * can be called at unlinking with @type is zero.
  */
-int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
+int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t btop, mode_t type)
 {
 	int npositive, err;
 	aufs_bindex_t bindex, btail, bdiropq;
@@ -165,7 +165,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t bstart, mode_t type)
 	npositive = 0;
 	parent = dget_parent(dentry);
 	btail = au_dbtaildir(parent);
-	for (bindex = bstart; bindex <= btail; bindex++) {
+	for (bindex = btop; bindex <= btail; bindex++) {
 		struct dentry *h_parent, *h_dentry;
 		struct inode *h_inode, *h_dir;
 
@@ -396,7 +396,7 @@ int au_h_verify(struct dentry *h_dentry, unsigned int udba, struct inode *h_dir,
 static int au_do_refresh_hdentry(struct dentry *dentry, struct dentry *parent)
 {
 	int err;
-	aufs_bindex_t new_bindex, bindex, bend, bwh, bdiropq;
+	aufs_bindex_t new_bindex, bindex, bbot, bwh, bdiropq;
 	struct au_hdentry tmp, *p, *q;
 	struct au_dinfo *dinfo;
 	struct super_block *sb;
@@ -405,11 +405,11 @@ static int au_do_refresh_hdentry(struct dentry *dentry, struct dentry *parent)
 
 	sb = dentry->d_sb;
 	dinfo = au_di(dentry);
-	bend = dinfo->di_bbot;
+	bbot = dinfo->di_bbot;
 	bwh = dinfo->di_bwh;
 	bdiropq = dinfo->di_bdiropq;
 	p = dinfo->di_hdentry + dinfo->di_btop;
-	for (bindex = dinfo->di_btop; bindex <= bend; bindex++, p++) {
+	for (bindex = dinfo->di_btop; bindex <= bbot; bindex++, p++) {
 		if (!p->hd_dentry)
 			continue;
 
@@ -451,17 +451,17 @@ static int au_do_refresh_hdentry(struct dentry *dentry, struct dentry *parent)
 	err = -EIO;
 	dinfo->di_btop = -1;
 	dinfo->di_bbot = -1;
-	bend = au_dbbot(parent);
+	bbot = au_dbbot(parent);
 	p = dinfo->di_hdentry;
-	for (bindex = 0; bindex <= bend; bindex++, p++)
+	for (bindex = 0; bindex <= bbot; bindex++, p++)
 		if (p->hd_dentry) {
 			dinfo->di_btop = bindex;
 			break;
 		}
 
 	if (dinfo->di_btop >= 0) {
-		p = dinfo->di_hdentry + bend;
-		for (bindex = bend; bindex >= 0; bindex--, p--)
+		p = dinfo->di_hdentry + bbot;
+		for (bindex = bbot; bindex >= 0; bindex--, p--)
 			if (p->hd_dentry) {
 				dinfo->di_bbot = bindex;
 				err = 0;
@@ -563,7 +563,7 @@ static int au_refresh_by_dinfo(struct dentry *dentry, struct au_dinfo *dinfo,
 			       struct au_dinfo *tmp)
 {
 	int err;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	struct {
 		struct dentry *dentry;
 		struct inode *inode;
@@ -661,8 +661,8 @@ static int au_refresh_by_dinfo(struct dentry *dentry, struct au_dinfo *dinfo,
 				dinfo->di_bwh = tmp->di_bwh;
 				dinfo->di_bdiropq = tmp->di_bdiropq;
 				hd = tmp->di_hdentry;
-				bend = dinfo->di_bbot;
-				for (bindex = tmp->di_btop; bindex <= bend;
+				bbot = dinfo->di_bbot;
+				for (bindex = tmp->di_btop; bindex <= bbot;
 				     bindex++) {
 					if (au_h_dptr(dentry, bindex))
 						continue;
@@ -765,7 +765,7 @@ int au_refresh_dentry(struct dentry *dentry, struct dentry *parent)
 	 * if current working dir is removed, it returns an error.
 	 * but the dentry is legal.
 	 */
-	err = au_lkup_dentry(dentry, /*bstart*/0, /*type*/0);
+	err = au_lkup_dentry(dentry, /*btop*/0, /*type*/0);
 	AuDbgDentry(dentry);
 	au_di_swap(tmp, dinfo);
 	if (err == -ENOENT)
@@ -828,7 +828,7 @@ static int h_d_revalidate(struct dentry *dentry, struct inode *inode,
 {
 	int err;
 	umode_t mode, h_mode;
-	aufs_bindex_t bindex, btail, bstart, ibs, ibe;
+	aufs_bindex_t bindex, btail, btop, ibs, ibe;
 	unsigned char plus, unhashed, is_root, h_plus, h_nfs, tmpfile;
 	struct inode *h_inode, *h_cached_inode;
 	struct dentry *h_dentry;
@@ -858,11 +858,11 @@ static int h_d_revalidate(struct dentry *dentry, struct inode *inode,
 		ibe = au_ibbot(inode);
 	}
 
-	bstart = au_dbtop(dentry);
-	btail = bstart;
+	btop = au_dbtop(dentry);
+	btail = btop;
 	if (inode && S_ISDIR(inode->i_mode))
 		btail = au_dbtaildir(dentry);
-	for (bindex = bstart; bindex <= btail; bindex++) {
+	for (bindex = btop; bindex <= btail; bindex++) {
 		h_dentry = au_h_dptr(dentry, bindex);
 		if (!h_dentry)
 			continue;
@@ -1075,11 +1075,11 @@ static int aufs_d_revalidate(struct dentry *dentry, unsigned int flags)
 
 	do_udba = !au_opt_test(au_mntflags(sb), UDBA_NONE);
 	if (do_udba && inode) {
-		aufs_bindex_t bstart = au_ibtop(inode);
+		aufs_bindex_t btop = au_ibtop(inode);
 		struct inode *h_inode;
 
-		if (bstart >= 0) {
-			h_inode = au_h_iptr(inode, bstart);
+		if (btop >= 0) {
+			h_inode = au_h_iptr(inode, btop);
 			if (h_inode && au_test_higen(inode, h_inode)) {
 				AuTraceErr(err);
 				goto out_inval;

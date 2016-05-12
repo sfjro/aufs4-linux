@@ -149,7 +149,7 @@ void au_dpri_inode(struct inode *inode)
 		return;
 
 	iinfo = au_ii(inode);
-	dpri("i-1: bstart %d, bend %d, gen %d\n",
+	dpri("i-1: btop %d, bbot %d, gen %d\n",
 	     iinfo->ii_btop, iinfo->ii_bbot, au_iigen(inode, NULL));
 	if (iinfo->ii_btop < 0)
 		return;
@@ -213,7 +213,7 @@ void au_dpri_dentry(struct dentry *dentry)
 	dinfo = au_di(dentry);
 	if (!dinfo)
 		return;
-	dpri("d-1: bstart %d, bend %d, bwh %d, bdiropq %d, gen %d, tmp %d\n",
+	dpri("d-1: btop %d, bbot %d, bwh %d, bdiropq %d, gen %d, tmp %d\n",
 	     dinfo->di_btop, dinfo->di_bbot,
 	     dinfo->di_bwh, dinfo->di_bdiropq, au_digen(dentry),
 	     dinfo->di_tmpfile);
@@ -350,21 +350,21 @@ void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line)
 {
 	struct inode *h_inode, *inode = dentry->d_inode;
 	struct dentry *h_dentry;
-	aufs_bindex_t bindex, bend, bi;
+	aufs_bindex_t bindex, bbot, bi;
 
 	if (!inode /* || au_di(dentry)->di_lsc == AuLsc_DI_TMP */)
 		return;
 
-	bend = au_dbbot(dentry);
+	bbot = au_dbbot(dentry);
 	bi = au_ibbot(inode);
-	if (bi < bend)
-		bend = bi;
+	if (bi < bbot)
+		bbot = bi;
 	bindex = au_dbtop(dentry);
 	bi = au_ibtop(inode);
 	if (bi > bindex)
 		bindex = bi;
 
-	for (; bindex <= bend; bindex++) {
+	for (; bindex <= bbot; bindex++) {
 		h_dentry = au_h_dptr(dentry, bindex);
 		if (!h_dentry)
 			continue;
