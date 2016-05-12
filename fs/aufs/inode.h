@@ -69,7 +69,7 @@ struct au_iinfo {
 	struct super_block	*ii_hsb1;	/* no get/put */
 
 	struct au_rwsem		ii_rwsem;
-	aufs_bindex_t		ii_bstart, ii_bend;
+	aufs_bindex_t		ii_btop, ii_bbot;
 	__u32			ii_higen;
 	struct au_hinode	*ii_hinode;
 	struct au_vdir		*ii_vdir;
@@ -480,16 +480,16 @@ static inline aufs_bindex_t au_ii_br_id(struct inode *inode,
 	return au_ii(inode)->ii_hinode[0 + bindex].hi_id;
 }
 
-static inline aufs_bindex_t au_ibstart(struct inode *inode)
+static inline aufs_bindex_t au_ibtop(struct inode *inode)
 {
 	IiMustAnyLock(inode);
-	return au_ii(inode)->ii_bstart;
+	return au_ii(inode)->ii_btop;
 }
 
-static inline aufs_bindex_t au_ibend(struct inode *inode)
+static inline aufs_bindex_t au_ibbot(struct inode *inode)
 {
 	IiMustAnyLock(inode);
-	return au_ii(inode)->ii_bend;
+	return au_ii(inode)->ii_bbot;
 }
 
 static inline struct au_vdir *au_ivdir(struct inode *inode)
@@ -504,16 +504,16 @@ static inline struct dentry *au_hi_wh(struct inode *inode, aufs_bindex_t bindex)
 	return au_ii(inode)->ii_hinode[0 + bindex].hi_whdentry;
 }
 
-static inline void au_set_ibstart(struct inode *inode, aufs_bindex_t bindex)
+static inline void au_set_ibtop(struct inode *inode, aufs_bindex_t bindex)
 {
 	IiMustWriteLock(inode);
-	au_ii(inode)->ii_bstart = bindex;
+	au_ii(inode)->ii_btop = bindex;
 }
 
-static inline void au_set_ibend(struct inode *inode, aufs_bindex_t bindex)
+static inline void au_set_ibbot(struct inode *inode, aufs_bindex_t bindex)
 {
 	IiMustWriteLock(inode);
-	au_ii(inode)->ii_bend = bindex;
+	au_ii(inode)->ii_bbot = bindex;
 }
 
 static inline void au_set_ivdir(struct inode *inode, struct au_vdir *vdir)

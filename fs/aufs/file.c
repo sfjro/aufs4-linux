@@ -547,7 +547,7 @@ static int au_file_refresh_by_inode(struct file *file, int *need_reopen)
 	finfo = au_fi(file);
 	sb = cpg.dentry->d_sb;
 	inode = cpg.dentry->d_inode;
-	cpg.bdst = au_ibstart(inode);
+	cpg.bdst = au_ibtop(inode);
 	if (cpg.bdst == finfo->fi_btop || IS_ROOT(cpg.dentry))
 		goto out;
 
@@ -732,7 +732,7 @@ int au_reval_and_lock_fdi(struct file *file, int (*reopen)(struct file *file),
 	figen = au_figen(file);
 	di_write_lock_child(dentry);
 	bstart = au_dbstart(dentry);
-	pseudo_link = (bstart != au_ibstart(inode));
+	pseudo_link = (bstart != au_ibtop(inode));
 	if (sigen == figen && !pseudo_link && au_fbstart(file) == bstart) {
 		if (!wlock) {
 			di_downgrade_lock(dentry, AuLock_IR);

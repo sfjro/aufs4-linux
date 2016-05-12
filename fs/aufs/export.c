@@ -712,7 +712,7 @@ static int aufs_encode_fh(struct inode *inode, __u32 *fh, int *max_len,
 	err = -EIO;
 	parent = NULL;
 	ii_read_lock_child(inode);
-	bindex = au_ibstart(inode);
+	bindex = au_ibtop(inode);
 	if (!dir) {
 		dentry = d_find_any_alias(inode);
 		if (unlikely(!dentry))
@@ -786,7 +786,7 @@ static int aufs_commit_metadata(struct inode *inode)
 	sb = inode->i_sb;
 	si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLMW);
 	ii_write_lock_child(inode);
-	bindex = au_ibstart(inode);
+	bindex = au_ibtop(inode);
 	AuDebugOn(bindex < 0);
 	h_inode = au_h_iptr(inode, bindex);
 

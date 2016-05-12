@@ -150,11 +150,11 @@ void au_dpri_inode(struct inode *inode)
 
 	iinfo = au_ii(inode);
 	dpri("i-1: bstart %d, bend %d, gen %d\n",
-	     iinfo->ii_bstart, iinfo->ii_bend, au_iigen(inode, NULL));
-	if (iinfo->ii_bstart < 0)
+	     iinfo->ii_btop, iinfo->ii_bbot, au_iigen(inode, NULL));
+	if (iinfo->ii_btop < 0)
 		return;
 	hn = 0;
-	for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend; bindex++) {
+	for (bindex = iinfo->ii_btop; bindex <= iinfo->ii_bbot; bindex++) {
 		hn = !!au_hn(iinfo->ii_hinode + bindex);
 		do_pri_inode(bindex, iinfo->ii_hinode[0 + bindex].hi_inode, hn,
 			     iinfo->ii_hinode[0 + bindex].hi_whdentry);
@@ -356,11 +356,11 @@ void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line)
 		return;
 
 	bend = au_dbend(dentry);
-	bi = au_ibend(inode);
+	bi = au_ibbot(inode);
 	if (bi < bend)
 		bend = bi;
 	bindex = au_dbstart(dentry);
-	bi = au_ibstart(inode);
+	bi = au_ibtop(inode);
 	if (bi > bindex)
 		bindex = bi;
 

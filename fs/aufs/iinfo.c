@@ -77,7 +77,7 @@ void au_set_h_iptr(struct inode *inode, aufs_bindex_t bindex,
 		AuDebugOn(inode->i_mode
 			  && (h_inode->i_mode & S_IFMT)
 			  != (inode->i_mode & S_IFMT));
-		if (bindex == iinfo->ii_bstart)
+		if (bindex == iinfo->ii_btop)
 			au_cpup_igen(inode, h_inode);
 		br = au_sbr(sb, bindex);
 		hinode->hi_id = br->br_id;
@@ -137,8 +137,8 @@ void au_update_ibrange(struct inode *inode, int do_put_zero)
 	IiMustWriteLock(inode);
 
 	iinfo = au_ii(inode);
-	if (do_put_zero && iinfo->ii_bstart >= 0) {
-		for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend;
+	if (do_put_zero && iinfo->ii_btop >= 0) {
+		for (bindex = iinfo->ii_btop; bindex <= iinfo->ii_bbot;
 		     bindex++) {
 			struct inode *h_i;
 
@@ -150,21 +150,21 @@ void au_update_ibrange(struct inode *inode, int do_put_zero)
 		}
 	}
 
-	iinfo->ii_bstart = -1;
-	iinfo->ii_bend = -1;
+	iinfo->ii_btop = -1;
+	iinfo->ii_bbot = -1;
 	bend = au_sbend(inode->i_sb);
 	for (bindex = 0; bindex <= bend; bindex++)
 		if (iinfo->ii_hinode[0 + bindex].hi_inode) {
-			iinfo->ii_bstart = bindex;
+			iinfo->ii_btop = bindex;
 			break;
 		}
-	if (iinfo->ii_bstart >= 0)
-		for (bindex = bend; bindex >= iinfo->ii_bstart; bindex--)
+	if (iinfo->ii_btop >= 0)
+		for (bindex = bend; bindex >= iinfo->ii_btop; bindex--)
 			if (iinfo->ii_hinode[0 + bindex].hi_inode) {
-				iinfo->ii_bend = bindex;
+				iinfo->ii_bbot = bindex;
 				break;
 			}
-	AuDebugOn(iinfo->ii_bstart > iinfo->ii_bend);
+	AuDebugOn(iinfo->ii_btop > iinfo->ii_bbot);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -197,8 +197,8 @@ int au_iinfo_init(struct inode *inode)
 			iinfo->ii_hinode[i].hi_id = -1;
 
 		iinfo->ii_generation.ig_generation = au_sigen(sb);
-		iinfo->ii_bstart = -1;
-		iinfo->ii_bend = -1;
+		iinfo->ii_btop = -1;
+		iinfo->ii_bbot = -1;
 		iinfo->ii_vdir = NULL;
 		return 0;
 	}
@@ -213,7 +213,7 @@ int au_ii_realloc(struct au_iinfo *iinfo, int nbr)
 	AuRwMustWriteLock(&iinfo->ii_rwsem);
 
 	err = -ENOMEM;
-	sz = sizeof(*hip) * (iinfo->ii_bend + 1);
+	sz = sizeof(*hip) * (iinfo->ii_bbot + 1);
 	if (!sz)
 		sz = sizeof(*hip);
 	hip = au_kzrealloc(iinfo->ii_hinode, sz, sizeof(*hip) * nbr, GFP_NOFS);
@@ -255,10 +255,10 @@ void au_iinfo_fin(struct inode *inode)
 	if (iinfo->ii_vdir)
 		au_vdir_free(iinfo->ii_vdir);
 
-	bindex = iinfo->ii_bstart;
+	bindex = iinfo->ii_btop;
 	if (bindex >= 0) {
 		hi = iinfo->ii_hinode + bindex;
-		bend = iinfo->ii_bend;
+		bend = iinfo->ii_bbot;
 		while (bindex++ <= bend) {
 			if (hi->hi_inode)
 				au_hiput(hi);

@@ -449,8 +449,8 @@ static int au_plink_do_half_refresh(struct inode *inode, aufs_bindex_t br_id)
 	aufs_bindex_t bstart, bend, bindex;
 
 	do_put = 0;
-	bstart = au_ibstart(inode);
-	bend = au_ibend(inode);
+	bstart = au_ibtop(inode);
+	bend = au_ibbot(inode);
 	if (bstart >= 0) {
 		for (bindex = bstart; bindex <= bend; bindex++) {
 			if (!au_h_iptr(inode, bindex)

@@ -365,18 +365,18 @@ static int au_do_mvdown(const unsigned char dmsg, struct au_mvd_args *a)
 		au_set_h_dptr(a->dentry, a->mvd_bsrc, NULL);
 		au_set_dbstart(a->dentry, a->mvd_bdst);
 		au_set_h_iptr(a->inode, a->mvd_bsrc, NULL, /*flags*/0);
-		au_set_ibstart(a->inode, a->mvd_bdst);
+		au_set_ibtop(a->inode, a->mvd_bdst);
 	} else {
 		/* hide the lower */
 		au_set_h_dptr(a->dentry, a->mvd_bdst, NULL);
 		au_set_dbend(a->dentry, a->mvd_bsrc);
 		au_set_h_iptr(a->inode, a->mvd_bdst, NULL, /*flags*/0);
-		au_set_ibend(a->inode, a->mvd_bsrc);
+		au_set_ibbot(a->inode, a->mvd_bsrc);
 	}
 	if (au_dbend(a->dentry) < a->mvd_bdst)
 		au_set_dbend(a->dentry, a->mvd_bdst);
-	if (au_ibend(a->inode) < a->mvd_bdst)
-		au_set_ibend(a->inode, a->mvd_bdst);
+	if (au_ibbot(a->inode) < a->mvd_bdst)
+		au_set_ibbot(a->inode, a->mvd_bdst);
 
 out_unlock:
 	au_do_unlock(dmsg, a);
@@ -555,15 +555,15 @@ static int au_mvd_args(const unsigned char dmsg, struct au_mvd_args *a)
 
 	err = -EINVAL;
 	if (!(a->mvdown.flags & AUFS_MVDOWN_BRID_UPPER))
-		a->mvd_bsrc = au_ibstart(a->inode);
+		a->mvd_bsrc = au_ibtop(a->inode);
 	else {
 		a->mvd_bsrc = au_br_index(a->sb, a->mvd_src_brid);
 		if (unlikely(a->mvd_bsrc < 0
 			     || (a->mvd_bsrc < au_dbstart(a->dentry)
 				 || au_dbend(a->dentry) < a->mvd_bsrc
 				 || !au_h_dptr(a->dentry, a->mvd_bsrc))
-			     || (a->mvd_bsrc < au_ibstart(a->inode)
-				 || au_ibend(a->inode) < a->mvd_bsrc
+			     || (a->mvd_bsrc < au_ibtop(a->inode)
+				 || au_ibbot(a->inode) < a->mvd_bsrc
 				 || !au_h_iptr(a->inode, a->mvd_bsrc)))) {
 			a->mvd_errno = EAU_MVDOWN_NOUPPER;
 			AU_MVD_PR(dmsg, "no upper\n");

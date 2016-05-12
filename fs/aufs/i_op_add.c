@@ -482,7 +482,7 @@ int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 		au_di(dentry)->di_tmpfile = 1;
 
 		/* update without i_mutex */
-		if (au_ibstart(dir) == au_dbstart(dentry))
+		if (au_ibtop(dir) == au_dbstart(dentry))
 			au_cpup_attr_timesizes(dir);
 	}
 
@@ -563,7 +563,7 @@ static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
 	h_inode = NULL;
 	sb = src_dentry->d_sb;
 	inode = src_dentry->d_inode;
-	if (au_ibstart(inode) <= a->bdst)
+	if (au_ibtop(inode) <= a->bdst)
 		h_inode = au_h_iptr(inode, a->bdst);
 	if (!h_inode || !h_inode->i_nlink) {
 		/* copyup src_dentry as the name of dentry. */
@@ -682,7 +682,7 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 		goto out_unlock;
 
 	a->src_parent = dget_parent(src_dentry);
-	wr_dir_args.force_btgt = au_ibstart(inode);
+	wr_dir_args.force_btgt = au_ibtop(inode);
 
 	di_write_lock_parent(a->parent);
 	wr_dir_args.force_btgt = au_wbr(dentry, wr_dir_args.force_btgt);
@@ -697,7 +697,7 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 	a->bdst = au_dbstart(dentry);
 	a->h_path.dentry = au_h_dptr(dentry, a->bdst);
 	a->h_path.mnt = au_sbr_mnt(sb, a->bdst);
-	a->bsrc = au_ibstart(inode);
+	a->bsrc = au_ibtop(inode);
 	h_src_dentry = au_h_d_alias(src_dentry, a->bsrc);
 	if (!h_src_dentry && au_di(src_dentry)->di_tmpfile)
 		h_src_dentry = dget(au_hi_wh(inode, a->bsrc));

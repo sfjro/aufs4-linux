@@ -449,9 +449,9 @@ static void au_br_do_add_hip(struct au_iinfo *iinfo, aufs_bindex_t bindex,
 	memmove(hip + 1, hip, sizeof(*hip) * amount);
 	hip->hi_inode = NULL;
 	au_hn_init(hip);
-	iinfo->ii_bend++;
+	iinfo->ii_bbot++;
 	if (unlikely(bend < 0))
-		iinfo->ii_bstart = 0;
+		iinfo->ii_btop = 0;
 }
 
 static void au_br_do_add(struct super_block *sb, struct au_branch *br,
@@ -715,8 +715,8 @@ static int test_inode_busy(struct super_block *sb, aufs_bindex_t bindex,
 			}
 		}
 
-		bstart = au_ibstart(i);
-		bend = au_ibend(i);
+		bstart = au_ibtop(i);
+		bend = au_ibbot(i);
 		if (bstart <= bindex
 		    && bindex <= bend
 		    && au_h_iptr(i, bindex)
@@ -932,7 +932,7 @@ static void au_br_do_del_hip(struct au_iinfo *iinfo, const aufs_bindex_t bindex,
 		memmove(hip, hip + 1, sizeof(*hip) * (bend - bindex));
 	iinfo->ii_hinode[0 + bend].hi_inode = NULL;
 	au_hn_init(iinfo->ii_hinode + bend);
-	iinfo->ii_bend--;
+	iinfo->ii_bbot--;
 
 	p = krealloc(iinfo->ii_hinode, sizeof(*p) * bend, AuGFP_SBILIST);
 	if (p)
@@ -1127,8 +1127,8 @@ static int au_ibusy(struct super_block *sb, struct aufs_ibusy __user *arg)
 		goto out_unlock;
 
 	ii_read_lock_child(inode);
-	bstart = au_ibstart(inode);
-	bend = au_ibend(inode);
+	bstart = au_ibtop(inode);
+	bend = au_ibbot(inode);
 	if (bstart <= ibusy.bindex && ibusy.bindex <= bend) {
 		h_inode = au_h_iptr(inode, ibusy.bindex);
 		if (h_inode && au_test_ibusy(inode, bstart, bend))

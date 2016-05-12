@@ -342,8 +342,8 @@ struct dentry *au_h_d_alias(struct dentry *dentry, aufs_bindex_t bindex)
 		goto out; /* success */
 	}
 
-	AuDebugOn(bindex < au_ibstart(inode));
-	AuDebugOn(au_ibend(inode) < bindex);
+	AuDebugOn(bindex < au_ibtop(inode));
+	AuDebugOn(au_ibbot(inode) < bindex);
 	h_inode = au_h_iptr(inode, bindex);
 	h_dentry = d_find_alias(h_inode);
 	if (h_dentry) {

@@ -590,14 +590,14 @@ void au_xino_delete_inode(struct inode *inode, const int unlinked)
 	}
 
 	iinfo = au_ii(inode);
-	bindex = iinfo->ii_bstart;
+	bindex = iinfo->ii_btop;
 	if (bindex < 0)
 		return;
 
 	xwrite = au_sbi(sb)->si_xwrite;
 	try_trunc = !!au_opt_test(mnt_flags, TRUNC_XINO);
 	hi = iinfo->ii_hinode + bindex;
-	bend = iinfo->ii_bend;
+	bend = iinfo->ii_bbot;
 	for (; bindex <= bend; bindex++, hi++) {
 		h_inode = hi->hi_inode;
 		if (!h_inode

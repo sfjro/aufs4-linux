@@ -214,7 +214,7 @@ static int au_rdu(struct file *file, struct aufs_rdu *rdu)
 	}
 
 	ii_read_lock_child(inode);
-	fsstack_copy_attr_atime(inode, au_h_iptr(inode, au_ibstart(inode)));
+	fsstack_copy_attr_atime(inode, au_h_iptr(inode, au_ibtop(inode)));
 	ii_read_unlock(inode);
 
 out_unlock:

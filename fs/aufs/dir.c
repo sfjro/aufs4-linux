@@ -119,7 +119,7 @@ static void au_do_dir_ts(void *arg)
 	/* no dir->i_mutex lock */
 	aufs_read_lock(a->dentry, AuLock_DW); /* noflush */
 
-	bstart = au_ibstart(dir);
+	bstart = au_ibtop(dir);
 	bindex = au_br_index(sb, a->brid);
 	if (bindex < bstart)
 		goto out_unlock;
@@ -172,7 +172,7 @@ void au_dir_ts(struct inode *dir, aufs_bindex_t bindex)
 	dentry = d_find_any_alias(dir);
 	AuDebugOn(!dentry);
 	sb = dentry->d_sb;
-	bstart = au_ibstart(dir);
+	bstart = au_ibtop(dir);
 	if (bstart == bindex) {
 		au_cpup_attr_timesizes(dir);
 		goto out;
@@ -491,7 +491,7 @@ static int aufs_iterate(struct file *file, struct dir_context *ctx)
 	if (unlikely(err))
 		goto out_unlock;
 
-	h_inode = au_h_iptr(inode, au_ibstart(inode));
+	h_inode = au_h_iptr(inode, au_ibtop(inode));
 	if (!au_test_nfsd()) {
 		err = au_vdir_fill_de(file, ctx);
 		fsstack_copy_attr_atime(inode, h_inode);

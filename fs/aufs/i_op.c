@@ -112,14 +112,14 @@ static int aufs_permission(struct inode *inode, int mask)
 	    || write_mask
 	    || au_opt_test(au_mntflags(sb), DIRPERM1)) {
 		err = au_busy_or_stale();
-		h_inode = au_h_iptr(inode, au_ibstart(inode));
+		h_inode = au_h_iptr(inode, au_ibtop(inode));
 		if (unlikely(!h_inode
 			     || (h_inode->i_mode & S_IFMT)
 			     != (inode->i_mode & S_IFMT)))
 			goto out;
 
 		err = 0;
-		bindex = au_ibstart(inode);
+		bindex = au_ibtop(inode);
 		br = au_sbr(sb, bindex);
 		err = h_permission(h_inode, mask, au_br_mnt(br), br->br_perm);
 		if (write_mask
@@ -138,8 +138,8 @@ static int aufs_permission(struct inode *inode, int mask)
 
 	/* non-write to dir */
 	err = 0;
-	bend = au_ibend(inode);
-	for (bindex = au_ibstart(inode); !err && bindex <= bend; bindex++) {
+	bend = au_ibbot(inode);
+	for (bindex = au_ibtop(inode); !err && bindex <= bend; bindex++) {
 		h_inode = au_h_iptr(inode, bindex);
 		if (h_inode) {
 			err = au_busy_or_stale();
@@ -764,7 +764,7 @@ int au_pin_and_icpup(struct dentry *dentry, struct iattr *ia,
 {
 	int err;
 	loff_t sz;
-	aufs_bindex_t bstart, ibstart;
+	aufs_bindex_t bstart, ibtop;
 	struct dentry *hi_wh, *parent;
 	struct inode *inode;
 	struct au_wr_dir_args wr_dir_args = {
@@ -777,9 +777,9 @@ int au_pin_and_icpup(struct dentry *dentry, struct iattr *ia,
 	/* plink or hi_wh() case */
 	bstart = au_dbstart(dentry);
 	inode = dentry->d_inode;
-	ibstart = au_ibstart(inode);
-	if (bstart != ibstart && !au_test_ro(inode->i_sb, ibstart, inode))
-		wr_dir_args.force_btgt = ibstart;
+	ibtop = au_ibtop(inode);
+	if (bstart != ibtop && !au_test_ro(inode->i_sb, ibtop, inode))
+		wr_dir_args.force_btgt = ibtop;
 	err = au_wr_dir(dentry, /*src_dentry*/NULL, &wr_dir_args);
 	if (unlikely(err < 0))
 		goto out;
@@ -1168,7 +1168,7 @@ int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path)
 		di_read_lock_child(dentry, AuLock_IR);
 
 	inode = dentry->d_inode;
-	bindex = au_ibstart(inode);
+	bindex = au_ibtop(inode);
 	h_path->mnt = au_sbr_mnt(sb, bindex);
 	h_sb = h_path->mnt->mnt_sb;
 	if (!force
@@ -1345,7 +1345,7 @@ static int aufs_update_time(struct inode *inode, struct timespec *ts, int flags)
 	si_read_lock(sb, AuLock_FLUSH);
 	ii_write_lock_child(inode);
 	lockdep_on();
-	h_inode = au_h_iptr(inode, au_ibstart(inode));
+	h_inode = au_h_iptr(inode, au_ibtop(inode));
 	err = vfsub_update_time(h_inode, ts, flags);
 	lockdep_off();
 	if (!err)

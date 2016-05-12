@@ -854,8 +854,8 @@ static int h_d_revalidate(struct dentry *dentry, struct inode *inode,
 	if (do_udba && inode) {
 		mode = (inode->i_mode & S_IFMT);
 		plus = (inode->i_nlink > 0);
-		ibs = au_ibstart(inode);
-		ibe = au_ibend(inode);
+		ibs = au_ibtop(inode);
+		ibe = au_ibbot(inode);
 	}
 
 	bstart = au_dbstart(dentry);
@@ -1075,7 +1075,7 @@ static int aufs_d_revalidate(struct dentry *dentry, unsigned int flags)
 
 	do_udba = !au_opt_test(au_mntflags(sb), UDBA_NONE);
 	if (do_udba && inode) {
-		aufs_bindex_t bstart = au_ibstart(inode);
+		aufs_bindex_t bstart = au_ibtop(inode);
 		struct inode *h_inode;
 
 		if (bstart >= 0) {

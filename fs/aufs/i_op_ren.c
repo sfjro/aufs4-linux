@@ -694,7 +694,7 @@ static void au_ren_refresh(struct au_ren_args *a)
 	if (au_opt_test(au_mntflags(sb), PLINK) && au_plink_test(i))
 		return; /* success */
 
-	bend = au_ibend(i);
+	bend = au_ibbot(i);
 	for (bindex = a->btgt + 1; bindex <= bend; bindex++) {
 		h_i = au_h_iptr(i, bindex);
 		if (h_i) {
@@ -703,7 +703,7 @@ static void au_ren_refresh(struct au_ren_args *a)
 			au_set_h_iptr(i, bindex, NULL, 0);
 		}
 	}
-	au_set_ibend(i, a->btgt);
+	au_set_ibbot(i, a->btgt);
 }
 
 /* ---------------------------------------------------------------------- */

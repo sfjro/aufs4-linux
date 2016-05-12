@@ -517,7 +517,7 @@ static unsigned long long au_iarray_cb(void *a,
 	spin_lock(&inode_sb_list_lock);
 	list_for_each_entry(inode, head, i_sb_list) {
 		if (!is_bad_inode(inode)
-		    && au_ii(inode)->ii_bstart >= 0) {
+		    && au_ii(inode)->ii_btop >= 0) {
 			spin_lock(&inode->i_lock);
 			if (atomic_read(&inode->i_count)) {
 				au_igrab(inode);

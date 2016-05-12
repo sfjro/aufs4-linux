@@ -77,8 +77,8 @@ void au_hn_reset(struct inode *inode, unsigned int flags)
 	struct inode *hi;
 	struct dentry *iwhdentry;
 
-	bend = au_ibend(inode);
-	for (bindex = au_ibstart(inode); bindex <= bend; bindex++) {
+	bend = au_ibbot(inode);
+	for (bindex = au_ibtop(inode); bindex <= bend; bindex++) {
 		hi = au_h_iptr(inode, bindex);
 		if (!hi)
 			continue;
@@ -112,8 +112,8 @@ static int hn_xino(struct inode *inode, struct inode *h_inode)
 	}
 
 	bfound = -1;
-	bend = au_ibend(inode);
-	bstart = au_ibstart(inode);
+	bend = au_ibbot(inode);
+	bstart = au_ibtop(inode);
 #if 0 /* reserved for future use */
 	if (bindex == bend) {
 		/* keep this ino in rename case */
@@ -468,8 +468,8 @@ static void au_hn_bh(void *_args)
 
 	ii_read_lock_parent(a->dir);
 	bfound = -1;
-	bend = au_ibend(a->dir);
-	for (bindex = au_ibstart(a->dir); bindex <= bend; bindex++)
+	bend = au_ibbot(a->dir);
+	for (bindex = au_ibtop(a->dir); bindex <= bend; bindex++)
 		if (au_h_iptr(a->dir, bindex) == a->h_dir) {
 			bfound = bindex;
 			break;

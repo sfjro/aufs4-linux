@@ -58,9 +58,9 @@ static int au_ii_refresh(struct inode *inode, int *update)
 	if (unlikely(err))
 		goto out;
 
-	AuDebugOn(iinfo->ii_bstart < 0);
-	p = iinfo->ii_hinode + iinfo->ii_bstart;
-	for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend;
+	AuDebugOn(iinfo->ii_btop < 0);
+	p = iinfo->ii_hinode + iinfo->ii_btop;
+	for (bindex = iinfo->ii_btop; bindex <= iinfo->ii_bbot;
 	     bindex++, p++) {
 		if (!p->hi_inode)
 			continue;
@@ -77,10 +77,10 @@ static int au_ii_refresh(struct inode *inode, int *update)
 			continue;
 		}
 
-		if (new_bindex < iinfo->ii_bstart)
-			iinfo->ii_bstart = new_bindex;
-		if (iinfo->ii_bend < new_bindex)
-			iinfo->ii_bend = new_bindex;
+		if (new_bindex < iinfo->ii_btop)
+			iinfo->ii_btop = new_bindex;
+		if (iinfo->ii_bbot < new_bindex)
+			iinfo->ii_bbot = new_bindex;
 		/* swap two lower inode, and loop again */
 		q = iinfo->ii_hinode + new_bindex;
 		tmp = *q;
@@ -155,7 +155,7 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 
 	update = 0;
 	iinfo = au_ii(inode);
-	p = iinfo->ii_hinode + iinfo->ii_bstart;
+	p = iinfo->ii_hinode + iinfo->ii_btop;
 	mode = (inode->i_mode & S_IFMT);
 	isdir = S_ISDIR(mode);
 	flags = au_hi_flags(inode, isdir);
@@ -169,7 +169,7 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 			continue;
 
 		AuDebugOn(mode != (h_d->d_inode->i_mode & S_IFMT));
-		if (iinfo->ii_bstart <= bindex && bindex <= iinfo->ii_bend) {
+		if (iinfo->ii_btop <= bindex && bindex <= iinfo->ii_bbot) {
 			h_i = au_h_iptr(inode, bindex);
 			if (h_i) {
 				if (h_i == h_d->d_inode)
@@ -178,10 +178,10 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 				break;
 			}
 		}
-		if (bindex < iinfo->ii_bstart)
-			iinfo->ii_bstart = bindex;
-		if (iinfo->ii_bend < bindex)
-			iinfo->ii_bend = bindex;
+		if (bindex < iinfo->ii_btop)
+			iinfo->ii_btop = bindex;
+		if (iinfo->ii_bbot < bindex)
+			iinfo->ii_bbot = bindex;
 		au_set_h_iptr(inode, bindex, au_igrab(h_d->d_inode), flags);
 		update = 1;
 	}
@@ -258,8 +258,8 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 	    && !memcmp(dentry->d_name.name, AUFS_WH_PFX, AUFS_WH_PFX_LEN))
 		au_fclr_hi(flags, HNOTIFY);
 	iinfo = au_ii(inode);
-	iinfo->ii_bstart = bstart;
-	iinfo->ii_bend = btail;
+	iinfo->ii_btop = bstart;
+	iinfo->ii_bbot = btail;
 	for (bindex = bstart; bindex <= btail; bindex++) {
 		h_dentry = au_h_dptr(dentry, bindex);
 		if (h_dentry)
@@ -301,8 +301,8 @@ static int reval_inode(struct inode *inode, struct dentry *dentry)
 	err = 1;
 	ii_write_lock_new_child(inode);
 	h_dinode = au_h_dptr(dentry, au_dbstart(dentry))->d_inode;
-	bend = au_ibend(inode);
-	for (bindex = au_ibstart(inode); bindex <= bend; bindex++) {
+	bend = au_ibbot(inode);
+	for (bindex = au_ibtop(inode); bindex <= bend; bindex++) {
 		h_inode = au_h_iptr(inode, bindex);
 		if (!h_inode || h_inode != h_dinode)
 			continue;
@@ -481,8 +481,8 @@ int au_test_ro(struct super_block *sb, aufs_bindex_t bindex,
 	/* pseudo-link after flushed may happen out of bounds */
 	if (!err
 	    && inode
-	    && au_ibstart(inode) <= bindex
-	    && bindex <= au_ibend(inode)) {
+	    && au_ibtop(inode) <= bindex
+	    && bindex <= au_ibbot(inode)) {
 		/*
 		 * permission check is unnecessary since vfsub routine
 		 * will be called later

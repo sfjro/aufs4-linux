@@ -326,7 +326,7 @@ int au_dy_irefresh(struct inode *inode)
 
 	err = 0;
 	if (S_ISREG(inode->i_mode)) {
-		bstart = au_ibstart(inode);
+		bstart = au_ibtop(inode);
 		h_inode = au_h_iptr(inode, bstart);
 		err = au_dy_iaop(inode, bstart, h_inode);
 	}
