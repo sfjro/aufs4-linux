@@ -36,7 +36,7 @@ struct au_dinfo {
 	atomic_t		di_generation;
 
 	struct au_rwsem		di_rwsem;
-	aufs_bindex_t		di_bstart, di_bend, di_bwh, di_bdiropq;
+	aufs_bindex_t		di_btop, di_bbot, di_bwh, di_bdiropq;
 	unsigned char		di_tmpfile; /* to allow the different name */
 	struct au_hdentry	*di_hdentry;
 } ____cacheline_aligned_in_smp;
@@ -86,8 +86,8 @@ int au_digen_test(struct dentry *dentry, unsigned int sigen);
 int au_dbrange_test(struct dentry *dentry);
 void au_update_digen(struct dentry *dentry);
 void au_update_dbrange(struct dentry *dentry, int do_put_zero);
-void au_update_dbstart(struct dentry *dentry);
-void au_update_dbend(struct dentry *dentry);
+void au_update_dbtop(struct dentry *dentry);
+void au_update_dbbot(struct dentry *dentry);
 int au_find_dbindex(struct dentry *dentry, struct dentry *h_dentry);
 
 /* ---------------------------------------------------------------------- */
@@ -164,16 +164,16 @@ static inline void au_hdput(struct au_hdentry *hd)
 		dput(hd->hd_dentry);
 }
 
-static inline aufs_bindex_t au_dbstart(struct dentry *dentry)
+static inline aufs_bindex_t au_dbtop(struct dentry *dentry)
 {
 	DiMustAnyLock(dentry);
-	return au_di(dentry)->di_bstart;
+	return au_di(dentry)->di_btop;
 }
 
-static inline aufs_bindex_t au_dbend(struct dentry *dentry)
+static inline aufs_bindex_t au_dbbot(struct dentry *dentry)
 {
 	DiMustAnyLock(dentry);
-	return au_di(dentry)->di_bend;
+	return au_di(dentry)->di_bbot;
 }
 
 static inline aufs_bindex_t au_dbwh(struct dentry *dentry)
@@ -189,16 +189,16 @@ static inline aufs_bindex_t au_dbdiropq(struct dentry *dentry)
 }
 
 /* todo: hard/soft set? */
-static inline void au_set_dbstart(struct dentry *dentry, aufs_bindex_t bindex)
+static inline void au_set_dbtop(struct dentry *dentry, aufs_bindex_t bindex)
 {
 	DiMustWriteLock(dentry);
-	au_di(dentry)->di_bstart = bindex;
+	au_di(dentry)->di_btop = bindex;
 }
 
-static inline void au_set_dbend(struct dentry *dentry, aufs_bindex_t bindex)
+static inline void au_set_dbbot(struct dentry *dentry, aufs_bindex_t bindex)
 {
 	DiMustWriteLock(dentry);
-	au_di(dentry)->di_bend = bindex;
+	au_di(dentry)->di_bbot = bindex;
 }
 
 static inline void au_set_dbwh(struct dentry *dentry, aufs_bindex_t bindex)

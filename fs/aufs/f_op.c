@@ -41,7 +41,7 @@ int au_do_open_nondir(struct file *file, int flags, struct file *h_file)
 	finfo = au_fi(file);
 	memset(&finfo->fi_htop, 0, sizeof(finfo->fi_htop));
 	atomic_set(&finfo->fi_mmapped, 0);
-	bindex = au_dbstart(dentry);
+	bindex = au_dbtop(dentry);
 	if (!h_file) {
 		h_dentry = au_h_dptr(dentry, bindex);
 		err = vfsub_test_mntns(file->f_path.mnt, h_dentry->d_sb);

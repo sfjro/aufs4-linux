@@ -113,7 +113,7 @@ static int au_cpdown_dir(struct dentry *dentry, aufs_bindex_t bdst,
 	struct inode *h_dir, *h_inode, *inode, *dir;
 	unsigned int *flags = arg;
 
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	/* dentry is di-locked */
 	parent = dget_parent(dentry);
 	dir = parent->d_inode;
@@ -192,8 +192,8 @@ out_dir:
 	}
 out_put:
 	au_set_h_dptr(dentry, bdst, NULL);
-	if (au_dbend(dentry) == bdst)
-		au_update_dbend(dentry);
+	if (au_dbbot(dentry) == bdst)
+		au_update_dbbot(dentry);
 out:
 	dput(parent);
 	return err;
@@ -270,14 +270,14 @@ static int au_wbr_create_tdp(struct dentry *dentry,
 	struct dentry *parent, *h_parent;
 
 	sb = dentry->d_sb;
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	err = bstart;
 	if (!au_br_rdonly(au_sbr(sb, bstart)))
 		goto out;
 
 	err = -EROFS;
 	parent = dget_parent(dentry);
-	for (bindex = au_dbstart(parent); bindex < bstart; bindex++) {
+	for (bindex = au_dbtop(parent); bindex < bstart; bindex++) {
 		h_parent = au_h_dptr(parent, bindex);
 		if (!h_parent || !h_parent->d_inode)
 			continue;
@@ -424,7 +424,7 @@ static void au_mfs(struct dentry *dentry, struct dentry *parent)
 		bindex = 0;
 		bend = au_sbbot(sb);
 	} else {
-		bindex = au_dbstart(parent);
+		bindex = au_dbtop(parent);
 		bend = au_dbtaildir(parent);
 	}
 
@@ -562,7 +562,7 @@ static int au_wbr_create_pmfs(struct dentry *dentry, unsigned int flags)
 	if (unlikely(err < 0))
 		goto out;
 	parent = dget_parent(dentry);
-	bstart = au_dbstart(parent);
+	bstart = au_dbtop(parent);
 	bend = au_dbtaildir(parent);
 	if (bstart == bend)
 		goto out_parent; /* success */
@@ -655,8 +655,8 @@ static int au_wbr_copyup_bup(struct dentry *dentry)
 	err = -EROFS;
 	sb = dentry->d_sb;
 	parent = dget_parent(dentry);
-	bstart = au_dbstart(parent);
-	for (bindex = au_dbstart(dentry); bindex >= bstart; bindex--) {
+	bstart = au_dbtop(parent);
+	for (bindex = au_dbtop(dentry); bindex >= bstart; bindex--) {
 		h_parent = au_h_dptr(parent, bindex);
 		if (!h_parent || !h_parent->d_inode)
 			continue;
@@ -695,7 +695,7 @@ static int au_wbr_copyup_bu(struct dentry *dentry)
 	int err;
 	aufs_bindex_t bstart;
 
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	err = au_wbr_do_copyup_bu(dentry, bstart);
 	return err;
 }

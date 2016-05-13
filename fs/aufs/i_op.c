@@ -198,7 +198,7 @@ static struct dentry *aufs_lookup(struct inode *dir, struct dentry *dentry,
 	if (!err)
 		err = au_digen_test(parent, au_sigen(sb));
 	if (!err) {
-		npositive = au_lkup_dentry(dentry, au_dbstart(parent),
+		npositive = au_lkup_dentry(dentry, au_dbtop(parent),
 					   /*type*/0);
 		err = npositive;
 	}
@@ -459,11 +459,11 @@ int au_wr_dir(struct dentry *dentry, struct dentry *src_dentry,
 	sb = dentry->d_sb;
 	sbinfo = au_sbi(sb);
 	parent = dget_parent(dentry);
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	bcpup = bstart;
 	if (args->force_btgt < 0) {
 		if (src_dentry) {
-			src_bstart = au_dbstart(src_dentry);
+			src_bstart = au_dbtop(src_dentry);
 			if (src_bstart < bstart)
 				bcpup = src_bstart;
 		} else if (add_entry) {
@@ -504,8 +504,8 @@ int au_wr_dir(struct dentry *dentry, struct dentry *src_dentry,
 	if (err >= 0) {
 		if (!dentry->d_inode) {
 			au_set_h_dptr(dentry, bstart, NULL);
-			au_set_dbstart(dentry, bcpup);
-			au_set_dbend(dentry, bcpup);
+			au_set_dbtop(dentry, bcpup);
+			au_set_dbbot(dentry, bcpup);
 		}
 		AuDebugOn(add_entry
 			  && !au_ftest_wrdir(args->flags, TMPFILE)
@@ -646,7 +646,7 @@ int au_do_pin(struct au_pin *p)
 	}
 
 	p->h_dentry = NULL;
-	if (p->bindex <= au_dbend(p->dentry))
+	if (p->bindex <= au_dbbot(p->dentry))
 		p->h_dentry = au_h_dptr(p->dentry, p->bindex);
 
 	p->parent = dget_parent(p->dentry);
@@ -775,7 +775,7 @@ int au_pin_and_icpup(struct dentry *dentry, struct iattr *ia,
 	if (d_is_dir(dentry))
 		au_fset_wrdir(wr_dir_args.flags, ISDIR);
 	/* plink or hi_wh() case */
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	inode = dentry->d_inode;
 	ibtop = au_ibtop(inode);
 	if (bstart != ibtop && !au_test_ro(inode->i_sb, ibtop, inode))
@@ -979,7 +979,7 @@ out_unlock:
 	mutex_unlock(&a->h_inode->i_mutex);
 	au_unpin(&a->pin);
 	if (unlikely(err))
-		au_update_dbstart(dentry);
+		au_update_dbtop(dentry);
 out_dentry:
 	di_write_unlock(dentry);
 	if (file) {
@@ -1076,7 +1076,7 @@ ssize_t au_srxattr(struct dentry *dentry, struct au_srxattr *arg)
 
 	au_unpin(&a->pin);
 	if (unlikely(err))
-		au_update_dbstart(dentry);
+		au_update_dbtop(dentry);
 
 out_di:
 	di_write_unlock(dentry);
@@ -1176,7 +1176,7 @@ int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path)
 	    && udba_none)
 		goto out; /* success */
 
-	if (au_dbstart(dentry) == bindex)
+	if (au_dbtop(dentry) == bindex)
 		h_path->dentry = au_h_dptr(dentry, bindex);
 	else if (au_opt_test(mnt_flags, PLINK) && au_plink_test(inode)) {
 		h_path->dentry = au_plink_lkup(inode, bindex);
@@ -1273,7 +1273,7 @@ static int aufs_readlink(struct dentry *dentry, char __user *buf, int bufsiz)
 		goto out;
 	err = au_d_hashed_positive(dentry);
 	if (!err)
-		err = h_readlink(dentry, au_dbstart(dentry), buf, bufsiz);
+		err = h_readlink(dentry, au_dbtop(dentry), buf, bufsiz);
 	aufs_read_unlock(dentry, AuLock_IR);
 
 out:
@@ -1302,7 +1302,7 @@ static void *aufs_follow_link(struct dentry *dentry, struct nameidata *nd)
 	if (!err) {
 		old_fs = get_fs();
 		set_fs(KERNEL_DS);
-		err = h_readlink(dentry, au_dbstart(dentry), buf.u, PATH_MAX);
+		err = h_readlink(dentry, au_dbtop(dentry), buf.u, PATH_MAX);
 		set_fs(old_fs);
 	}
 	aufs_read_unlock(dentry, AuLock_IR);

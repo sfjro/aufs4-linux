@@ -76,7 +76,7 @@ loff_t au_dir_size(struct file *file, struct dentry *dentry)
 		AuDebugOn(!d_is_dir(dentry));
 
 		bend = au_dbtaildir(dentry);
-		for (bindex = au_dbstart(dentry);
+		for (bindex = au_dbtop(dentry);
 		     bindex <= bend && sz < KMALLOC_MAX_SIZE;
 		     bindex++) {
 			h_dentry = au_h_dptr(dentry, bindex);
@@ -211,7 +211,7 @@ static int reopen_dir(struct file *file)
 
 	/* open all lower dirs */
 	dentry = file->f_path.dentry;
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	for (bindex = au_fbstart(file); bindex < bstart; bindex++)
 		au_set_h_fptr(file, bindex, NULL);
 	au_set_fbstart(file, bstart);
@@ -259,7 +259,7 @@ static int do_open_dir(struct file *file, int flags, struct file *h_file)
 	mnt = file->f_path.mnt;
 	dentry = file->f_path.dentry;
 	file->f_version = dentry->d_inode->i_version;
-	bindex = au_dbstart(dentry);
+	bindex = au_dbtop(dentry);
 	au_set_fbstart(file, bindex);
 	btail = au_dbtaildir(dentry);
 	au_set_fbend_dir(file, btail);
@@ -387,8 +387,8 @@ static int au_do_fsync_dir_no_file(struct dentry *dentry, int datasync)
 	sb = dentry->d_sb;
 	inode = dentry->d_inode;
 	IMustLock(inode);
-	bend = au_dbend(dentry);
-	for (bindex = au_dbstart(dentry); !err && bindex <= bend; bindex++) {
+	bend = au_dbbot(dentry);
+	for (bindex = au_dbtop(dentry); !err && bindex <= bend; bindex++) {
 		struct path h_path;
 
 		if (au_test_ro(sb, bindex, inode))
@@ -680,7 +680,7 @@ int au_test_empty_lower(struct dentry *dentry)
 
 	arg.flags = 0;
 	arg.whlist = &whlist;
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	if (au_opt_test(au_mntflags(dentry->d_sb), SHWH))
 		au_fset_testempty(arg.flags, SHWH);
 	test_empty = do_test_empty;
@@ -725,7 +725,7 @@ int au_test_empty(struct dentry *dentry, struct au_nhash *whlist)
 	if (au_opt_test(au_mntflags(dentry->d_sb), SHWH))
 		au_fset_testempty(arg.flags, SHWH);
 	btail = au_dbtaildir(dentry);
-	for (bindex = au_dbstart(dentry); !err && bindex <= btail; bindex++) {
+	for (bindex = au_dbtop(dentry); !err && bindex <= btail; bindex++) {
 		struct dentry *h_dentry;
 
 		h_dentry = au_h_dptr(dentry, bindex);

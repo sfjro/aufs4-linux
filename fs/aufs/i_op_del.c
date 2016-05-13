@@ -38,7 +38,7 @@ int au_wr_dir_need_wh(struct dentry *dentry, int isdir, aufs_bindex_t *bcpup)
 	struct super_block *sb;
 
 	sb = dentry->d_sb;
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	if (*bcpup < 0) {
 		*bcpup = bstart;
 		if (au_test_ro(sb, bstart, dentry->d_inode)) {
@@ -176,7 +176,7 @@ lock_hdir_create_wh(struct dentry *dentry, int isdir, aufs_bindex_t *rbcpup,
 
 	h_path.dentry = au_pinned_h_parent(pin);
 	if (udba != AuOpt_UDBA_NONE
-	    && au_dbstart(dentry) == bcpup) {
+	    && au_dbtop(dentry) == bcpup) {
 		err = au_may_del(dentry, bcpup, h_path.dentry, isdir);
 		wh_dentry = ERR_PTR(err);
 		if (unlikely(err))
@@ -325,7 +325,7 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 	if (unlikely(d_is_dir(dentry)))
 		goto out_unlock; /* possible? */
 
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	bwh = au_dbwh(dentry);
 	bindex = -1;
 	parent = dentry->d_parent; /* dir inode is locked */
@@ -437,7 +437,7 @@ int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (unlikely(err))
 		goto out_parent;
 
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	bwh = au_dbwh(dentry);
 	bindex = -1;
 	wh_dentry = lock_hdir_create_wh(dentry, /*isdir*/1, &bindex, &a->dt,

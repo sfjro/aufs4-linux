@@ -159,8 +159,8 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 	mode = (inode->i_mode & S_IFMT);
 	isdir = S_ISDIR(mode);
 	flags = au_hi_flags(inode, isdir);
-	bend = au_dbend(dentry);
-	for (bindex = au_dbstart(dentry); bindex <= bend; bindex++) {
+	bend = au_dbbot(dentry);
+	for (bindex = au_dbtop(dentry); bindex <= bend; bindex++) {
 		struct inode *h_i;
 		struct dentry *h_d;
 
@@ -214,7 +214,7 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 	err = 0;
 	isdir = 0;
 	iop = au_sbi(inode->i_sb)->si_iop_array;
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	h_inode = au_h_dptr(dentry, bstart)->d_inode;
 	mode = h_inode->i_mode;
 	switch (mode & S_IFMT) {
@@ -300,7 +300,7 @@ static int reval_inode(struct inode *inode, struct dentry *dentry)
 
 	err = 1;
 	ii_write_lock_new_child(inode);
-	h_dinode = au_h_dptr(dentry, au_dbstart(dentry))->d_inode;
+	h_dinode = au_h_dptr(dentry, au_dbtop(dentry))->d_inode;
 	bend = au_ibbot(inode);
 	for (bindex = au_ibtop(inode); bindex <= bend; bindex++) {
 		h_inode = au_h_iptr(inode, bindex);
@@ -371,7 +371,7 @@ struct inode *au_new_inode(struct dentry *dentry, int must_new)
 	aufs_bindex_t bstart;
 
 	sb = dentry->d_sb;
-	bstart = au_dbstart(dentry);
+	bstart = au_dbtop(dentry);
 	h_dentry = au_h_dptr(dentry, bstart);
 	h_ino = h_dentry->d_inode->i_ino;
 

@@ -214,13 +214,13 @@ void au_dpri_dentry(struct dentry *dentry)
 	if (!dinfo)
 		return;
 	dpri("d-1: bstart %d, bend %d, bwh %d, bdiropq %d, gen %d, tmp %d\n",
-	     dinfo->di_bstart, dinfo->di_bend,
+	     dinfo->di_btop, dinfo->di_bbot,
 	     dinfo->di_bwh, dinfo->di_bdiropq, au_digen(dentry),
 	     dinfo->di_tmpfile);
-	if (dinfo->di_bstart < 0)
+	if (dinfo->di_btop < 0)
 		return;
 	hdp = dinfo->di_hdentry;
-	for (bindex = dinfo->di_bstart; bindex <= dinfo->di_bend; bindex++)
+	for (bindex = dinfo->di_btop; bindex <= dinfo->di_bbot; bindex++)
 		do_pri_dentry(bindex, hdp[0 + bindex].hd_dentry);
 }
 
@@ -355,11 +355,11 @@ void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line)
 	if (!inode /* || au_di(dentry)->di_lsc == AuLsc_DI_TMP */)
 		return;
 
-	bend = au_dbend(dentry);
+	bend = au_dbbot(dentry);
 	bi = au_ibbot(inode);
 	if (bi < bend)
 		bend = bi;
-	bindex = au_dbstart(dentry);
+	bindex = au_dbtop(dentry);
 	bi = au_ibtop(inode);
 	if (bi > bindex)
 		bindex = bi;

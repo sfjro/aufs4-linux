@@ -991,7 +991,7 @@ static int au_cpup_simple(struct au_cp_generic *cpg)
 
 		/* revert */
 		au_set_h_dptr(dentry, cpg->bdst, NULL);
-		au_set_dbstart(dentry, cpg->bsrc);
+		au_set_dbtop(dentry, cpg->bsrc);
 	}
 
 	return err;
@@ -1058,7 +1058,7 @@ int au_sio_cpup_simple(struct au_cp_generic *cpg)
 
 	if (cpg->bsrc < 0) {
 		dentry = cpg->dentry;
-		bend = au_dbend(dentry);
+		bend = au_dbbot(dentry);
 		for (bsrc = cpg->bdst + 1; bsrc <= bend; bsrc++) {
 			h_dentry = au_h_dptr(dentry, bsrc);
 			if (h_dentry) {
@@ -1098,10 +1098,10 @@ static int au_do_cpup_wh(struct au_cp_generic *cpg, struct dentry *wh_dentry,
 	AuRwMustWriteLock(&dinfo->di_rwsem);
 
 	bsrc_orig = cpg->bsrc;
-	cpg->bsrc = dinfo->di_bstart;
+	cpg->bsrc = dinfo->di_btop;
 	hdp = dinfo->di_hdentry;
 	h_d_dst = hdp[0 + cpg->bdst].hd_dentry;
-	dinfo->di_bstart = cpg->bdst;
+	dinfo->di_btop = cpg->bdst;
 	hdp[0 + cpg->bdst].hd_dentry = wh_dentry;
 	h_d_start = NULL;
 	if (file) {
@@ -1118,7 +1118,7 @@ static int au_do_cpup_wh(struct au_cp_generic *cpg, struct dentry *wh_dentry,
 		hdp[0 + cpg->bsrc].hd_dentry = h_d_start;
 	}
 	hdp[0 + cpg->bdst].hd_dentry = h_d_dst;
-	dinfo->di_bstart = cpg->bsrc;
+	dinfo->di_btop = cpg->bsrc;
 	cpg->bsrc = bsrc_orig;
 
 	return err;
@@ -1301,7 +1301,7 @@ int au_cp_dirs(struct dentry *dentry, aufs_bindex_t bdst,
 		/* somebody else might create while we were sleeping */
 		if (!au_h_dptr(d, bdst) || !au_h_dptr(d, bdst)->d_inode) {
 			if (au_h_dptr(d, bdst))
-				au_update_dbstart(d);
+				au_update_dbtop(d);
 
 			au_pin_set_dentry(&pin, d);
 			err = au_do_pin(&pin);

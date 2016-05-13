@@ -433,9 +433,9 @@ static void au_br_do_add_hdp(struct au_dinfo *dinfo, aufs_bindex_t bindex,
 	hdp = dinfo->di_hdentry + bindex;
 	memmove(hdp + 1, hdp, sizeof(*hdp) * amount);
 	au_h_dentry_init(hdp);
-	dinfo->di_bend++;
+	dinfo->di_bbot++;
 	if (unlikely(bend < 0))
-		dinfo->di_bstart = 0;
+		dinfo->di_btop = 0;
 }
 
 static void au_br_do_add_hip(struct au_iinfo *iinfo, aufs_bindex_t bindex,
@@ -658,8 +658,8 @@ static int test_dentry_busy(struct dentry *root, aufs_bindex_t bindex,
 			}
 
 			/* AuDbgDentry(d); */
-			bstart = au_dbstart(d);
-			bend = au_dbend(d);
+			bstart = au_dbtop(d);
+			bend = au_dbbot(d);
 			if (bstart <= bindex
 			    && bindex <= bend
 			    && au_h_dptr(d, bindex)
@@ -912,7 +912,7 @@ static void au_br_do_del_hdp(struct au_dinfo *dinfo, const aufs_bindex_t bindex,
 		memmove(hdp + bindex, hdp + bindex + 1,
 			sizeof(*hdp) * (bend - bindex));
 	hdp[0 + bend].hd_dentry = NULL;
-	dinfo->di_bend--;
+	dinfo->di_bbot--;
 
 	p = krealloc(hdp, sizeof(*p) * bend, AuGFP_SBILIST);
 	if (p)
