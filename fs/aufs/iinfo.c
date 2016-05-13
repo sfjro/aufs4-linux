@@ -152,7 +152,7 @@ void au_update_ibrange(struct inode *inode, int do_put_zero)
 
 	iinfo->ii_btop = -1;
 	iinfo->ii_bbot = -1;
-	bend = au_sbend(inode->i_sb);
+	bend = au_sbbot(inode->i_sb);
 	for (bindex = 0; bindex <= bend; bindex++)
 		if (iinfo->ii_hinode[0 + bindex].hi_inode) {
 			iinfo->ii_btop = bindex;
@@ -187,7 +187,7 @@ int au_iinfo_init(struct inode *inode)
 
 	sb = inode->i_sb;
 	iinfo = &(container_of(inode, struct au_icntnr, vfs_inode)->iinfo);
-	nbr = au_sbend(sb) + 1;
+	nbr = au_sbbot(sb) + 1;
 	if (unlikely(nbr <= 0))
 		nbr = 1;
 	iinfo->ii_hinode = kcalloc(nbr, sizeof(*iinfo->ii_hinode), GFP_NOFS);

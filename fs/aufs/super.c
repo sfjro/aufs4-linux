@@ -98,7 +98,7 @@ static int au_show_brs(struct seq_file *seq, struct super_block *sb)
 	au_br_perm_str_t perm;
 
 	err = 0;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	hdp = au_di(sb->s_root)->di_hdentry;
 	for (bindex = 0; !err && bindex <= bend; bindex++) {
 		br = au_sbr(sb, bindex);
@@ -344,7 +344,7 @@ static int au_statfs_sum(struct super_block *sb, struct kstatfs *buf)
 	blocks = 0;
 	bfree = 0;
 	bavail = 0;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	for (bindex = 0; bindex <= bend; bindex++) {
 		h_path.mnt = au_sbr_mnt(sb, bindex);
 		h_sb = h_path.mnt->mnt_sb;
@@ -434,7 +434,7 @@ static int aufs_sync_fs(struct super_block *sb, int wait)
 
 	err = 0;
 	si_noflush_read_lock(sb);
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	for (bindex = 0; bindex <= bend; bindex++) {
 		br = au_sbr(sb, bindex);
 		if (!au_br_writable(br->br_perm))
@@ -712,7 +712,7 @@ static void au_remount_refresh(struct super_block *sb, unsigned int do_idop)
 	IiMustNoWaiters(inode);
 
 	udba = au_opt_udba(sb);
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	for (bindex = 0; bindex <= bend; bindex++) {
 		br = au_sbr(sb, bindex);
 		err = au_hnotify_reset_br(udba, br, br->br_perm);

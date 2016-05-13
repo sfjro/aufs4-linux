@@ -54,7 +54,7 @@ static int au_ii_refresh(struct inode *inode, int *update)
 	sb = inode->i_sb;
 	type = inode->i_mode & S_IFMT;
 	iinfo = au_ii(inode);
-	err = au_ii_realloc(iinfo, au_sbend(sb) + 1);
+	err = au_ii_realloc(iinfo, au_sbbot(sb) + 1);
 	if (unlikely(err))
 		goto out;
 

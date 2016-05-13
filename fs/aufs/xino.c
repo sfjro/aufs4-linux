@@ -263,7 +263,7 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex)
 		goto out;
 
 	err = -EINVAL;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	if (unlikely(bindex < 0 || bend < bindex))
 		goto out_st;
 	br = au_sbr(sb, bindex);
@@ -823,7 +823,7 @@ int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t h_ino,
 	struct super_block *tgt_sb;
 
 	shared_br = NULL;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	if (do_test) {
 		tgt_sb = au_br_sb(br);
 		for (bindex = 0; bindex <= bend; bindex++) {
@@ -923,7 +923,7 @@ static int xib_restore(struct super_block *sb)
 		goto out;
 
 	err = 0;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	for (bindex = 0; !err && bindex <= bend; bindex++)
 		if (!bindex || is_sb_shared(sb, bindex, bindex - 1) < 0)
 			err = do_xib_restore
@@ -1094,7 +1094,7 @@ static void xino_clear_br(struct super_block *sb)
 	aufs_bindex_t bindex, bend;
 	struct au_branch *br;
 
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	for (bindex = 0; bindex <= bend; bindex++) {
 		br = au_sbr(sb, bindex);
 		if (!br || !br->br_xino.xi_file)
@@ -1120,7 +1120,7 @@ static int au_xino_set_br(struct super_block *sb, struct file *base)
 	SiMustWriteLock(sb);
 
 	err = -ENOMEM;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	fpair = kcalloc(bend + 1, sizeof(*fpair), GFP_NOFS);
 	if (unlikely(!fpair))
 		goto out;
@@ -1252,7 +1252,7 @@ struct file *au_xino_def(struct super_block *sb)
 	aufs_bindex_t bend, bindex, bwr;
 
 	br = NULL;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	bwr = -1;
 	for (bindex = 0; bindex <= bend; bindex++) {
 		br = au_sbr(sb, bindex);

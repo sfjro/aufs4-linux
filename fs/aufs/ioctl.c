@@ -70,7 +70,7 @@ static int au_wbr_fd(struct path *path, struct aufs_wbr_fd __user *arg)
 	sb = path->dentry->d_sb;
 	root = sb->s_root;
 	aufs_read_lock(root, AuLock_IR);
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	if (wbrfd.brid >= 0) {
 		wbi = au_br_index(sb, wbrfd.brid);
 		if (unlikely(wbi < 0 || wbi > bend))

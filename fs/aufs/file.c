@@ -636,7 +636,7 @@ static void au_do_refresh_dir(struct file *file)
 
 	p = fidir->fd_hfile;
 	if (!au_test_mmapped(file) && !d_unlinked(file->f_path.dentry)) {
-		bend = au_sbend(sb);
+		bend = au_sbbot(sb);
 		for (finfo->fi_btop = 0; finfo->fi_btop <= bend;
 		     finfo->fi_btop++, p++)
 			if (p->hf_file) {
@@ -650,7 +650,7 @@ static void au_do_refresh_dir(struct file *file)
 		     finfo->fi_btop++, p++)
 			if (p->hf_file)
 				au_hfput(p, file);
-		bend = au_sbend(sb);
+		bend = au_sbbot(sb);
 	}
 
 	p = fidir->fd_hfile + bend;
@@ -685,7 +685,7 @@ static int refresh_file(struct file *file, int (*reopen)(struct file *file))
 		if (bindex != finfo->fi_btop)
 			au_set_fbstart(file, bindex);
 	} else {
-		err = au_fidir_realloc(finfo, au_sbend(dentry->d_sb) + 1);
+		err = au_fidir_realloc(finfo, au_sbbot(dentry->d_sb) + 1);
 		if (unlikely(err))
 			goto out;
 		au_do_refresh_dir(file);

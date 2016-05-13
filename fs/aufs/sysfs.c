@@ -172,7 +172,7 @@ ssize_t sysaufs_si_show(struct kobject *kobj, struct attribute *attr,
 
 	err = kstrtol(name, 10, &l);
 	if (!err) {
-		bend = au_sbend(sb);
+		bend = au_sbbot(sb);
 		if (l <= bend)
 			err = sysaufs_si_br(seq, sb, (aufs_bindex_t)l, idx);
 		else
@@ -206,7 +206,7 @@ static int au_brinfo(struct super_block *sb, union aufs_brinfo __user *arg)
 	struct au_branch *br;
 
 	si_read_lock(sb, AuLock_FLUSH);
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	err = bend + 1;
 	if (!arg)
 		goto out;
@@ -309,7 +309,7 @@ void sysaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 		return;
 
 	kobj = &au_sbi(sb)->si_kobj;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	for (; bindex <= bend; bindex++) {
 		br = au_sbr(sb, bindex);
 		br_sysfs = br->br_sysfs;
@@ -334,7 +334,7 @@ void sysaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 		return;
 
 	kobj = &au_sbi(sb)->si_kobj;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	for (; bindex <= bend; bindex++) {
 		br = au_sbr(sb, bindex);
 		br_sysfs = br->br_sysfs;

@@ -238,7 +238,7 @@ static int dbgaufs_xino_open(struct inode *inode, struct file *file)
 	sbinfo = inode->i_private;
 	sb = sbinfo->si_sb;
 	si_noflush_read_lock(sb);
-	if (l <= au_sbend(sb)) {
+	if (l <= au_sbbot(sb)) {
 		xf = au_sbr(sb, (aufs_bindex_t)l)->br_xino.xi_file;
 		err = dbgaufs_xi_open(xf, file, /*do_fcnt*/1);
 	} else
@@ -265,7 +265,7 @@ void dbgaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 	if (!au_sbi(sb)->si_dbgaufs)
 		return;
 
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	for (; bindex <= bend; bindex++) {
 		br = au_sbr(sb, bindex);
 		xi = &br->br_xino;
@@ -288,7 +288,7 @@ void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 	if (!parent)
 		return;
 
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	for (; bindex <= bend; bindex++) {
 		snprintf(name, sizeof(name), DbgaufsXi_PREFIX "%d", bindex);
 		br = au_sbr(sb, bindex);

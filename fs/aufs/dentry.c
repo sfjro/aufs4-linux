@@ -439,12 +439,12 @@ static int au_do_refresh_hdentry(struct dentry *dentry, struct dentry *parent)
 	}
 
 	dinfo->di_bwh = -1;
-	if (bwh >= 0 && bwh <= au_sbend(sb) && au_sbr_whable(sb, bwh))
+	if (bwh >= 0 && bwh <= au_sbbot(sb) && au_sbr_whable(sb, bwh))
 		dinfo->di_bwh = bwh;
 
 	dinfo->di_bdiropq = -1;
 	if (bdiropq >= 0
-	    && bdiropq <= au_sbend(sb)
+	    && bdiropq <= au_sbbot(sb)
 	    && au_sbr_whable(sb, bdiropq))
 		dinfo->di_bdiropq = bdiropq;
 
@@ -736,7 +736,7 @@ int au_refresh_dentry(struct dentry *dentry, struct dentry *parent)
 		goto out;
 
 	dinfo = au_di(dentry);
-	err = au_di_realloc(dinfo, au_sbend(sb) + 1);
+	err = au_di_realloc(dinfo, au_sbbot(sb) + 1);
 	if (unlikely(err))
 		goto out;
 	ebrange = au_dbrange_test(dentry);

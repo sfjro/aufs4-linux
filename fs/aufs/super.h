@@ -116,7 +116,7 @@ struct au_sbinfo {
 	/* see AuSi_ flags */
 	unsigned char		au_si_status;
 
-	aufs_bindex_t		si_bend;
+	aufs_bindex_t		si_bbot;
 
 	/* dirty trick to keep br_id plus */
 	unsigned int		si_last_br_id :
@@ -564,10 +564,10 @@ static inline void si_downgrade_lock(struct super_block *sb)
 
 /* ---------------------------------------------------------------------- */
 
-static inline aufs_bindex_t au_sbend(struct super_block *sb)
+static inline aufs_bindex_t au_sbbot(struct super_block *sb)
 {
 	SiMustAnyLock(sb);
-	return au_sbi(sb)->si_bend;
+	return au_sbi(sb)->si_bbot;
 }
 
 static inline unsigned int au_mntflags(struct super_block *sb)

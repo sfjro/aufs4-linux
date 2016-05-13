@@ -343,7 +343,7 @@ static int au_wbr_create_init_rr(struct super_block *sb)
 {
 	int err;
 
-	err = au_wbr_bu(sb, au_sbend(sb));
+	err = au_wbr_bu(sb, au_sbbot(sb));
 	atomic_set(&au_sbi(sb)->si_wbr_rr_next, -err); /* less important */
 	/* smp_mb(); */
 
@@ -365,7 +365,7 @@ static int au_wbr_create_rr(struct dentry *dentry, unsigned int flags)
 
 	sb = dentry->d_sb;
 	next = &au_sbi(sb)->si_wbr_rr_next;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	nbr = bend + 1;
 	for (bindex = 0; bindex <= bend; bindex++) {
 		if (!au_ftest_wbr(flags, DIR)) {
@@ -422,7 +422,7 @@ static void au_mfs(struct dentry *dentry, struct dentry *parent)
 	mfs->mfsrr_bytes = 0;
 	if (!parent) {
 		bindex = 0;
-		bend = au_sbend(sb);
+		bend = au_sbbot(sb);
 	} else {
 		bindex = au_dbstart(parent);
 		bend = au_dbtaildir(parent);

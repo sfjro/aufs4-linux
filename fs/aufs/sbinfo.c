@@ -75,7 +75,7 @@ int au_si_alloc(struct super_block *sb)
 	atomic_long_set(&sbinfo->si_ninodes, 0);
 	atomic_long_set(&sbinfo->si_nfiles, 0);
 
-	sbinfo->si_bend = -1;
+	sbinfo->si_bbot = -1;
 	sbinfo->si_last_br_id = AUFS_BRANCH_MAX / 2;
 
 	sbinfo->si_wbr_copyup = AuWbrCopyup_Def;
@@ -133,7 +133,7 @@ int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr)
 	AuRwMustWriteLock(&sbinfo->si_rwsem);
 
 	err = -ENOMEM;
-	sz = sizeof(*brp) * (sbinfo->si_bend + 1);
+	sz = sizeof(*brp) * (sbinfo->si_bbot + 1);
 	if (unlikely(!sz))
 		sz = sizeof(*brp);
 	brp = au_kzrealloc(sbinfo->si_branch, sz, sizeof(*brp) * nbr, GFP_NOFS);

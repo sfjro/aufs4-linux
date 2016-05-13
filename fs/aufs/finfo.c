@@ -68,7 +68,7 @@ struct au_fidir *au_fidir_alloc(struct super_block *sb)
 	struct au_fidir *fidir;
 	int nbr;
 
-	nbr = au_sbend(sb) + 1;
+	nbr = au_sbbot(sb) + 1;
 	if (nbr < 2)
 		nbr = 2; /* initial allocate for 2 branches */
 	fidir = kzalloc(au_fidir_sz(nbr), GFP_NOFS);

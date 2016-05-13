@@ -37,7 +37,7 @@ struct au_dinfo *au_di_alloc(struct super_block *sb, unsigned int lsc)
 	if (unlikely(!dinfo))
 		goto out;
 
-	nbr = au_sbend(sb) + 1;
+	nbr = au_sbbot(sb) + 1;
 	if (nbr <= 0)
 		nbr = 1;
 	dinfo->di_hdentry = kcalloc(nbr, sizeof(*dinfo->di_hdentry), GFP_NOFS);

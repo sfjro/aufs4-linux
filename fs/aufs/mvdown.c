@@ -71,7 +71,7 @@ static int find_lower_writable(struct au_mvd_args *a)
 
 	sb = a->sb;
 	bindex = a->mvd_bsrc;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	if (a->mvdown.flags & AUFS_MVDOWN_FHSM_LOWER)
 		for (bindex++; bindex <= bend; bindex++) {
 			br = au_sbr(sb, bindex);
@@ -570,7 +570,7 @@ static int au_mvd_args(const unsigned char dmsg, struct au_mvd_args *a)
 			goto out;
 		}
 	}
-	if (unlikely(a->mvd_bsrc == au_sbend(a->sb))) {
+	if (unlikely(a->mvd_bsrc == au_sbbot(a->sb))) {
 		a->mvd_errno = EAU_MVDOWN_BOTTOM;
 		AU_MVD_PR(dmsg, "on the bottom\n");
 		goto out;
@@ -600,7 +600,7 @@ static int au_mvd_args(const unsigned char dmsg, struct au_mvd_args *a)
 	} else {
 		a->mvd_bdst = au_br_index(a->sb, a->mvd_dst_brid);
 		if (unlikely(a->mvd_bdst < 0
-			     || au_sbend(a->sb) < a->mvd_bdst)) {
+			     || au_sbbot(a->sb) < a->mvd_bdst)) {
 			a->mvd_errno = EAU_MVDOWN_NOLOWERBR;
 			AU_MVD_PR(dmsg, "no lower brid\n");
 			goto out;

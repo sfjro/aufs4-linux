@@ -79,7 +79,7 @@ void au_br_free(struct au_sbinfo *sbinfo)
 
 	AuRwMustWriteLock(&sbinfo->si_rwsem);
 
-	bmax = sbinfo->si_bend + 1;
+	bmax = sbinfo->si_bbot + 1;
 	br = sbinfo->si_branch;
 	while (bmax--)
 		au_br_do_free(*br++);
@@ -92,7 +92,7 @@ int au_br_index(struct super_block *sb, aufs_bindex_t br_id)
 {
 	aufs_bindex_t bindex, bend;
 
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	for (bindex = 0; bindex <= bend; bindex++)
 		if (au_sbr_id(sb, bindex) == br_id)
 			return bindex;
@@ -202,7 +202,7 @@ static int test_add(struct super_block *sb, struct au_opt_add *add, int remount)
 	struct inode *inode, *h_inode;
 
 	root = sb->s_root;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	if (unlikely(bend >= 0
 		     && au_find_dbindex(root, add->path.dentry) >= 0)) {
 		err = 1;
@@ -418,9 +418,9 @@ static void au_br_do_add_brp(struct au_sbinfo *sbinfo, aufs_bindex_t bindex,
 	brp = sbinfo->si_branch + bindex;
 	memmove(brp + 1, brp, sizeof(*brp) * amount);
 	*brp = br;
-	sbinfo->si_bend++;
+	sbinfo->si_bbot++;
 	if (unlikely(bend < 0))
-		sbinfo->si_bend = 0;
+		sbinfo->si_bbot = 0;
 }
 
 static void au_br_do_add_hdp(struct au_dinfo *dinfo, aufs_bindex_t bindex,
@@ -463,7 +463,7 @@ static void au_br_do_add(struct super_block *sb, struct au_branch *br,
 
 	root = sb->s_root;
 	root_inode = root->d_inode;
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	amount = bend + 1 - bindex;
 	h_dentry = au_br_dentry(br);
 	au_sbilist_lock();
@@ -495,7 +495,7 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 		goto out; /* success */
 	}
 
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	add_branch = au_br_alloc(sb, bend + 2, add->perm);
 	err = PTR_ERR(add_branch);
 	if (IS_ERR(add_branch))
@@ -892,7 +892,7 @@ static void au_br_do_del_brp(struct au_sbinfo *sbinfo,
 	if (bindex < bend)
 		memmove(brp, brp + 1, sizeof(*brp) * (bend - bindex));
 	sbinfo->si_branch[0 + bend] = NULL;
-	sbinfo->si_bend--;
+	sbinfo->si_bbot--;
 
 	p = krealloc(sbinfo->si_branch, sizeof(*p) * bend, AuGFP_SBILIST);
 	if (p)
@@ -954,7 +954,7 @@ static void au_br_do_del(struct super_block *sb, aufs_bindex_t bindex,
 	root = sb->s_root;
 	inode = root->d_inode;
 	sbinfo = au_sbi(sb);
-	bend = sbinfo->si_bend;
+	bend = sbinfo->si_bbot;
 
 	h_root = au_h_dptr(root, bindex);
 	hinode = au_hi(inode, bindex);
@@ -1007,7 +1007,7 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 	err = -EBUSY;
 	mnt_flags = au_mntflags(sb);
 	verbose = !!au_opt_test(mnt_flags, VERBOSE);
-	bend = au_sbend(sb);
+	bend = au_sbbot(sb);
 	if (unlikely(!bend)) {
 		AuVerbose(verbose, "no more branches left\n");
 		goto out;
@@ -1115,7 +1115,7 @@ static int au_ibusy(struct super_block *sb, struct aufs_ibusy __user *arg)
 
 	err = -EINVAL;
 	si_read_lock(sb, AuLock_FLUSH);
-	if (unlikely(ibusy.bindex < 0 || ibusy.bindex > au_sbend(sb)))
+	if (unlikely(ibusy.bindex < 0 || ibusy.bindex > au_sbbot(sb)))
 		goto out_unlock;
 
 	err = 0;
