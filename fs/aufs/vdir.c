@@ -577,8 +577,8 @@ static int au_do_read_vdir(struct fillvdir_arg *arg)
 		shwh = 1;
 		au_fset_fillvdir(arg->flags, SHWH);
 	}
-	bstart = au_fbstart(file);
-	bend = au_fbend_dir(file);
+	bstart = au_fbtop(file);
+	bend = au_fbbot_dir(file);
 	for (bindex = bstart; !err && bindex <= bend; bindex++) {
 		hf = au_hf_dir(file, bindex);
 		if (!hf)

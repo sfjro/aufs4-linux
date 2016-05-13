@@ -63,8 +63,8 @@ loff_t au_dir_size(struct file *file, struct dentry *dentry)
 	if (file) {
 		AuDebugOn(!d_is_dir(file->f_path.dentry));
 
-		bend = au_fbend_dir(file);
-		for (bindex = au_fbstart(file);
+		bend = au_fbbot_dir(file);
+		for (bindex = au_fbtop(file);
 		     bindex <= bend && sz < KMALLOC_MAX_SIZE;
 		     bindex++) {
 			h_file = au_hf_dir(file, bindex);
@@ -212,14 +212,14 @@ static int reopen_dir(struct file *file)
 	/* open all lower dirs */
 	dentry = file->f_path.dentry;
 	bstart = au_dbtop(dentry);
-	for (bindex = au_fbstart(file); bindex < bstart; bindex++)
+	for (bindex = au_fbtop(file); bindex < bstart; bindex++)
 		au_set_h_fptr(file, bindex, NULL);
-	au_set_fbstart(file, bstart);
+	au_set_fbtop(file, bstart);
 
 	btail = au_dbtaildir(dentry);
-	for (bindex = au_fbend_dir(file); btail < bindex; bindex--)
+	for (bindex = au_fbbot_dir(file); btail < bindex; bindex--)
 		au_set_h_fptr(file, bindex, NULL);
-	au_set_fbend_dir(file, btail);
+	au_set_fbbot_dir(file, btail);
 
 	flags = vfsub_file_flags(file);
 	for (bindex = bstart; bindex <= btail; bindex++) {
@@ -260,9 +260,9 @@ static int do_open_dir(struct file *file, int flags, struct file *h_file)
 	dentry = file->f_path.dentry;
 	file->f_version = dentry->d_inode->i_version;
 	bindex = au_dbtop(dentry);
-	au_set_fbstart(file, bindex);
+	au_set_fbtop(file, bindex);
 	btail = au_dbtaildir(dentry);
-	au_set_fbend_dir(file, btail);
+	au_set_fbbot_dir(file, btail);
 	for (; !err && bindex <= btail; bindex++) {
 		h_dentry = au_h_dptr(dentry, bindex);
 		if (!h_dentry)
@@ -285,10 +285,10 @@ static int do_open_dir(struct file *file, int flags, struct file *h_file)
 		return 0; /* success */
 
 	/* close all */
-	for (bindex = au_fbstart(file); bindex <= btail; bindex++)
+	for (bindex = au_fbtop(file); bindex <= btail; bindex++)
 		au_set_h_fptr(file, bindex, NULL);
-	au_set_fbstart(file, -1);
-	au_set_fbend_dir(file, -1);
+	au_set_fbtop(file, -1);
+	au_set_fbbot_dir(file, -1);
 
 	return err;
 }
@@ -360,8 +360,8 @@ static int au_do_flush_dir(struct file *file, fl_owner_t id)
 	struct file *h_file;
 
 	err = 0;
-	bend = au_fbend_dir(file);
-	for (bindex = au_fbstart(file); !err && bindex <= bend; bindex++) {
+	bend = au_fbbot_dir(file);
+	for (bindex = au_fbtop(file); !err && bindex <= bend; bindex++) {
 		h_file = au_hf_dir(file, bindex);
 		if (h_file)
 			err = vfsub_flush(h_file, id);
@@ -418,8 +418,8 @@ static int au_do_fsync_dir(struct file *file, int datasync)
 
 	inode = file_inode(file);
 	sb = inode->i_sb;
-	bend = au_fbend_dir(file);
-	for (bindex = au_fbstart(file); !err && bindex <= bend; bindex++) {
+	bend = au_fbbot_dir(file);
+	for (bindex = au_fbtop(file); !err && bindex <= bend; bindex++) {
 		h_file = au_hf_dir(file, bindex);
 		if (!h_file || au_test_ro(sb, bindex, inode))
 			continue;

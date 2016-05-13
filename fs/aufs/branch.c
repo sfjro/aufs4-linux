@@ -772,8 +772,8 @@ static int test_dir_busy(struct file *file, aufs_bindex_t br_id,
 	matched = 0;
 	fidir = au_fi(file)->fi_hdir;
 	AuDebugOn(!fidir);
-	bend = au_fbend_dir(file);
-	for (bindex = au_fbstart(file); bindex <= bend; bindex++) {
+	bend = au_fbbot_dir(file);
+	for (bindex = au_fbtop(file); bindex <= bend; bindex++) {
 		hfile = fidir->fd_hfile + bindex;
 		if (!hfile->hf_file)
 			continue;
@@ -816,7 +816,7 @@ static int test_file_busy(struct super_block *sb, aufs_bindex_t br_id,
 
 		/* AuDbg("%pD\n", file); */
 		fi_read_lock(file);
-		bstart = au_fbstart(file);
+		bstart = au_fbtop(file);
 		if (!d_is_dir(file->f_path.dentry)) {
 			hfile = &au_fi(file)->fi_htop;
 			if (hfile->hf_br->br_id == br_id)
@@ -855,8 +855,8 @@ static void br_del_file(struct file **to_free, unsigned long long opened,
 		fidir = au_fi(file)->fi_hdir;
 		AuDebugOn(!fidir);
 		fi_write_lock(file);
-		bstart = au_fbstart(file);
-		bend = au_fbend_dir(file);
+		bstart = au_fbtop(file);
+		bend = au_fbbot_dir(file);
 		for (bindex = bstart; bindex <= bend; bindex++) {
 			hfile = fidir->fd_hfile + bindex;
 			if (!hfile->hf_file)
@@ -872,7 +872,7 @@ static void br_del_file(struct file **to_free, unsigned long long opened,
 		if (bfound == bstart) {
 			for (bstart++; bstart <= bend; bstart++)
 				if (au_hf_dir(file, bstart)) {
-					au_set_fbstart(file, bstart);
+					au_set_fbtop(file, bstart);
 					break;
 				}
 		}

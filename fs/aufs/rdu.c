@@ -188,10 +188,10 @@ static int au_rdu(struct file *file, struct aufs_rdu *rdu)
 		if (!rdu->blk)
 			rdu->blk = au_dir_size(file, /*dentry*/NULL);
 	}
-	bend = au_fbstart(file);
+	bend = au_fbtop(file);
 	if (cookie->bindex < bend)
 		cookie->bindex = bend;
-	bend = au_fbend_dir(file);
+	bend = au_fbbot_dir(file);
 	/* AuDbg("b%d, b%d\n", cookie->bindex, bend); */
 	for (; !err && cookie->bindex <= bend;
 	     cookie->bindex++, cookie->h_pos = 0) {

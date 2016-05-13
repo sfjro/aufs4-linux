@@ -65,7 +65,7 @@ int au_do_open_nondir(struct file *file, int flags, struct file *h_file)
 			h_inode->i_state |= I_LINKABLE;
 			spin_unlock(&h_inode->i_lock);
 		}
-		au_set_fbstart(file, bindex);
+		au_set_fbtop(file, bindex);
 		au_set_h_fptr(file, bindex, h_file);
 		au_update_figen(file);
 		/* todo: necessary? */
@@ -200,7 +200,7 @@ static struct file *au_write_pre(struct file *file, int do_ready,
 
 	di_downgrade_lock(dentry, /*flags*/0);
 	if (wpre)
-		wpre->bstart = au_fbstart(file);
+		wpre->bstart = au_fbtop(file);
 	h_file = au_hf_top(file);
 	get_file(h_file);
 	if (wpre)
