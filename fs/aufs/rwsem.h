@@ -34,6 +34,15 @@ struct au_rwsem {
 #endif
 };
 
+#ifdef CONFIG_LOCKDEP
+#define au_lockdep_set_name(rw)						\
+	lockdep_set_class_and_name(&(rw)->rwsem,			\
+				   /*original key*/(rw)->rwsem.dep_map.key, \
+				   /*name*/#rw)
+#else
+#define au_lockdep_set_name(rw) do {} while (0)
+#endif
+
 #ifdef CONFIG_AUFS_DEBUG
 #define AuDbgCntInit(rw) do { \
 	atomic_set(&(rw)->rcnt, 0); \
@@ -63,28 +72,23 @@ struct au_rwsem {
 #define AuRwDestroy(rw)		AuDebugOn(atomic_read(&(rw)->rcnt) \
 					|| atomic_read(&(rw)->wcnt))
 
-#define au_rw_class(rw, key)	lockdep_set_class(&(rw)->rwsem, key)
+#define au_rw_init(rw) do {			\
+		AuDbgCntInit(rw);		\
+		init_rwsem(&(rw)->rwsem);	\
+		au_lockdep_set_name(rw);	\
+	} while (0)
 
-static inline void au_rw_init(struct au_rwsem *rw)
-{
-	AuDbgCntInit(rw);
-	init_rwsem(&rw->rwsem);
-}
+#define au_rw_init_wlock(rw) do {		\
+		au_rw_init(rw);			\
+		down_write(&(rw)->rwsem);	\
+		AuDbgWcntInc(rw);		\
+	} while (0)
 
-static inline void au_rw_init_wlock(struct au_rwsem *rw)
-{
-	au_rw_init(rw);
-	down_write(&rw->rwsem);
-	AuDbgWcntInc(rw);
-}
-
-static inline void au_rw_init_wlock_nested(struct au_rwsem *rw,
-					   unsigned int lsc)
-{
-	au_rw_init(rw);
-	down_write_nested(&rw->rwsem, lsc);
-	AuDbgWcntInc(rw);
-}
+#define au_rw_init_wlock_nested(rw, lsc) do { \
+		au_rw_init(rw);				\
+		down_write_nested(&(rw)->rwsem, lsc);	\
+		AuDbgWcntInc(rw);			\
+	} while (0)
 
 static inline void au_rw_read_lock(struct au_rwsem *rw)
 {
@@ -154,10 +158,8 @@ static inline int au_rw_write_trylock(struct au_rwsem *rw)
 	return ret;
 }
 
-#undef AuDbgCntInit
 #undef AuDbgRcntInc
 #undef AuDbgRcntDec
-#undef AuDbgWcntInc
 #undef AuDbgWcntDec
 
 #define AuSimpleLockRwsemFuncs(prefix, param, rwsem) \

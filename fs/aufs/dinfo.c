@@ -24,10 +24,8 @@
 void au_di_init_once(void *_dinfo)
 {
 	struct au_dinfo *dinfo = _dinfo;
-	static struct lock_class_key aufs_di;
 
 	au_rw_init(&dinfo->di_rwsem);
-	au_rw_class(&dinfo->di_rwsem, &aufs_di);
 }
 
 struct au_dinfo *au_di_alloc(struct super_block *sb, unsigned int lsc)

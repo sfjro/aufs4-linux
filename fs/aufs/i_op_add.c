@@ -494,15 +494,7 @@ out_parent:
 	di_write_unlock(parent);
 	dput(parent);
 	di_write_unlock(dentry);
-	if (!err)
-#if 0
-		/* verbose coding for lock class name */
-		au_rw_class(&au_di(dentry)->di_rwsem,
-			    au_lc_key + AuLcNonDir_DIINFO);
-#else
-		;
-#endif
-	else {
+	if (unlikely(err)) {
 		au_di_fin(dentry);
 		dentry->d_fsdata = NULL;
 	}

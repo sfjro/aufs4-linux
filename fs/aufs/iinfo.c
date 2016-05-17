@@ -175,11 +175,9 @@ void au_icntnr_init_once(void *_c)
 {
 	struct au_icntnr *c = _c;
 	struct au_iinfo *iinfo = &c->iinfo;
-	static struct lock_class_key aufs_ii;
 
 	spin_lock_init(&iinfo->ii_generation.ig_spin);
 	au_rw_init(&iinfo->ii_rwsem);
-	au_rw_class(&iinfo->ii_rwsem, &aufs_ii);
 	inode_init_once(&c->vfs_inode);
 }
 
