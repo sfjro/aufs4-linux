@@ -822,6 +822,11 @@ void au_export_init(struct super_block *sb)
 	struct au_sbinfo *sbinfo;
 	__u32 u;
 
+	BUILD_BUG_ON_MSG(IS_BUILTIN(CONFIG_AUFS_FS)
+			 && IS_MODULE(CONFIG_EXPORTFS),
+			 AUFS_NAME ": unsupported configuration "
+			 "CONFIG_EXPORTFS=m and CONFIG_AUFS_FS=y");
+
 	sb->s_export_op = &aufs_export_op;
 	sbinfo = au_sbi(sb);
 	sbinfo->si_xigen = NULL;
