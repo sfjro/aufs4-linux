@@ -21,6 +21,15 @@ struct au_rwsem {
 #endif
 };
 
+#ifdef CONFIG_LOCKDEP
+#define au_lockdep_set_name(rw)						\
+	lockdep_set_class_and_name(&(rw)->rwsem,			\
+				   /*original key*/(rw)->rwsem.dep_map.key, \
+				   /*name*/#rw)
+#else
+#define au_lockdep_set_name(rw) do {} while (0)
+#endif
+
 #ifdef CONFIG_AUFS_DEBUG
 #define AuDbgCntInit(rw) do { \
 	atomic_set(&(rw)->rcnt, 0); \
@@ -28,11 +37,15 @@ struct au_rwsem {
 	smp_mb(); /* atomic set */ \
 } while (0)
 
-#define AuDbgRcntInc(rw)	atomic_inc(&(rw)->rcnt)
-#define AuDbgRcntDec(rw)	WARN_ON(atomic_dec_return(&(rw)->rcnt) < 0)
-#define AuDbgWcntInc(rw)	atomic_inc(&(rw)->wcnt)
-#define AuDbgWcntDec(rw)	WARN_ON(atomic_dec_return(&(rw)->wcnt) < 0)
+#define AuDbgCnt(rw, cnt)	atomic_read(&(rw)->cnt)
+#define AuDbgCntInc(rw, cnt)	atomic_inc(&(rw)->cnt)
+#define AuDbgCntDec(rw, cnt)	WARN_ON(atomic_dec_return(&(rw)->cnt) < 0)
+#define AuDbgRcntInc(rw)	AuDbgCntInc(rw, rcnt)
+#define AuDbgRcntDec(rw)	AuDbgCntDec(rw, rcnt)
+#define AuDbgWcntInc(rw)	AuDbgCntInc(rw, wcnt)
+#define AuDbgWcntDec(rw)	AuDbgCntDec(rw, wcnt)
 #else
+#define AuDbgCnt(rw, cnt)	0
 #define AuDbgCntInit(rw)	do {} while (0)
 #define AuDbgRcntInc(rw)	do {} while (0)
 #define AuDbgRcntDec(rw)	do {} while (0)
@@ -41,37 +54,32 @@ struct au_rwsem {
 #endif /* CONFIG_AUFS_DEBUG */
 
 /* to debug easier, do not make them inlined functions */
-#define AuRwMustNoWaiters(rw)	AuDebugOn(!list_empty(&(rw)->rwsem.wait_list))
+#define AuRwMustNoWaiters(rw)	AuDebugOn(rwsem_is_contended(&(rw)->rwsem))
 /* rwsem_is_locked() is unusable */
-#define AuRwMustReadLock(rw)	AuDebugOn(atomic_read(&(rw)->rcnt) <= 0)
-#define AuRwMustWriteLock(rw)	AuDebugOn(atomic_read(&(rw)->wcnt) <= 0)
-#define AuRwMustAnyLock(rw)	AuDebugOn(atomic_read(&(rw)->rcnt) <= 0 \
-					&& atomic_read(&(rw)->wcnt) <= 0)
-#define AuRwDestroy(rw)		AuDebugOn(atomic_read(&(rw)->rcnt) \
-					|| atomic_read(&(rw)->wcnt))
+#define AuRwMustReadLock(rw)	AuDebugOn(AuDbgCnt(rw, rcnt) <= 0)
+#define AuRwMustWriteLock(rw)	AuDebugOn(AuDbgCnt(rw, wcnt) <= 0)
+#define AuRwMustAnyLock(rw)	AuDebugOn(AuDbgCnt(rw, rcnt) <= 0	\
+					  && AuDbgCnt(rw, wcnt) <= 0)
+#define AuRwDestroy(rw)		AuDebugOn(AuDbgCnt(rw, rcnt)		\
+					  || AuDbgCnt(rw, wcnt))
 
-#define au_rw_class(rw, key)	lockdep_set_class(&(rw)->rwsem, key)
+#define au_rw_init(rw) do {			\
+		AuDbgCntInit(rw);		\
+		init_rwsem(&(rw)->rwsem);	\
+		au_lockdep_set_name(rw);	\
+	} while (0)
 
-static inline void au_rw_init(struct au_rwsem *rw)
-{
-	AuDbgCntInit(rw);
-	init_rwsem(&rw->rwsem);
-}
+#define au_rw_init_wlock(rw) do {		\
+		au_rw_init(rw);			\
+		down_write(&(rw)->rwsem);	\
+		AuDbgWcntInc(rw);		\
+	} while (0)
 
-static inline void au_rw_init_wlock(struct au_rwsem *rw)
-{
-	au_rw_init(rw);
-	down_write(&rw->rwsem);
-	AuDbgWcntInc(rw);
-}
-
-static inline void au_rw_init_wlock_nested(struct au_rwsem *rw,
-					   unsigned int lsc)
-{
-	au_rw_init(rw);
-	down_write_nested(&rw->rwsem, lsc);
-	AuDbgWcntInc(rw);
-}
+#define au_rw_init_wlock_nested(rw, lsc) do { \
+		au_rw_init(rw);				\
+		down_write_nested(&(rw)->rwsem, lsc);	\
+		AuDbgWcntInc(rw);			\
+	} while (0)
 
 static inline void au_rw_read_lock(struct au_rwsem *rw)
 {
@@ -141,10 +149,9 @@ static inline int au_rw_write_trylock(struct au_rwsem *rw)
 	return ret;
 }
 
-#undef AuDbgCntInit
+#undef AuDbgCntDec
 #undef AuDbgRcntInc
 #undef AuDbgRcntDec
-#undef AuDbgWcntInc
 #undef AuDbgWcntDec
 
 #define AuSimpleLockRwsemFuncs(prefix, param, rwsem) \

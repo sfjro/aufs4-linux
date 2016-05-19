@@ -237,7 +237,7 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex)
 	int err;
 	unsigned long jiffy;
 	blkcnt_t blocks;
-	aufs_bindex_t bi, bend;
+	aufs_bindex_t bi, bbot;
 	struct kstatfs *st;
 	struct au_branch *br;
 	struct file *new_xino, *file;
@@ -250,8 +250,8 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex)
 		goto out;
 
 	err = -EINVAL;
-	bend = au_sbend(sb);
-	if (unlikely(bindex < 0 || bend < bindex))
+	bbot = au_sbbot(sb);
+	if (unlikely(bindex < 0 || bbot < bindex))
 		goto out_st;
 	br = au_sbr(sb, bindex);
 	file = br->br_xino.xi_file;
@@ -280,7 +280,7 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex)
 	br->br_xino.xi_file = new_xino;
 
 	h_sb = au_br_sb(br);
-	for (bi = 0; bi <= bend; bi++) {
+	for (bi = 0; bi <= bbot; bi++) {
 		if (unlikely(bi == bindex))
 			continue;
 		br = au_sbr(sb, bi);
@@ -335,7 +335,7 @@ static void xino_do_trunc(void *_args)
 	if (unlikely(err))
 		pr_warn("err b%d, (%d)\n", bindex, err);
 	atomic_dec(&br->br_xino_running);
-	atomic_dec(&br->br_count);
+	au_br_put(br);
 	si_write_unlock(sb);
 	au_nwt_done(&au_sbi(sb)->si_nowait);
 	kfree(args);
@@ -383,7 +383,7 @@ static void xino_try_trunc(struct super_block *sb, struct au_branch *br)
 		goto out_args;
 	}
 
-	atomic_inc(&br->br_count);
+	au_br_get(br);
 	args->sb = sb;
 	args->br = br;
 	wkq_err = au_wkq_nowait(xino_do_trunc, args, sb, /*flags*/0);
@@ -391,7 +391,7 @@ static void xino_try_trunc(struct super_block *sb, struct au_branch *br)
 		return; /* success */
 
 	pr_err("wkq %d\n", wkq_err);
-	atomic_dec(&br->br_count);
+	au_br_put(br);
 
 out_args:
 	kfree(args);
@@ -554,7 +554,7 @@ void au_xino_delete_inode(struct inode *inode, const int unlinked)
 {
 	int err;
 	unsigned int mnt_flags;
-	aufs_bindex_t bindex, bend, bi;
+	aufs_bindex_t bindex, bbot, bi;
 	unsigned char try_trunc;
 	struct au_iinfo *iinfo;
 	struct super_block *sb;
@@ -562,6 +562,8 @@ void au_xino_delete_inode(struct inode *inode, const int unlinked)
 	struct inode *h_inode;
 	struct au_branch *br;
 	au_writef_t xwrite;
+
+	AuDebugOn(is_bad_inode(inode));
 
 	sb = inode->i_sb;
 	mnt_flags = au_mntflags(sb);
@@ -575,18 +577,15 @@ void au_xino_delete_inode(struct inode *inode, const int unlinked)
 	}
 
 	iinfo = au_ii(inode);
-	if (!iinfo)
-		return;
-
-	bindex = iinfo->ii_bstart;
+	bindex = iinfo->ii_btop;
 	if (bindex < 0)
 		return;
 
 	xwrite = au_sbi(sb)->si_xwrite;
 	try_trunc = !!au_opt_test(mnt_flags, TRUNC_XINO);
-	hi = iinfo->ii_hinode + bindex;
-	bend = iinfo->ii_bend;
-	for (; bindex <= bend; bindex++, hi++) {
+	hi = au_hinode(iinfo, bindex);
+	bbot = iinfo->ii_bbot;
+	for (; bindex <= bbot; bindex++, hi++) {
 		h_inode = hi->hi_inode;
 		if (!h_inode
 		    || (!unlinked && h_inode->i_nlink))
@@ -775,10 +774,10 @@ out:
 
 /*
  * find another branch who is on the same filesystem of the specified
- * branch{@btgt}. search until @bend.
+ * branch{@btgt}. search until @bbot.
  */
 static int is_sb_shared(struct super_block *sb, aufs_bindex_t btgt,
-			aufs_bindex_t bend)
+			aufs_bindex_t bbot)
 {
 	aufs_bindex_t bindex;
 	struct super_block *tgt_sb = au_sbr_sb(sb, btgt);
@@ -786,7 +785,7 @@ static int is_sb_shared(struct super_block *sb, aufs_bindex_t btgt,
 	for (bindex = 0; bindex < btgt; bindex++)
 		if (unlikely(tgt_sb == au_sbr_sb(sb, bindex)))
 			return bindex;
-	for (bindex++; bindex <= bend; bindex++)
+	for (bindex++; bindex <= bbot; bindex++)
 		if (unlikely(tgt_sb == au_sbr_sb(sb, bindex)))
 			return bindex;
 	return -1;
@@ -805,16 +804,16 @@ int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t h_ino,
 {
 	int err;
 	ino_t ino;
-	aufs_bindex_t bend, bindex;
+	aufs_bindex_t bbot, bindex;
 	struct au_branch *shared_br, *b;
 	struct file *file;
 	struct super_block *tgt_sb;
 
 	shared_br = NULL;
-	bend = au_sbend(sb);
+	bbot = au_sbbot(sb);
 	if (do_test) {
 		tgt_sb = au_br_sb(br);
-		for (bindex = 0; bindex <= bend; bindex++) {
+		for (bindex = 0; bindex <= bbot; bindex++) {
 			b = au_sbr(sb, bindex);
 			if (tgt_sb == au_br_sb(b)) {
 				shared_br = b;
@@ -902,7 +901,7 @@ out:
 static int xib_restore(struct super_block *sb)
 {
 	int err;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	void *page;
 
 	err = -ENOMEM;
@@ -911,8 +910,8 @@ static int xib_restore(struct super_block *sb)
 		goto out;
 
 	err = 0;
-	bend = au_sbend(sb);
-	for (bindex = 0; !err && bindex <= bend; bindex++)
+	bbot = au_sbbot(sb);
+	for (bindex = 0; !err && bindex <= bbot; bindex++)
 		if (!bindex || is_sb_shared(sb, bindex, bindex - 1) < 0)
 			err = do_xib_restore
 				(sb, au_sbr(sb, bindex)->br_xino.xi_file, page);
@@ -1079,11 +1078,11 @@ out:
 /* xino for each branch */
 static void xino_clear_br(struct super_block *sb)
 {
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	struct au_branch *br;
 
-	bend = au_sbend(sb);
-	for (bindex = 0; bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (bindex = 0; bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		if (!br || !br->br_xino.xi_file)
 			continue;
@@ -1097,7 +1096,7 @@ static int au_xino_set_br(struct super_block *sb, struct file *base)
 {
 	int err;
 	ino_t ino;
-	aufs_bindex_t bindex, bend, bshared;
+	aufs_bindex_t bindex, bbot, bshared;
 	struct {
 		struct file *old, *new;
 	} *fpair, *p;
@@ -1108,15 +1107,15 @@ static int au_xino_set_br(struct super_block *sb, struct file *base)
 	SiMustWriteLock(sb);
 
 	err = -ENOMEM;
-	bend = au_sbend(sb);
-	fpair = kcalloc(bend + 1, sizeof(*fpair), GFP_NOFS);
+	bbot = au_sbbot(sb);
+	fpair = kcalloc(bbot + 1, sizeof(*fpair), GFP_NOFS);
 	if (unlikely(!fpair))
 		goto out;
 
 	inode = sb->s_root->d_inode;
 	ino = AUFS_ROOT_INO;
 	writef = au_sbi(sb)->si_xwrite;
-	for (bindex = 0, p = fpair; bindex <= bend; bindex++, p++) {
+	for (bindex = 0, p = fpair; bindex <= bbot; bindex++, p++) {
 		br = au_sbr(sb, bindex);
 		bshared = is_sb_shared(sb, bindex, bindex - 1);
 		if (bshared >= 0) {
@@ -1142,7 +1141,7 @@ static int au_xino_set_br(struct super_block *sb, struct file *base)
 			goto out_pair;
 	}
 
-	for (bindex = 0, p = fpair; bindex <= bend; bindex++, p++) {
+	for (bindex = 0, p = fpair; bindex <= bbot; bindex++, p++) {
 		br = au_sbr(sb, bindex);
 		if (br->br_xino.xi_file)
 			fput(br->br_xino.xi_file);
@@ -1151,7 +1150,7 @@ static int au_xino_set_br(struct super_block *sb, struct file *base)
 	}
 
 out_pair:
-	for (bindex = 0, p = fpair; bindex <= bend; bindex++, p++)
+	for (bindex = 0, p = fpair; bindex <= bbot; bindex++, p++)
 		if (p->new)
 			fput(p->new);
 		else
@@ -1237,12 +1236,12 @@ struct file *au_xino_def(struct super_block *sb)
 	struct au_branch *br;
 	struct super_block *h_sb;
 	struct path path;
-	aufs_bindex_t bend, bindex, bwr;
+	aufs_bindex_t bbot, bindex, bwr;
 
 	br = NULL;
-	bend = au_sbend(sb);
+	bbot = au_sbbot(sb);
 	bwr = -1;
-	for (bindex = 0; bindex <= bend; bindex++) {
+	for (bindex = 0; bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		if (au_br_writable(br->br_perm)
 		    && !au_test_fs_bad_xino(au_br_sb(br))) {
