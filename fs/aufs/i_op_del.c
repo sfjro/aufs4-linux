@@ -34,25 +34,25 @@
 int au_wr_dir_need_wh(struct dentry *dentry, int isdir, aufs_bindex_t *bcpup)
 {
 	int need_wh, err;
-	aufs_bindex_t bstart;
+	aufs_bindex_t btop;
 	struct super_block *sb;
 
 	sb = dentry->d_sb;
-	bstart = au_dbstart(dentry);
+	btop = au_dbtop(dentry);
 	if (*bcpup < 0) {
-		*bcpup = bstart;
-		if (au_test_ro(sb, bstart, dentry->d_inode)) {
+		*bcpup = btop;
+		if (au_test_ro(sb, btop, dentry->d_inode)) {
 			err = AuWbrCopyup(au_sbi(sb), dentry);
 			*bcpup = err;
 			if (unlikely(err < 0))
 				goto out;
 		}
 	} else
-		AuDebugOn(bstart < *bcpup
+		AuDebugOn(btop < *bcpup
 			  || au_test_ro(sb, *bcpup, dentry->d_inode));
-	AuDbg("bcpup %d, bstart %d\n", *bcpup, bstart);
+	AuDbg("bcpup %d, btop %d\n", *bcpup, btop);
 
-	if (*bcpup != bstart) {
+	if (*bcpup != btop) {
 		err = au_cpup_dirs(dentry, *bcpup);
 		if (unlikely(err))
 			goto out;
@@ -67,7 +67,7 @@ int au_wr_dir_need_wh(struct dentry *dentry, int isdir, aufs_bindex_t *bcpup)
 			au_di_cp(tmp, dinfo);
 			au_di_swap(tmp, dinfo);
 			/* returns the number of positive dentries */
-			need_wh = au_lkup_dentry(dentry, bstart + 1, /*type*/0);
+			need_wh = au_lkup_dentry(dentry, btop + 1, /*type*/0);
 			au_di_swap(tmp, dinfo);
 			au_rw_write_unlock(&tmp->di_rwsem);
 			au_di_free(tmp);
@@ -176,7 +176,7 @@ lock_hdir_create_wh(struct dentry *dentry, int isdir, aufs_bindex_t *rbcpup,
 
 	h_path.dentry = au_pinned_h_parent(pin);
 	if (udba != AuOpt_UDBA_NONE
-	    && au_dbstart(dentry) == bcpup) {
+	    && au_dbtop(dentry) == bcpup) {
 		err = au_may_del(dentry, bcpup, h_path.dentry, isdir);
 		wh_dentry = ERR_PTR(err);
 		if (unlikely(err))
@@ -296,7 +296,7 @@ static int do_revert(int err, struct inode *dir, aufs_bindex_t bindex,
 int aufs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	int err;
-	aufs_bindex_t bwh, bindex, bstart;
+	aufs_bindex_t bwh, bindex, btop;
 	struct inode *inode, *h_dir, *delegated;
 	struct dentry *parent, *wh_dentry;
 	/* to reuduce stack size */
@@ -325,7 +325,7 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 	if (unlikely(d_is_dir(dentry)))
 		goto out_unlock; /* possible? */
 
-	bstart = au_dbstart(dentry);
+	btop = au_dbtop(dentry);
 	bwh = au_dbwh(dentry);
 	bindex = -1;
 	parent = dentry->d_parent; /* dir inode is locked */
@@ -336,10 +336,10 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 	if (IS_ERR(wh_dentry))
 		goto out_parent;
 
-	a->h_path.mnt = au_sbr_mnt(dentry->d_sb, bstart);
-	a->h_path.dentry = au_h_dptr(dentry, bstart);
+	a->h_path.mnt = au_sbr_mnt(dentry->d_sb, btop);
+	a->h_path.dentry = au_h_dptr(dentry, btop);
 	dget(a->h_path.dentry);
-	if (bindex == bstart) {
+	if (bindex == btop) {
 		h_dir = au_pinned_h_dir(&a->pin);
 		delegated = NULL;
 		err = vfsub_unlink(h_dir, &a->h_path, &delegated, /*force*/0);
@@ -360,7 +360,7 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 		epilog(dir, dentry, bindex);
 
 		/* update target timestamps */
-		if (bindex == bstart) {
+		if (bindex == btop) {
 			vfsub_update_h_iattr(&a->h_path, /*did*/NULL);
 			/*ignore*/
 			inode->i_ctime = a->h_path.dentry->d_inode->i_ctime;
@@ -397,7 +397,7 @@ out:
 int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	int err, rmdir_later;
-	aufs_bindex_t bwh, bindex, bstart;
+	aufs_bindex_t bwh, bindex, btop;
 	struct inode *inode;
 	struct dentry *parent, *wh_dentry, *h_dentry;
 	struct au_whtmp_rmdir *args;
@@ -437,7 +437,7 @@ int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (unlikely(err))
 		goto out_parent;
 
-	bstart = au_dbstart(dentry);
+	btop = au_dbtop(dentry);
 	bwh = au_dbwh(dentry);
 	bindex = -1;
 	wh_dentry = lock_hdir_create_wh(dentry, /*isdir*/1, &bindex, &a->dt,
@@ -446,18 +446,18 @@ int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (IS_ERR(wh_dentry))
 		goto out_parent;
 
-	h_dentry = au_h_dptr(dentry, bstart);
+	h_dentry = au_h_dptr(dentry, btop);
 	dget(h_dentry);
 	rmdir_later = 0;
-	if (bindex == bstart) {
-		err = renwh_and_rmdir(dentry, bstart, &args->whlist, dir);
+	if (bindex == btop) {
+		err = renwh_and_rmdir(dentry, btop, &args->whlist, dir);
 		if (err > 0) {
 			rmdir_later = err;
 			err = 0;
 		}
 	} else {
 		/* stop monitoring */
-		au_hn_free(au_hi(inode, bstart));
+		au_hn_free(au_hi(inode, btop));
 
 		/* dir inode is locked */
 		IMustLock(wh_dentry->d_parent->d_inode);
@@ -470,7 +470,7 @@ int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 		epilog(dir, dentry, bindex);
 
 		if (rmdir_later) {
-			au_whtmp_kick_rmdir(dir, bstart, h_dentry, args);
+			au_whtmp_kick_rmdir(dir, btop, h_dentry, args);
 			args = NULL;
 		}
 

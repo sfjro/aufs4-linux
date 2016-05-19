@@ -39,7 +39,27 @@ void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp)
 /*
  * aufs caches
  */
-struct kmem_cache *au_cachep[AuCache_Last];
+struct kmem_cache *au_cachep[AuCache_Last] = {
+	[0] = NULL
+};
+
+static void au_cache_fin(void)
+{
+	int i;
+
+	/*
+	 * Make sure all delayed rcu free inodes are flushed before we
+	 * destroy cache.
+	 */
+	rcu_barrier();
+
+	/* excluding AuCache_HNOTIFY */
+	BUILD_BUG_ON(AuCache_HNOTIFY + 1 != AuCache_Last);
+	for (i = 0; i < AuCache_HNOTIFY; i++)
+		if (au_cachep[i])
+			kmem_cache_destroy(au_cachep[i]);
+}
+
 static int __init au_cache_init(void)
 {
 	au_cachep[AuCache_DINFO] = AuCacheCtor(au_dinfo, au_di_init_once);
@@ -57,26 +77,8 @@ static int __init au_cache_init(void)
 	if (au_cachep[AuCache_DEHSTR])
 		return 0;
 
+	au_cache_fin();
 	return -ENOMEM;
-}
-
-static void au_cache_fin(void)
-{
-	int i;
-
-	/*
-	 * Make sure all delayed rcu free inodes are flushed before we
-	 * destroy cache.
-	 */
-	rcu_barrier();
-
-	/* excluding AuCache_HNOTIFY */
-	BUILD_BUG_ON(AuCache_HNOTIFY + 1 != AuCache_Last);
-	for (i = 0; i < AuCache_HNOTIFY; i++)
-		if (au_cachep[i]) {
-			kmem_cache_destroy(au_cachep[i]);
-			au_cachep[i] = NULL;
-		}
 }
 
 /* ---------------------------------------------------------------------- */
@@ -90,8 +92,6 @@ int au_dir_roflags;
  */
 struct au_sphlhead au_sbilist;
 #endif
-
-struct lock_class_key au_lc_key[AuLcKey_Last];
 
 /*
  * functions for module interface.

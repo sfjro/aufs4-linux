@@ -837,7 +837,7 @@ static int au_opts_parse_idel(struct super_block *sb, aufs_bindex_t bindex,
 	err = -EINVAL;
 	root = sb->s_root;
 	aufs_read_lock(root, AuLock_FLUSH);
-	if (bindex < 0 || au_sbend(sb) < bindex) {
+	if (bindex < 0 || au_sbbot(sb) < bindex) {
 		pr_err("out of bounds, %d\n", bindex);
 		goto out;
 	}
@@ -893,7 +893,7 @@ static int au_opts_parse_imod(struct super_block *sb, aufs_bindex_t bindex,
 	err = -EINVAL;
 	root = sb->s_root;
 	aufs_read_lock(root, AuLock_FLUSH);
-	if (bindex < 0 || au_sbend(sb) < bindex) {
+	if (bindex < 0 || au_sbbot(sb) < bindex) {
 		pr_err("out of bounds, %d\n", bindex);
 		goto out;
 	}
@@ -942,7 +942,7 @@ au_opts_parse_xino_itrunc_path(struct super_block *sb,
 			       substring_t args[])
 {
 	int err;
-	aufs_bindex_t bend, bindex;
+	aufs_bindex_t bbot, bindex;
 	struct path path;
 	struct dentry *root;
 
@@ -955,8 +955,8 @@ au_opts_parse_xino_itrunc_path(struct super_block *sb,
 	xino_itrunc->bindex = -1;
 	root = sb->s_root;
 	aufs_read_lock(root, AuLock_FLUSH);
-	bend = au_sbend(sb);
-	for (bindex = 0; bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (bindex = 0; bindex <= bbot; bindex++) {
 		if (au_h_dptr(root, bindex) == path.dentry) {
 			xino_itrunc->bindex = bindex;
 			break;
@@ -1100,7 +1100,7 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 			}
 			u.xino_itrunc->bindex = n;
 			aufs_read_lock(root, AuLock_FLUSH);
-			if (n < 0 || au_sbend(sb) < n) {
+			if (n < 0 || au_sbbot(sb) < n) {
 				pr_err("out of bounds, %d\n", n);
 				aufs_read_unlock(root, !AuLock_IR);
 				break;
@@ -1478,7 +1478,7 @@ static int au_opt_br(struct super_block *sb, struct au_opt *opt,
 	err = 0;
 	switch (opt->type) {
 	case Opt_append:
-		opt->add.bindex = au_sbend(sb) + 1;
+		opt->add.bindex = au_sbbot(sb) + 1;
 		if (opt->add.bindex < 0)
 			opt->add.bindex = 0;
 		goto add;
@@ -1526,7 +1526,7 @@ static int au_opt_xino(struct super_block *sb, struct au_opt *opt,
 		       struct au_opts *opts)
 {
 	int err;
-	aufs_bindex_t bend, bindex;
+	aufs_bindex_t bbot, bindex;
 	struct dentry *root, *parent, *h_root;
 
 	err = 0;
@@ -1543,8 +1543,8 @@ static int au_opt_xino(struct super_block *sb, struct au_opt *opt,
 		/* safe d_parent access */
 		parent = opt->xino.file->f_path.dentry->d_parent;
 		root = sb->s_root;
-		bend = au_sbend(sb);
-		for (bindex = 0; bindex <= bend; bindex++) {
+		bbot = au_sbbot(sb);
+		for (bindex = 0; bindex <= bbot; bindex++) {
 			h_root = au_h_dptr(root, bindex);
 			if (h_root == parent) {
 				au_xino_brid_set(sb, au_sbr_id(sb, bindex));
@@ -1567,7 +1567,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		   unsigned int pending)
 {
 	int err, fhsm;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	unsigned char do_plink, skip, do_free, can_no_dreval;
 	struct au_branch *br;
 	struct au_wbr *wbr;
@@ -1603,8 +1603,8 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 	do_plink = !!au_opt_test(sbinfo->si_mntflags, PLINK);
 	can_no_dreval = !!au_opt_test((sbinfo->si_mntflags | pending),
 				      UDBA_NONE);
-	bend = au_sbend(sb);
-	for (bindex = 0; !err && bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (bindex = 0; !err && bindex <= bbot; bindex++) {
 		skip = 0;
 		h_dir = au_h_iptr(dir, bindex);
 		br = au_sbr(sb, bindex);
@@ -1690,7 +1690,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 
 	if (fhsm >= 2) {
 		au_fset_si(sbinfo, FHSM);
-		for (bindex = bend; bindex >= 0; bindex--) {
+		for (bindex = bbot; bindex >= 0; bindex--) {
 			br = au_sbr(sb, bindex);
 			if (au_br_fhsm(br->br_perm)) {
 				au_fhsm_set_bottom(sb, bindex);
@@ -1709,7 +1709,7 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 {
 	int err;
 	unsigned int tmp;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	struct au_opt *opt;
 	struct au_opt_xino *opt_xino, xino;
 	struct au_sbinfo *sbinfo;
@@ -1742,8 +1742,8 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 	else if (unlikely(err < 0))
 		goto out;
 
-	bend = au_sbend(sb);
-	if (unlikely(bend < 0)) {
+	bbot = au_sbbot(sb);
+	if (unlikely(bbot < 0)) {
 		err = -EINVAL;
 		pr_err("no branches\n");
 		goto out;
@@ -1778,8 +1778,8 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts)
 	tmp &= AuOptMask_UDBA;
 	sbinfo->si_mntflags &= ~AuOptMask_UDBA;
 	sbinfo->si_mntflags |= tmp;
-	bend = au_sbend(sb);
-	for (bindex = 0; bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (bindex = 0; bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		err = au_hnotify_reset_br(tmp, br, br->br_perm);
 		if (unlikely(err))

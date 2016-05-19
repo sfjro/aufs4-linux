@@ -53,7 +53,6 @@ int au_si_alloc(struct super_block *sb)
 {
 	int err, i;
 	struct au_sbinfo *sbinfo;
-	static struct lock_class_key aufs_si;
 
 	err = -ENOMEM;
 	sbinfo = kzalloc(sizeof(*sbinfo), GFP_NOFS);
@@ -71,13 +70,12 @@ int au_si_alloc(struct super_block *sb)
 
 	au_nwt_init(&sbinfo->si_nowait);
 	au_rw_init_wlock(&sbinfo->si_rwsem);
-	au_rw_class(&sbinfo->si_rwsem, &aufs_si);
 	mutex_init(&sbinfo->au_si_pid.pid_mtx);
 
 	atomic_long_set(&sbinfo->si_ninodes, 0);
 	atomic_long_set(&sbinfo->si_nfiles, 0);
 
-	sbinfo->si_bend = -1;
+	sbinfo->si_bbot = -1;
 	sbinfo->si_last_br_id = AUFS_BRANCH_MAX / 2;
 
 	sbinfo->si_wbr_copyup = AuWbrCopyup_Def;
@@ -135,7 +133,7 @@ int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr)
 	AuRwMustWriteLock(&sbinfo->si_rwsem);
 
 	err = -ENOMEM;
-	sz = sizeof(*brp) * (sbinfo->si_bend + 1);
+	sz = sizeof(*brp) * (sbinfo->si_bbot + 1);
 	if (unlikely(!sz))
 		sz = sizeof(*brp);
 	brp = au_kzrealloc(sbinfo->si_branch, sz, sizeof(*brp) * nbr, GFP_NOFS);
