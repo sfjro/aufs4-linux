@@ -144,13 +144,13 @@ AuSimpleRwsemFuncs(fi, struct file *f, &au_fi(f)->fi_rwsem);
 /* ---------------------------------------------------------------------- */
 
 /* todo: hard/soft set? */
-static inline aufs_bindex_t au_fbstart(struct file *file)
+static inline aufs_bindex_t au_fbtop(struct file *file)
 {
 	FiMustAnyLock(file);
 	return au_fi(file)->fi_btop;
 }
 
-static inline aufs_bindex_t au_fbend_dir(struct file *file)
+static inline aufs_bindex_t au_fbbot_dir(struct file *file)
 {
 	FiMustAnyLock(file);
 	AuDebugOn(!au_fi(file)->fi_hdir);
@@ -164,13 +164,13 @@ static inline struct au_vdir *au_fvdir_cache(struct file *file)
 	return au_fi(file)->fi_hdir->fd_vdir_cache;
 }
 
-static inline void au_set_fbstart(struct file *file, aufs_bindex_t bindex)
+static inline void au_set_fbtop(struct file *file, aufs_bindex_t bindex)
 {
 	FiMustWriteLock(file);
 	au_fi(file)->fi_btop = bindex;
 }
 
-static inline void au_set_fbend_dir(struct file *file, aufs_bindex_t bindex)
+static inline void au_set_fbbot_dir(struct file *file, aufs_bindex_t bindex)
 {
 	FiMustWriteLock(file);
 	AuDebugOn(!au_fi(file)->fi_hdir);
