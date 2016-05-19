@@ -112,7 +112,7 @@ struct au_sbinfo {
 	/* see AuSi_ flags */
 	unsigned char		au_si_status;
 
-	aufs_bindex_t		si_bend;
+	aufs_bindex_t		si_bbot;
 
 	/* dirty trick to keep br_id plus */
 	unsigned int		si_last_br_id :
@@ -297,7 +297,7 @@ extern struct au_wbr_copyup_operations au_wbr_copyup_ops[];
 extern struct au_wbr_create_operations au_wbr_create_ops[];
 int au_cpdown_dirs(struct dentry *dentry, aufs_bindex_t bdst);
 int au_wbr_nonopq(struct dentry *dentry, aufs_bindex_t bindex);
-int au_wbr_do_copyup_bu(struct dentry *dentry, aufs_bindex_t bstart);
+int au_wbr_do_copyup_bu(struct dentry *dentry, aufs_bindex_t btop);
 
 /* mvdown.c */
 int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *arg);
@@ -560,10 +560,10 @@ static inline void si_downgrade_lock(struct super_block *sb)
 
 /* ---------------------------------------------------------------------- */
 
-static inline aufs_bindex_t au_sbend(struct super_block *sb)
+static inline aufs_bindex_t au_sbbot(struct super_block *sb)
 {
 	SiMustAnyLock(sb);
-	return au_sbi(sb)->si_bend;
+	return au_sbi(sb)->si_bbot;
 }
 
 static inline unsigned int au_mntflags(struct super_block *sb)
