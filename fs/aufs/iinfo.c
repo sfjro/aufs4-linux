@@ -11,10 +11,12 @@
 struct inode *au_h_iptr(struct inode *inode, aufs_bindex_t bindex)
 {
 	struct inode *h_inode;
+	struct au_hinode *hinode;
 
 	IiMustAnyLock(inode);
 
-	h_inode = au_ii(inode)->ii_hinode[0 + bindex].hi_inode;
+	hinode = au_hinode(au_ii(inode), bindex);
+	h_inode = hinode->hi_inode;
 	AuDebugOn(h_inode && atomic_read(&h_inode->i_count) <= 0);
 	return h_inode;
 }
@@ -49,7 +51,7 @@ void au_set_h_iptr(struct inode *inode, aufs_bindex_t bindex,
 
 	IiMustWriteLock(inode);
 
-	hinode = iinfo->ii_hinode + bindex;
+	hinode = au_hinode(iinfo, bindex);
 	hi = hinode->hi_inode;
 	AuDebugOn(h_inode && atomic_read(&h_inode->i_count) <= 0);
 
@@ -64,7 +66,7 @@ void au_set_h_iptr(struct inode *inode, aufs_bindex_t bindex,
 		AuDebugOn(inode->i_mode
 			  && (h_inode->i_mode & S_IFMT)
 			  != (inode->i_mode & S_IFMT));
-		if (bindex == iinfo->ii_bstart)
+		if (bindex == iinfo->ii_btop)
 			au_cpup_igen(inode, h_inode);
 		br = au_sbr(sb, bindex);
 		hinode->hi_id = br->br_id;
@@ -91,7 +93,7 @@ void au_set_hi_wh(struct inode *inode, aufs_bindex_t bindex,
 
 	IiMustWriteLock(inode);
 
-	hinode = au_ii(inode)->ii_hinode + bindex;
+	hinode = au_hinode(au_ii(inode), bindex);
 	AuDebugOn(hinode->hi_whdentry);
 	hinode->hi_whdentry = h_wh;
 }
@@ -118,20 +120,18 @@ void au_update_iigen(struct inode *inode, int half)
 void au_update_ibrange(struct inode *inode, int do_put_zero)
 {
 	struct au_iinfo *iinfo;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 
-	iinfo = au_ii(inode);
-	if (!iinfo)
-		return;
-
+	AuDebugOn(is_bad_inode(inode));
 	IiMustWriteLock(inode);
 
-	if (do_put_zero && iinfo->ii_bstart >= 0) {
-		for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend;
+	iinfo = au_ii(inode);
+	if (do_put_zero && iinfo->ii_btop >= 0) {
+		for (bindex = iinfo->ii_btop; bindex <= iinfo->ii_bbot;
 		     bindex++) {
 			struct inode *h_i;
 
-			h_i = iinfo->ii_hinode[0 + bindex].hi_inode;
+			h_i = au_hinode(iinfo, bindex)->hi_inode;
 			if (h_i
 			    && !h_i->i_nlink
 			    && !(h_i->i_state & I_LINKABLE))
@@ -139,21 +139,21 @@ void au_update_ibrange(struct inode *inode, int do_put_zero)
 		}
 	}
 
-	iinfo->ii_bstart = -1;
-	iinfo->ii_bend = -1;
-	bend = au_sbend(inode->i_sb);
-	for (bindex = 0; bindex <= bend; bindex++)
-		if (iinfo->ii_hinode[0 + bindex].hi_inode) {
-			iinfo->ii_bstart = bindex;
+	iinfo->ii_btop = -1;
+	iinfo->ii_bbot = -1;
+	bbot = au_sbbot(inode->i_sb);
+	for (bindex = 0; bindex <= bbot; bindex++)
+		if (au_hinode(iinfo, bindex)->hi_inode) {
+			iinfo->ii_btop = bindex;
 			break;
 		}
-	if (iinfo->ii_bstart >= 0)
-		for (bindex = bend; bindex >= iinfo->ii_bstart; bindex--)
-			if (iinfo->ii_hinode[0 + bindex].hi_inode) {
-				iinfo->ii_bend = bindex;
+	if (iinfo->ii_btop >= 0)
+		for (bindex = bbot; bindex >= iinfo->ii_btop; bindex--)
+			if (au_hinode(iinfo, bindex)->hi_inode) {
+				iinfo->ii_bbot = bindex;
 				break;
 			}
-	AuDebugOn(iinfo->ii_bstart > iinfo->ii_bend);
+	AuDebugOn(iinfo->ii_btop > iinfo->ii_bbot);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -162,12 +162,18 @@ void au_icntnr_init_once(void *_c)
 {
 	struct au_icntnr *c = _c;
 	struct au_iinfo *iinfo = &c->iinfo;
-	static struct lock_class_key aufs_ii;
 
 	spin_lock_init(&iinfo->ii_generation.ig_spin);
 	au_rw_init(&iinfo->ii_rwsem);
-	au_rw_class(&iinfo->ii_rwsem, &aufs_ii);
 	inode_init_once(&c->vfs_inode);
+}
+
+void au_hinode_init(struct au_hinode *hinode)
+{
+	hinode->hi_inode = NULL;
+	hinode->hi_id = -1;
+	au_hn_init(hinode);
+	hinode->hi_whdentry = NULL;
 }
 
 int au_iinfo_init(struct inode *inode)
@@ -178,37 +184,37 @@ int au_iinfo_init(struct inode *inode)
 
 	sb = inode->i_sb;
 	iinfo = &(container_of(inode, struct au_icntnr, vfs_inode)->iinfo);
-	nbr = au_sbend(sb) + 1;
+	nbr = au_sbbot(sb) + 1;
 	if (unlikely(nbr <= 0))
 		nbr = 1;
-	iinfo->ii_hinode = kcalloc(nbr, sizeof(*iinfo->ii_hinode), GFP_NOFS);
+	iinfo->ii_hinode = kmalloc_array(nbr, sizeof(*iinfo->ii_hinode),
+					 GFP_NOFS);
 	if (iinfo->ii_hinode) {
 		au_ninodes_inc(sb);
 		for (i = 0; i < nbr; i++)
-			iinfo->ii_hinode[i].hi_id = -1;
+			au_hinode_init(iinfo->ii_hinode + i);
 
 		iinfo->ii_generation.ig_generation = au_sigen(sb);
-		iinfo->ii_bstart = -1;
-		iinfo->ii_bend = -1;
+		iinfo->ii_btop = -1;
+		iinfo->ii_bbot = -1;
 		iinfo->ii_vdir = NULL;
 		return 0;
 	}
 	return -ENOMEM;
 }
 
-int au_ii_realloc(struct au_iinfo *iinfo, int nbr)
+int au_hinode_realloc(struct au_iinfo *iinfo, int nbr)
 {
-	int err, sz;
+	int err, i;
 	struct au_hinode *hip;
 
 	AuRwMustWriteLock(&iinfo->ii_rwsem);
 
 	err = -ENOMEM;
-	sz = sizeof(*hip) * (iinfo->ii_bend + 1);
-	if (!sz)
-		sz = sizeof(*hip);
-	hip = au_kzrealloc(iinfo->ii_hinode, sz, sizeof(*hip) * nbr, GFP_NOFS);
+	hip = krealloc(iinfo->ii_hinode, sizeof(*hip) * nbr, GFP_NOFS);
 	if (hip) {
+		for (i = iinfo->ii_bbot + 1; i < nbr; i++)
+			au_hinode_init(hip + i);
 		iinfo->ii_hinode = hip;
 		err = 0;
 	}
@@ -221,13 +227,10 @@ void au_iinfo_fin(struct inode *inode)
 	struct au_iinfo *iinfo;
 	struct au_hinode *hi;
 	struct super_block *sb;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	const unsigned char unlinked = !inode->i_nlink;
 
-	iinfo = au_ii(inode);
-	/* bad_inode case */
-	if (!iinfo)
-		return;
+	AuDebugOn(is_bad_inode(inode));
 
 	sb = inode->i_sb;
 	au_ninodes_dec(sb);
@@ -245,20 +248,20 @@ void au_iinfo_fin(struct inode *inode)
 		lockdep_on();
 	}
 
+	iinfo = au_ii(inode);
 	if (iinfo->ii_vdir)
 		au_vdir_free(iinfo->ii_vdir);
 
-	bindex = iinfo->ii_bstart;
+	bindex = iinfo->ii_btop;
 	if (bindex >= 0) {
-		hi = iinfo->ii_hinode + bindex;
-		bend = iinfo->ii_bend;
-		while (bindex++ <= bend) {
+		hi = au_hinode(iinfo, bindex);
+		bbot = iinfo->ii_bbot;
+		while (bindex++ <= bbot) {
 			if (hi->hi_inode)
 				au_hiput(hi);
 			hi++;
 		}
 	}
 	kfree(iinfo->ii_hinode);
-	iinfo->ii_hinode = NULL;
 	AuRwDestroy(&iinfo->ii_rwsem);
 }
