@@ -34,19 +34,20 @@ static int au_ii_refresh(struct inode *inode, int *update)
 	struct au_iinfo *iinfo;
 	struct au_hinode *p, *q, tmp;
 
+	AuDebugOn(is_bad_inode(inode));
 	IiMustWriteLock(inode);
 
 	*update = 0;
 	sb = inode->i_sb;
 	type = inode->i_mode & S_IFMT;
 	iinfo = au_ii(inode);
-	err = au_ii_realloc(iinfo, au_sbend(sb) + 1);
+	err = au_hinode_realloc(iinfo, au_sbbot(sb) + 1);
 	if (unlikely(err))
 		goto out;
 
-	AuDebugOn(iinfo->ii_bstart < 0);
-	p = iinfo->ii_hinode + iinfo->ii_bstart;
-	for (bindex = iinfo->ii_bstart; bindex <= iinfo->ii_bend;
+	AuDebugOn(iinfo->ii_btop < 0);
+	p = au_hinode(iinfo, iinfo->ii_btop);
+	for (bindex = iinfo->ii_btop; bindex <= iinfo->ii_bbot;
 	     bindex++, p++) {
 		if (!p->hi_inode)
 			continue;
@@ -63,12 +64,12 @@ static int au_ii_refresh(struct inode *inode, int *update)
 			continue;
 		}
 
-		if (new_bindex < iinfo->ii_bstart)
-			iinfo->ii_bstart = new_bindex;
-		if (iinfo->ii_bend < new_bindex)
-			iinfo->ii_bend = new_bindex;
+		if (new_bindex < iinfo->ii_btop)
+			iinfo->ii_btop = new_bindex;
+		if (iinfo->ii_bbot < new_bindex)
+			iinfo->ii_bbot = new_bindex;
 		/* swap two lower inode, and loop again */
-		q = iinfo->ii_hinode + new_bindex;
+		q = au_hinode(iinfo, new_bindex);
 		tmp = *q;
 		*q = *p;
 		*p = tmp;
@@ -130,7 +131,7 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 	int err, e, update;
 	unsigned int flags;
 	umode_t mode;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	unsigned char isdir;
 	struct au_hinode *p;
 	struct au_iinfo *iinfo;
@@ -141,12 +142,12 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 
 	update = 0;
 	iinfo = au_ii(inode);
-	p = iinfo->ii_hinode + iinfo->ii_bstart;
+	p = au_hinode(iinfo, iinfo->ii_btop);
 	mode = (inode->i_mode & S_IFMT);
 	isdir = S_ISDIR(mode);
 	flags = au_hi_flags(inode, isdir);
-	bend = au_dbend(dentry);
-	for (bindex = au_dbstart(dentry); bindex <= bend; bindex++) {
+	bbot = au_dbbot(dentry);
+	for (bindex = au_dbtop(dentry); bindex <= bbot; bindex++) {
 		struct inode *h_i, *h_inode;
 		struct dentry *h_d;
 
@@ -156,7 +157,7 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 
 		h_inode = d_inode(h_d);
 		AuDebugOn(mode != (h_inode->i_mode & S_IFMT));
-		if (iinfo->ii_bstart <= bindex && bindex <= iinfo->ii_bend) {
+		if (iinfo->ii_btop <= bindex && bindex <= iinfo->ii_bbot) {
 			h_i = au_h_iptr(inode, bindex);
 			if (h_i) {
 				if (h_i == h_inode)
@@ -165,10 +166,10 @@ int au_refresh_hinode(struct inode *inode, struct dentry *dentry)
 				break;
 			}
 		}
-		if (bindex < iinfo->ii_bstart)
-			iinfo->ii_bstart = bindex;
-		if (iinfo->ii_bend < bindex)
-			iinfo->ii_bend = bindex;
+		if (bindex < iinfo->ii_btop)
+			iinfo->ii_btop = bindex;
+		if (iinfo->ii_bbot < bindex)
+			iinfo->ii_bbot = bindex;
 		au_set_h_iptr(inode, bindex, au_igrab(h_inode), flags);
 		update = 1;
 	}
@@ -189,7 +190,7 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 	int err;
 	unsigned int flags;
 	umode_t mode;
-	aufs_bindex_t bindex, bstart, btail;
+	aufs_bindex_t bindex, btop, btail;
 	unsigned char isdir;
 	struct dentry *h_dentry;
 	struct inode *h_inode;
@@ -201,8 +202,8 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 	err = 0;
 	isdir = 0;
 	iop = au_sbi(inode->i_sb)->si_iop_array;
-	bstart = au_dbstart(dentry);
-	h_dentry = au_h_dptr(dentry, bstart);
+	btop = au_dbtop(dentry);
+	h_dentry = au_h_dptr(dentry, btop);
 	h_inode = d_inode(h_dentry);
 	mode = h_inode->i_mode;
 	switch (mode & S_IFMT) {
@@ -210,7 +211,7 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 		btail = au_dbtail(dentry);
 		inode->i_op = iop + AuIop_OTHER;
 		inode->i_fop = &aufs_file_fop;
-		err = au_dy_iaop(inode, bstart, h_inode);
+		err = au_dy_iaop(inode, btop, h_inode);
 		if (unlikely(err))
 			goto out;
 		break;
@@ -246,9 +247,9 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 	    && !memcmp(dentry->d_name.name, AUFS_WH_PFX, AUFS_WH_PFX_LEN))
 		au_fclr_hi(flags, HNOTIFY);
 	iinfo = au_ii(inode);
-	iinfo->ii_bstart = bstart;
-	iinfo->ii_bend = btail;
-	for (bindex = bstart; bindex <= btail; bindex++) {
+	iinfo->ii_btop = btop;
+	iinfo->ii_bbot = btail;
+	for (bindex = btop; bindex <= btail; bindex++) {
 		h_dentry = au_h_dptr(dentry, bindex);
 		if (h_dentry)
 			au_set_h_iptr(inode, bindex,
@@ -274,7 +275,7 @@ static int reval_inode(struct inode *inode, struct dentry *dentry)
 {
 	int err;
 	unsigned int gen, igflags;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	struct inode *h_inode, *h_dinode;
 	struct dentry *h_dentry;
 
@@ -289,10 +290,10 @@ static int reval_inode(struct inode *inode, struct dentry *dentry)
 
 	err = 1;
 	ii_write_lock_new_child(inode);
-	h_dentry = au_h_dptr(dentry, au_dbstart(dentry));
+	h_dentry = au_h_dptr(dentry, au_dbtop(dentry));
 	h_dinode = d_inode(h_dentry);
-	bend = au_ibend(inode);
-	for (bindex = au_ibstart(inode); bindex <= bend; bindex++) {
+	bbot = au_ibbot(inode);
+	for (bindex = au_ibtop(inode); bindex <= bbot; bindex++) {
 		h_inode = au_h_iptr(inode, bindex);
 		if (!h_inode || h_inode != h_dinode)
 			continue;
@@ -358,11 +359,11 @@ struct inode *au_new_inode(struct dentry *dentry, int must_new)
 	struct mutex *mtx;
 	ino_t h_ino, ino;
 	int err;
-	aufs_bindex_t bstart;
+	aufs_bindex_t btop;
 
 	sb = dentry->d_sb;
-	bstart = au_dbstart(dentry);
-	h_dentry = au_h_dptr(dentry, bstart);
+	btop = au_dbtop(dentry);
+	h_dentry = au_h_dptr(dentry, btop);
 	h_inode = d_inode(h_dentry);
 	h_ino = h_inode->i_ino;
 
@@ -372,12 +373,12 @@ struct inode *au_new_inode(struct dentry *dentry, int must_new)
 	 */
 	mtx = NULL;
 	if (!d_is_dir(h_dentry))
-		mtx = &au_sbr(sb, bstart)->br_xino.xi_nondir_mtx;
+		mtx = &au_sbr(sb, btop)->br_xino.xi_nondir_mtx;
 
 new_ino:
 	if (mtx)
 		mutex_lock(mtx);
-	err = au_xino_read(sb, bstart, h_ino, &ino);
+	err = au_xino_read(sb, btop, h_ino, &ino);
 	inode = ERR_PTR(err);
 	if (unlikely(err))
 		goto out;
@@ -398,17 +399,6 @@ new_ino:
 
 	AuDbg("%lx, new %d\n", inode->i_state, !!(inode->i_state & I_NEW));
 	if (inode->i_state & I_NEW) {
-		/* verbose coding for lock class name */
-		if (unlikely(d_is_symlink(h_dentry)))
-			au_rw_class(&au_ii(inode)->ii_rwsem,
-				    au_lc_key + AuLcSymlink_IIINFO);
-		else if (unlikely(d_is_dir(h_dentry)))
-			au_rw_class(&au_ii(inode)->ii_rwsem,
-				    au_lc_key + AuLcDir_IIINFO);
-		else /* likely */
-			au_rw_class(&au_ii(inode)->ii_rwsem,
-				    au_lc_key + AuLcNonDir_IIINFO);
-
 		ii_write_lock_new_child(inode);
 		err = set_inode(inode, dentry);
 		if (!err) {
@@ -424,7 +414,7 @@ new_ino:
 		atomic_inc(&inode->i_count);
 		iget_failed(inode);
 		ii_write_unlock(inode);
-		au_xino_write(sb, bstart, h_ino, /*ino*/0);
+		au_xino_write(sb, btop, h_ino, /*ino*/0);
 		/* ignore this error */
 		goto out_iput;
 	} else if (!must_new && !IS_DEADDIR(inode) && inode->i_nlink) {
@@ -450,10 +440,10 @@ new_ino:
 	if (unlikely(au_test_fs_unique_ino(h_inode)))
 		AuWarn1("Warning: Un-notified UDBA or repeatedly renamed dir,"
 			" b%d, %s, %pd, hi%lu, i%lu.\n",
-			bstart, au_sbtype(h_dentry->d_sb), dentry,
+			btop, au_sbtype(h_dentry->d_sb), dentry,
 			(unsigned long)h_ino, (unsigned long)ino);
 	ino = 0;
-	err = au_xino_write(sb, bstart, h_ino, /*ino*/0);
+	err = au_xino_write(sb, btop, h_ino, /*ino*/0);
 	if (!err) {
 		iput(inode);
 		if (mtx)
@@ -483,8 +473,8 @@ int au_test_ro(struct super_block *sb, aufs_bindex_t bindex,
 	/* pseudo-link after flushed may happen out of bounds */
 	if (!err
 	    && inode
-	    && au_ibstart(inode) <= bindex
-	    && bindex <= au_ibend(inode)) {
+	    && au_ibtop(inode) <= bindex
+	    && bindex <= au_ibbot(inode)) {
 		/*
 		 * permission check is unnecessary since vfsub routine
 		 * will be called later

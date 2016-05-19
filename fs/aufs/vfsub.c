@@ -125,7 +125,7 @@ int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
 			goto out;
 	}
 
-	atomic_inc(&br->br_count);
+	au_br_get(br);
 	fsnotify_open(file);
 
 out:

@@ -538,7 +538,7 @@ static int au_do_read_vdir(struct fillvdir_arg *arg)
 	int err;
 	unsigned int rdhash;
 	loff_t offset;
-	aufs_bindex_t bend, bindex, bstart;
+	aufs_bindex_t bbot, bindex, btop;
 	unsigned char shwh;
 	struct file *hf, *file;
 	struct super_block *sb;
@@ -564,9 +564,9 @@ static int au_do_read_vdir(struct fillvdir_arg *arg)
 		shwh = 1;
 		au_fset_fillvdir(arg->flags, SHWH);
 	}
-	bstart = au_fbstart(file);
-	bend = au_fbend_dir(file);
-	for (bindex = bstart; !err && bindex <= bend; bindex++) {
+	btop = au_fbtop(file);
+	bbot = au_fbbot_dir(file);
+	for (bindex = btop; !err && bindex <= bbot; bindex++) {
 		hf = au_hf_dir(file, bindex);
 		if (!hf)
 			continue;
@@ -579,7 +579,7 @@ static int au_do_read_vdir(struct fillvdir_arg *arg)
 		arg->bindex = bindex;
 		au_fclr_fillvdir(arg->flags, WHABLE);
 		if (shwh
-		    || (bindex != bend
+		    || (bindex != bbot
 			&& au_br_whable(au_sbr_perm(sb, bindex))))
 			au_fset_fillvdir(arg->flags, WHABLE);
 		do {
