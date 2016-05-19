@@ -225,7 +225,7 @@ static int dbgaufs_xino_open(struct inode *inode, struct file *file)
 	sbinfo = inode->i_private;
 	sb = sbinfo->si_sb;
 	si_noflush_read_lock(sb);
-	if (l <= au_sbend(sb)) {
+	if (l <= au_sbbot(sb)) {
 		xf = au_sbr(sb, (aufs_bindex_t)l)->br_xino.xi_file;
 		err = dbgaufs_xi_open(xf, file, /*do_fcnt*/1);
 	} else
@@ -245,15 +245,15 @@ static const struct file_operations dbgaufs_xino_fop = {
 
 void dbgaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 {
-	aufs_bindex_t bend;
+	aufs_bindex_t bbot;
 	struct au_branch *br;
 	struct au_xino_file *xi;
 
 	if (!au_sbi(sb)->si_dbgaufs)
 		return;
 
-	bend = au_sbend(sb);
-	for (; bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (; bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		xi = &br->br_xino;
 		debugfs_remove(xi->xi_dbgaufs);
@@ -267,7 +267,7 @@ void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 	struct dentry *parent;
 	struct au_branch *br;
 	struct au_xino_file *xi;
-	aufs_bindex_t bend;
+	aufs_bindex_t bbot;
 	char name[sizeof(DbgaufsXi_PREFIX) + 5]; /* "xi" bindex NULL */
 
 	sbinfo = au_sbi(sb);
@@ -275,8 +275,8 @@ void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 	if (!parent)
 		return;
 
-	bend = au_sbend(sb);
-	for (; bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (; bindex <= bbot; bindex++) {
 		snprintf(name, sizeof(name), DbgaufsXi_PREFIX "%d", bindex);
 		br = au_sbr(sb, bindex);
 		xi = &br->br_xino;

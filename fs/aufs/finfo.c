@@ -15,7 +15,7 @@ void au_hfput(struct au_hfile *hf, struct file *file)
 		allow_write_access(hf->hf_file);
 	fput(hf->hf_file);
 	hf->hf_file = NULL;
-	atomic_dec(&hf->hf_br->br_count);
+	au_br_put(hf->hf_br);
 	hf->hf_br = NULL;
 }
 
@@ -55,7 +55,7 @@ struct au_fidir *au_fidir_alloc(struct super_block *sb)
 	struct au_fidir *fidir;
 	int nbr;
 
-	nbr = au_sbend(sb) + 1;
+	nbr = au_sbbot(sb) + 1;
 	if (nbr < 2)
 		nbr = 2; /* initial allocate for 2 branches */
 	fidir = kzalloc(au_fidir_sz(nbr), GFP_NOFS);
@@ -105,10 +105,8 @@ void au_finfo_fin(struct file *file)
 void au_fi_init_once(void *_finfo)
 {
 	struct au_finfo *finfo = _finfo;
-	static struct lock_class_key aufs_fi;
 
 	au_rw_init(&finfo->fi_rwsem);
-	au_rw_class(&finfo->fi_rwsem, &aufs_fi);
 }
 
 int au_finfo_init(struct file *file, struct au_fidir *fidir)
@@ -125,11 +123,6 @@ int au_finfo_init(struct file *file, struct au_fidir *fidir)
 
 	err = 0;
 	au_nfiles_inc(dentry->d_sb);
-	/* verbose coding for lock class name */
-	if (!fidir)
-		au_rw_class(&finfo->fi_rwsem, au_lc_key + AuLcNonDir_FIINFO);
-	else
-		au_rw_class(&finfo->fi_rwsem, au_lc_key + AuLcDir_FIINFO);
 	au_rw_write_lock(&finfo->fi_rwsem);
 	finfo->fi_btop = -1;
 	finfo->fi_hdir = fidir;
