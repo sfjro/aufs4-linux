@@ -17,7 +17,7 @@
 static int au_wbr_fd(struct path *path, struct aufs_wbr_fd __user *arg)
 {
 	int err, fd;
-	aufs_bindex_t wbi, bindex, bend;
+	aufs_bindex_t wbi, bindex, bbot;
 	struct file *h_file;
 	struct super_block *sb;
 	struct dentry *root;
@@ -57,10 +57,10 @@ static int au_wbr_fd(struct path *path, struct aufs_wbr_fd __user *arg)
 	sb = path->dentry->d_sb;
 	root = sb->s_root;
 	aufs_read_lock(root, AuLock_IR);
-	bend = au_sbend(sb);
+	bbot = au_sbbot(sb);
 	if (wbrfd.brid >= 0) {
 		wbi = au_br_index(sb, wbrfd.brid);
-		if (unlikely(wbi < 0 || wbi > bend))
+		if (unlikely(wbi < 0 || wbi > bbot))
 			goto out_unlock;
 	}
 
@@ -72,7 +72,7 @@ static int au_wbr_fd(struct path *path, struct aufs_wbr_fd __user *arg)
 
 		bindex = wbi + 1;
 		wbi = -1;
-		for (; bindex <= bend; bindex++) {
+		for (; bindex <= bbot; bindex++) {
 			br = au_sbr(sb, bindex);
 			if (au_br_writable(br->br_perm)) {
 				wbi = bindex;
@@ -92,7 +92,7 @@ out_unlock:
 	if (IS_ERR(h_file))
 		goto out_fd;
 
-	atomic_dec(&br->br_count); /* cf. au_h_open() */
+	au_br_put(br); /* cf. au_h_open() */
 	fd_install(fd, h_file);
 	err = fd;
 	goto out; /* success */
