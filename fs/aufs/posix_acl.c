@@ -24,7 +24,7 @@ struct posix_acl *aufs_get_acl(struct inode *inode, int type)
 	if (!(sb->s_flags & MS_POSIXACL))
 		goto out;
 
-	bindex = au_ibstart(inode);
+	bindex = au_ibtop(inode);
 	h_inode = au_h_iptr(inode, bindex);
 	if (unlikely(!h_inode
 		     || ((h_inode->i_mode & S_IFMT)
