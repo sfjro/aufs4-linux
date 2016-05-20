@@ -429,13 +429,13 @@ void au_plink_clean(struct super_block *sb, int verbose)
 static int au_plink_do_half_refresh(struct inode *inode, aufs_bindex_t br_id)
 {
 	int do_put;
-	aufs_bindex_t bstart, bend, bindex;
+	aufs_bindex_t btop, bbot, bindex;
 
 	do_put = 0;
-	bstart = au_ibstart(inode);
-	bend = au_ibend(inode);
-	if (bstart >= 0) {
-		for (bindex = bstart; bindex <= bend; bindex++) {
+	btop = au_ibtop(inode);
+	bbot = au_ibbot(inode);
+	if (btop >= 0) {
+		for (bindex = btop; bindex <= bbot; bindex++) {
 			if (!au_h_iptr(inode, bindex)
 			    || au_ii_br_id(inode, bindex) != br_id)
 				continue;
@@ -444,7 +444,7 @@ static int au_plink_do_half_refresh(struct inode *inode, aufs_bindex_t br_id)
 			break;
 		}
 		if (do_put)
-			for (bindex = bstart; bindex <= bend; bindex++)
+			for (bindex = btop; bindex <= bbot; bindex++)
 				if (au_h_iptr(inode, bindex)) {
 					do_put = 0;
 					break;
