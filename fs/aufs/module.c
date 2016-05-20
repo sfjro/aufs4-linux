@@ -26,26 +26,9 @@ void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp)
 /*
  * aufs caches
  */
-struct kmem_cache *au_cachep[AuCache_Last];
-static int __init au_cache_init(void)
-{
-	au_cachep[AuCache_DINFO] = AuCacheCtor(au_dinfo, au_di_init_once);
-	if (au_cachep[AuCache_DINFO])
-		/* SLAB_DESTROY_BY_RCU */
-		au_cachep[AuCache_ICNTNR] = AuCacheCtor(au_icntnr,
-							au_icntnr_init_once);
-	if (au_cachep[AuCache_ICNTNR])
-		au_cachep[AuCache_FINFO] = AuCacheCtor(au_finfo,
-						       au_fi_init_once);
-	if (au_cachep[AuCache_FINFO])
-		au_cachep[AuCache_VDIR] = AuCache(au_vdir);
-	if (au_cachep[AuCache_VDIR])
-		au_cachep[AuCache_DEHSTR] = AuCache(au_vdir_dehstr);
-	if (au_cachep[AuCache_DEHSTR])
-		return 0;
-
-	return -ENOMEM;
-}
+struct kmem_cache *au_cachep[AuCache_Last] = {
+	[0] = NULL
+};
 
 static void au_cache_fin(void)
 {
@@ -65,6 +48,27 @@ static void au_cache_fin(void)
 	}
 }
 
+static int __init au_cache_init(void)
+{
+	au_cachep[AuCache_DINFO] = AuCacheCtor(au_dinfo, au_di_init_once);
+	if (au_cachep[AuCache_DINFO])
+		/* SLAB_DESTROY_BY_RCU */
+		au_cachep[AuCache_ICNTNR] = AuCacheCtor(au_icntnr,
+							au_icntnr_init_once);
+	if (au_cachep[AuCache_ICNTNR])
+		au_cachep[AuCache_FINFO] = AuCacheCtor(au_finfo,
+						       au_fi_init_once);
+	if (au_cachep[AuCache_FINFO])
+		au_cachep[AuCache_VDIR] = AuCache(au_vdir);
+	if (au_cachep[AuCache_VDIR])
+		au_cachep[AuCache_DEHSTR] = AuCache(au_vdir_dehstr);
+	if (au_cachep[AuCache_DEHSTR])
+		return 0;
+
+	au_cache_fin();
+	return -ENOMEM;
+}
+
 /* ---------------------------------------------------------------------- */
 
 int au_dir_roflags;
@@ -76,8 +80,6 @@ int au_dir_roflags;
  */
 struct au_sphlhead au_sbilist;
 #endif
-
-struct lock_class_key au_lc_key[AuLcKey_Last];
 
 /*
  * functions for module interface.

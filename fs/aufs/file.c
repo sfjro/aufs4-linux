@@ -69,7 +69,7 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 		}
 	}
 	flags &= ~O_CREAT;
-	atomic_inc(&br->br_count);
+	au_br_get(br);
 	h_path.dentry = h_dentry;
 	h_path.mnt = au_br_mnt(br);
 	h_file = vfsub_dentry_open(&h_path, flags);
@@ -88,7 +88,7 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 	goto out; /* success */
 
 out_br:
-	atomic_dec(&br->br_count);
+	au_br_put(br);
 out:
 	return h_file;
 }
@@ -122,7 +122,7 @@ static int au_cmoo(struct dentry *dentry)
 	err = 0;
 	if (IS_ROOT(dentry))
 		goto out;
-	cpg.bsrc = au_dbstart(dentry);
+	cpg.bsrc = au_dbtop(dentry);
 	if (!cpg.bsrc)
 		goto out;
 
@@ -237,7 +237,7 @@ int au_do_open(struct file *file, struct au_do_open_args *args)
 		if (!err)
 			err = args->open(file, vfsub_file_flags(file),
 					 args->h_file);
-		if (!err && au_fbstart(file) != au_dbstart(dentry))
+		if (!err && au_fbtop(file) != au_dbtop(dentry))
 			/*
 			 * cmoo happens after h_file was opened.
 			 * need to refresh file later.
@@ -270,49 +270,49 @@ out:
 int au_reopen_nondir(struct file *file)
 {
 	int err;
-	aufs_bindex_t bstart;
+	aufs_bindex_t btop;
 	struct dentry *dentry;
 	struct file *h_file, *h_file_tmp;
 
 	dentry = file->f_path.dentry;
-	bstart = au_dbstart(dentry);
+	btop = au_dbtop(dentry);
 	h_file_tmp = NULL;
-	if (au_fbstart(file) == bstart) {
+	if (au_fbtop(file) == btop) {
 		h_file = au_hf_top(file);
 		if (file->f_mode == h_file->f_mode)
 			return 0; /* success */
 		h_file_tmp = h_file;
 		get_file(h_file_tmp);
-		au_set_h_fptr(file, bstart, NULL);
+		au_set_h_fptr(file, btop, NULL);
 	}
 	AuDebugOn(au_fi(file)->fi_hdir);
 	/*
 	 * it can happen
 	 * file exists on both of rw and ro
-	 * open --> dbstart and fbstart are both 0
+	 * open --> dbtop and fbtop are both 0
 	 * prepend a branch as rw, "rw" become ro
 	 * remove rw/file
 	 * delete the top branch, "rw" becomes rw again
-	 *	--> dbstart is 1, fbstart is still 0
-	 * write --> fbstart is 0 but dbstart is 1
+	 *	--> dbtop is 1, fbtop is still 0
+	 * write --> fbtop is 0 but dbtop is 1
 	 */
-	/* AuDebugOn(au_fbstart(file) < bstart); */
+	/* AuDebugOn(au_fbtop(file) < btop); */
 
-	h_file = au_h_open(dentry, bstart, vfsub_file_flags(file) & ~O_TRUNC,
+	h_file = au_h_open(dentry, btop, vfsub_file_flags(file) & ~O_TRUNC,
 			   file, /*force_wr*/0);
 	err = PTR_ERR(h_file);
 	if (IS_ERR(h_file)) {
 		if (h_file_tmp) {
-			atomic_inc(&au_sbr(dentry->d_sb, bstart)->br_count);
-			au_set_h_fptr(file, bstart, h_file_tmp);
+			au_sbr_get(dentry->d_sb, btop);
+			au_set_h_fptr(file, btop, h_file_tmp);
 			h_file_tmp = NULL;
 		}
 		goto out; /* todo: close all? */
 	}
 
 	err = 0;
-	au_set_fbstart(file, bstart);
-	au_set_h_fptr(file, bstart, h_file);
+	au_set_fbtop(file, btop);
+	au_set_h_fptr(file, btop, h_file);
 	au_update_figen(file);
 	/* todo: necessary? */
 	/* file->f_ra = h_file->f_ra; */
@@ -329,7 +329,7 @@ static int au_reopen_wh(struct file *file, aufs_bindex_t btgt,
 			struct dentry *hi_wh)
 {
 	int err;
-	aufs_bindex_t bstart;
+	aufs_bindex_t btop;
 	struct au_dinfo *dinfo;
 	struct dentry *h_dentry;
 	struct au_hdentry *hdp;
@@ -337,14 +337,14 @@ static int au_reopen_wh(struct file *file, aufs_bindex_t btgt,
 	dinfo = au_di(file->f_path.dentry);
 	AuRwMustWriteLock(&dinfo->di_rwsem);
 
-	bstart = dinfo->di_bstart;
-	dinfo->di_bstart = btgt;
+	btop = dinfo->di_btop;
+	dinfo->di_btop = btgt;
 	hdp = dinfo->di_hdentry;
 	h_dentry = hdp[0 + btgt].hd_dentry;
 	hdp[0 + btgt].hd_dentry = hi_wh;
 	err = au_reopen_nondir(file);
 	hdp[0 + btgt].hd_dentry = h_dentry;
-	dinfo->di_bstart = bstart;
+	dinfo->di_btop = btop;
 
 	return err;
 }
@@ -363,11 +363,11 @@ static int au_ready_to_write_wh(struct file *file, loff_t len,
 		.pin	= pin
 	};
 
-	au_update_dbstart(cpg.dentry);
+	au_update_dbtop(cpg.dentry);
 	inode = d_inode(cpg.dentry);
 	h_inode = NULL;
-	if (au_dbstart(cpg.dentry) <= bcpup
-	    && au_dbend(cpg.dentry) >= bcpup) {
+	if (au_dbtop(cpg.dentry) <= bcpup
+	    && au_dbbot(cpg.dentry) >= bcpup) {
 		h_dentry = au_h_dptr(cpg.dentry, bcpup);
 		if (h_dentry && d_is_positive(h_dentry))
 			h_inode = d_inode(h_dentry);
@@ -394,7 +394,7 @@ static int au_ready_to_write_wh(struct file *file, loff_t len,
 int au_ready_to_write(struct file *file, loff_t len, struct au_pin *pin)
 {
 	int err;
-	aufs_bindex_t dbstart;
+	aufs_bindex_t dbtop;
 	struct dentry *parent;
 	struct inode *inode;
 	struct super_block *sb;
@@ -410,7 +410,7 @@ int au_ready_to_write(struct file *file, loff_t len, struct au_pin *pin)
 
 	sb = cpg.dentry->d_sb;
 	inode = d_inode(cpg.dentry);
-	cpg.bsrc = au_fbstart(file);
+	cpg.bsrc = au_fbtop(file);
 	err = au_test_ro(sb, cpg.bsrc, inode);
 	if (!err && (au_hf_top(file)->f_mode & FMODE_WRITE)) {
 		err = au_pin(pin, cpg.dentry, cpg.bsrc, AuOpt_UDBA_NONE,
@@ -438,11 +438,11 @@ int au_ready_to_write(struct file *file, loff_t len, struct au_pin *pin)
 	if (unlikely(err))
 		goto out_dgrade;
 
-	dbstart = au_dbstart(cpg.dentry);
-	if (dbstart <= cpg.bdst)
+	dbtop = au_dbtop(cpg.dentry);
+	if (dbtop <= cpg.bdst)
 		cpg.bsrc = cpg.bdst;
 
-	if (dbstart <= cpg.bdst		/* just reopen */
+	if (dbtop <= cpg.bdst		/* just reopen */
 	    || !d_unhashed(cpg.dentry)	/* copyup and reopen */
 		) {
 		h_file = au_h_open_pre(cpg.dentry, cpg.bsrc, /*force_wr*/0);
@@ -450,7 +450,7 @@ int au_ready_to_write(struct file *file, loff_t len, struct au_pin *pin)
 			err = PTR_ERR(h_file);
 		else {
 			di_downgrade_lock(parent, AuLock_IR);
-			if (dbstart > cpg.bdst)
+			if (dbtop > cpg.bdst)
 				err = au_sio_cpup_simple(&cpg);
 			if (!err)
 				err = au_reopen_nondir(file);
@@ -531,7 +531,7 @@ static int au_file_refresh_by_inode(struct file *file, int *need_reopen)
 	finfo = au_fi(file);
 	sb = cpg.dentry->d_sb;
 	inode = d_inode(cpg.dentry);
-	cpg.bdst = au_ibstart(inode);
+	cpg.bdst = au_ibtop(inode);
 	if (cpg.bdst == finfo->fi_btop || IS_ROOT(cpg.dentry))
 		goto out;
 
@@ -552,7 +552,7 @@ static int au_file_refresh_by_inode(struct file *file, int *need_reopen)
 	    && au_opt_test(au_mntflags(sb), PLINK)
 	    && au_plink_test(inode)
 	    && !d_unhashed(cpg.dentry)
-	    && cpg.bdst < au_dbstart(cpg.dentry)) {
+	    && cpg.bdst < au_dbtop(cpg.dentry)) {
 		err = au_test_and_cpup_dirs(cpg.dentry, cpg.bdst);
 		if (unlikely(err))
 			goto out_unlock;
@@ -580,7 +580,7 @@ out:
 
 static void au_do_refresh_dir(struct file *file)
 {
-	aufs_bindex_t bindex, bend, new_bindex, brid;
+	aufs_bindex_t bindex, bbot, new_bindex, brid;
 	struct au_hfile *p, tmp, *q;
 	struct au_finfo *finfo;
 	struct super_block *sb;
@@ -594,8 +594,8 @@ static void au_do_refresh_dir(struct file *file)
 	AuDebugOn(!fidir);
 	p = fidir->fd_hfile + finfo->fi_btop;
 	brid = p->hf_br->br_id;
-	bend = fidir->fd_bbot;
-	for (bindex = finfo->fi_btop; bindex <= bend; bindex++, p++) {
+	bbot = fidir->fd_bbot;
+	for (bindex = finfo->fi_btop; bindex <= bbot; bindex++, p++) {
 		if (!p->hf_file)
 			continue;
 
@@ -620,8 +620,8 @@ static void au_do_refresh_dir(struct file *file)
 
 	p = fidir->fd_hfile;
 	if (!au_test_mmapped(file) && !d_unlinked(file->f_path.dentry)) {
-		bend = au_sbend(sb);
-		for (finfo->fi_btop = 0; finfo->fi_btop <= bend;
+		bbot = au_sbbot(sb);
+		for (finfo->fi_btop = 0; finfo->fi_btop <= bbot;
 		     finfo->fi_btop++, p++)
 			if (p->hf_file) {
 				if (file_inode(p->hf_file))
@@ -629,16 +629,16 @@ static void au_do_refresh_dir(struct file *file)
 				au_hfput(p, file);
 			}
 	} else {
-		bend = au_br_index(sb, brid);
-		for (finfo->fi_btop = 0; finfo->fi_btop < bend;
+		bbot = au_br_index(sb, brid);
+		for (finfo->fi_btop = 0; finfo->fi_btop < bbot;
 		     finfo->fi_btop++, p++)
 			if (p->hf_file)
 				au_hfput(p, file);
-		bend = au_sbend(sb);
+		bbot = au_sbbot(sb);
 	}
 
-	p = fidir->fd_hfile + bend;
-	for (fidir->fd_bbot = bend; fidir->fd_bbot >= finfo->fi_btop;
+	p = fidir->fd_hfile + bbot;
+	for (fidir->fd_bbot = bbot; fidir->fd_bbot >= finfo->fi_btop;
 	     fidir->fd_bbot--, p--)
 		if (p->hf_file) {
 			if (file_inode(p->hf_file))
@@ -654,7 +654,7 @@ static void au_do_refresh_dir(struct file *file)
 static int refresh_file(struct file *file, int (*reopen)(struct file *file))
 {
 	int err, need_reopen;
-	aufs_bindex_t bend, bindex;
+	aufs_bindex_t bbot, bindex;
 	struct dentry *dentry;
 	struct au_finfo *finfo;
 	struct au_hfile *hfile;
@@ -667,9 +667,9 @@ static int refresh_file(struct file *file, int (*reopen)(struct file *file))
 		bindex = au_br_index(dentry->d_sb, hfile->hf_br->br_id);
 		AuDebugOn(bindex < 0);
 		if (bindex != finfo->fi_btop)
-			au_set_fbstart(file, bindex);
+			au_set_fbtop(file, bindex);
 	} else {
-		err = au_fidir_realloc(finfo, au_sbend(dentry->d_sb) + 1);
+		err = au_fidir_realloc(finfo, au_sbbot(dentry->d_sb) + 1);
 		if (unlikely(err))
 			goto out;
 		au_do_refresh_dir(file);
@@ -688,8 +688,8 @@ static int refresh_file(struct file *file, int (*reopen)(struct file *file))
 
 	/* error, close all lower files */
 	if (finfo->fi_hdir) {
-		bend = au_fbend_dir(file);
-		for (bindex = au_fbstart(file); bindex <= bend; bindex++)
+		bbot = au_fbbot_dir(file);
+		for (bindex = au_fbtop(file); bindex <= bbot; bindex++)
 			au_set_h_fptr(file, bindex, NULL);
 	}
 
@@ -703,7 +703,7 @@ int au_reval_and_lock_fdi(struct file *file, int (*reopen)(struct file *file),
 {
 	int err;
 	unsigned int sigen, figen;
-	aufs_bindex_t bstart;
+	aufs_bindex_t btop;
 	unsigned char pseudo_link;
 	struct dentry *dentry;
 	struct inode *inode;
@@ -715,9 +715,9 @@ int au_reval_and_lock_fdi(struct file *file, int (*reopen)(struct file *file),
 	fi_write_lock(file);
 	figen = au_figen(file);
 	di_write_lock_child(dentry);
-	bstart = au_dbstart(dentry);
-	pseudo_link = (bstart != au_ibstart(inode));
-	if (sigen == figen && !pseudo_link && au_fbstart(file) == bstart) {
+	btop = au_dbtop(dentry);
+	pseudo_link = (btop != au_ibtop(inode));
+	if (sigen == figen && !pseudo_link && au_fbtop(file) == btop) {
 		if (!wlock) {
 			di_downgrade_lock(dentry, AuLock_IR);
 			fi_downgrade_lock(file);
