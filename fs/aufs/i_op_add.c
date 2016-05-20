@@ -167,7 +167,7 @@ lock_hdir_lkup_wh(struct dentry *dentry, struct au_dtime *dt,
 
 	h_parent = au_pinned_h_parent(pin);
 	if (udba != AuOpt_UDBA_NONE
-	    && au_dbstart(dentry) == bcpup)
+	    && au_dbtop(dentry) == bcpup)
 		err = au_may_add(dentry, bcpup, h_parent,
 				 au_ftest_wrdir(wr_dir_args->flags, ISDIR));
 	else if (unlikely(dentry->d_name.len > AUFS_MAX_NAMELEN))
@@ -229,7 +229,7 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 		      struct simple_arg *arg)
 {
 	int err, rerr;
-	aufs_bindex_t bstart;
+	aufs_bindex_t btop;
 	unsigned char created;
 	const unsigned char try_aopen
 		= (arg->type == Creat && arg->u.c.try_aopen);
@@ -272,10 +272,10 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	if (IS_ERR(wh_dentry))
 		goto out_parent;
 
-	bstart = au_dbstart(dentry);
+	btop = au_dbtop(dentry);
 	sb = dentry->d_sb;
-	br = au_sbr(sb, bstart);
-	a->h_path.dentry = au_h_dptr(dentry, bstart);
+	br = au_sbr(sb, btop);
+	a->h_path.dentry = au_h_dptr(dentry, btop);
 	a->h_path.mnt = au_br_mnt(br);
 	h_dir = au_pinned_h_dir(&a->pin);
 	switch (arg->type) {
@@ -300,7 +300,7 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	}
 	created = !err;
 	if (!err)
-		err = epilog(dir, bstart, wh_dentry, dentry);
+		err = epilog(dir, btop, wh_dentry, dentry);
 
 	/* revert */
 	if (unlikely(created && err && d_is_positive(a->h_path.dentry))) {
@@ -326,7 +326,7 @@ out_parent:
 		di_write_unlock(parent);
 out_unlock:
 	if (unlikely(err)) {
-		au_update_dbstart(dentry);
+		au_update_dbtop(dentry);
 		d_drop(dentry);
 	}
 	if (!try_aopen)
@@ -423,9 +423,9 @@ int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (unlikely(err))
 		goto out_parent;
 
-	bindex = au_dbstart(parent);
-	au_set_dbstart(dentry, bindex);
-	au_set_dbend(dentry, bindex);
+	bindex = au_dbtop(parent);
+	au_set_dbtop(dentry, bindex);
+	au_set_dbbot(dentry, bindex);
 	err = au_wr_dir(dentry, /*src_dentry*/NULL, &wr_dir_args);
 	bindex = err;
 	if (unlikely(err < 0))
@@ -455,15 +455,15 @@ int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (unlikely(err))
 		goto out_dentry;
 
-	au_set_dbstart(dentry, bindex);
-	au_set_dbend(dentry, bindex);
+	au_set_dbtop(dentry, bindex);
+	au_set_dbbot(dentry, bindex);
 	au_set_h_dptr(dentry, bindex, dget(h_dentry));
 	inode = au_new_inode(dentry, /*must_new*/1);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		au_set_h_dptr(dentry, bindex, NULL);
-		au_set_dbstart(dentry, -1);
-		au_set_dbend(dentry, -1);
+		au_set_dbtop(dentry, -1);
+		au_set_dbbot(dentry, -1);
 	} else {
 		if (!inode->i_nlink)
 			set_nlink(inode, 1);
@@ -471,7 +471,7 @@ int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 		au_di(dentry)->di_tmpfile = 1;
 
 		/* update without i_mutex */
-		if (au_ibstart(dir) == au_dbstart(dentry))
+		if (au_ibtop(dir) == au_dbtop(dentry))
 			au_cpup_attr_timesizes(dir);
 	}
 
@@ -483,15 +483,7 @@ out_parent:
 	di_write_unlock(parent);
 	dput(parent);
 	di_write_unlock(dentry);
-	if (!err)
-#if 0
-		/* verbose coding for lock class name */
-		au_rw_class(&au_di(dentry)->di_rwsem,
-			    au_lc_key + AuLcNonDir_DIINFO);
-#else
-		;
-#endif
-	else {
+	if (unlikely(err)) {
 		au_di_fin(dentry);
 		dentry->d_fsdata = NULL;
 	}
@@ -550,7 +542,7 @@ static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
 {
 	int err;
 	unsigned char plink;
-	aufs_bindex_t bend;
+	aufs_bindex_t bbot;
 	struct dentry *h_src_dentry;
 	struct inode *h_inode, *inode, *delegated;
 	struct super_block *sb;
@@ -560,13 +552,13 @@ static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
 	h_inode = NULL;
 	sb = src_dentry->d_sb;
 	inode = d_inode(src_dentry);
-	if (au_ibstart(inode) <= a->bdst)
+	if (au_ibtop(inode) <= a->bdst)
 		h_inode = au_h_iptr(inode, a->bdst);
 	if (!h_inode || !h_inode->i_nlink) {
 		/* copyup src_dentry as the name of dentry. */
-		bend = au_dbend(dentry);
-		if (bend < a->bsrc)
-			au_set_dbend(dentry, a->bsrc);
+		bbot = au_dbbot(dentry);
+		if (bbot < a->bsrc)
+			au_set_dbbot(dentry, a->bsrc);
 		au_set_h_dptr(dentry, a->bsrc,
 			      dget(au_h_dptr(src_dentry, a->bsrc)));
 		dget(a->h_path.dentry);
@@ -601,7 +593,7 @@ static int au_cpup_or_link(struct dentry *src_dentry, struct dentry *dentry,
 		spin_unlock(&dentry->d_lock);
 		AuDbg("temporary d_inode...done\n");
 		au_set_h_dptr(dentry, a->bsrc, NULL);
-		au_set_dbend(dentry, bend);
+		au_set_dbbot(dentry, bbot);
 	} else {
 		/* the inode of src_dentry already exists on a.bdst branch */
 		h_src_dentry = d_find_alias(h_inode);
@@ -679,7 +671,7 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 		goto out_unlock;
 
 	a->src_parent = dget_parent(src_dentry);
-	wr_dir_args.force_btgt = au_ibstart(inode);
+	wr_dir_args.force_btgt = au_ibtop(inode);
 
 	di_write_lock_parent(a->parent);
 	wr_dir_args.force_btgt = au_wbr(dentry, wr_dir_args.force_btgt);
@@ -691,15 +683,15 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 
 	err = 0;
 	sb = dentry->d_sb;
-	a->bdst = au_dbstart(dentry);
+	a->bdst = au_dbtop(dentry);
 	a->h_path.dentry = au_h_dptr(dentry, a->bdst);
 	a->h_path.mnt = au_sbr_mnt(sb, a->bdst);
-	a->bsrc = au_ibstart(inode);
+	a->bsrc = au_ibtop(inode);
 	h_src_dentry = au_h_d_alias(src_dentry, a->bsrc);
 	if (!h_src_dentry && au_di(src_dentry)->di_tmpfile)
 		h_src_dentry = dget(au_hi_wh(inode, a->bsrc));
 	if (!h_src_dentry) {
-		a->bsrc = au_dbstart(src_dentry);
+		a->bsrc = au_dbtop(src_dentry);
 		h_src_dentry = au_h_d_alias(src_dentry, a->bsrc);
 		AuDebugOn(!h_src_dentry);
 	} else if (IS_ERR(h_src_dentry)) {
@@ -799,7 +791,7 @@ out_parent:
 	dput(a->src_parent);
 out_unlock:
 	if (unlikely(err)) {
-		au_update_dbstart(dentry);
+		au_update_dbtop(dentry);
 		d_drop(dentry);
 	}
 	aufs_read_and_write_unlock2(dentry, src_dentry);
@@ -851,7 +843,7 @@ int aufs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out_parent;
 
 	sb = dentry->d_sb;
-	bindex = au_dbstart(dentry);
+	bindex = au_dbtop(dentry);
 	h_path.dentry = au_h_dptr(dentry, bindex);
 	h_path.mnt = au_sbr_mnt(sb, bindex);
 	err = vfsub_mkdir(au_pinned_h_dir(&a->pin), &h_path, mode);
@@ -908,7 +900,7 @@ out_parent:
 	di_write_unlock(parent);
 out_unlock:
 	if (unlikely(err)) {
-		au_update_dbstart(dentry);
+		au_update_dbtop(dentry);
 		d_drop(dentry);
 	}
 	aufs_read_unlock(dentry, AuLock_DW);

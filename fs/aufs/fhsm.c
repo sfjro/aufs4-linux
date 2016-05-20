@@ -141,12 +141,12 @@ void au_fhsm_wrote(struct super_block *sb, aufs_bindex_t bindex, int force)
 
 void au_fhsm_wrote_all(struct super_block *sb, int force)
 {
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	struct au_branch *br;
 
 	/* exclude the bottom */
-	bend = au_fhsm_bottom(sb);
-	for (bindex = 0; bindex < bend; bindex++) {
+	bbot = au_fhsm_bottom(sb);
+	for (bindex = 0; bindex < bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		if (au_br_fhsm(br->br_perm))
 			au_fhsm_wrote(sb, bindex, force);
@@ -192,15 +192,15 @@ static ssize_t au_fhsm_do_read(struct super_block *sb,
 {
 	ssize_t err;
 	int nstbr;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	struct au_branch *br;
 	struct au_br_fhsm *bf;
 
 	/* except the bottom branch */
 	err = 0;
 	nstbr = 0;
-	bend = au_fhsm_bottom(sb);
-	for (bindex = 0; !err && bindex < bend; bindex++) {
+	bbot = au_fhsm_bottom(sb);
+	for (bindex = 0; !err && bindex < bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		if (!au_br_fhsm(br->br_perm))
 			continue;
@@ -231,7 +231,7 @@ static ssize_t au_fhsm_read(struct file *file, char __user *buf, size_t count,
 {
 	ssize_t err;
 	int readable;
-	aufs_bindex_t nfhsm, bindex, bend;
+	aufs_bindex_t nfhsm, bindex, bbot;
 	struct au_sbinfo *sbinfo;
 	struct au_fhsm *fhsm;
 	struct au_branch *br;
@@ -262,8 +262,8 @@ need_data:
 		AuDebugOn(!sb);
 		/* exclude the bottom branch */
 		nfhsm = 0;
-		bend = au_fhsm_bottom(sb);
-		for (bindex = 0; bindex < bend; bindex++) {
+		bbot = au_fhsm_bottom(sb);
+		for (bindex = 0; bindex < bbot; bindex++) {
 			br = au_sbr(sb, bindex);
 			if (au_br_fhsm(br->br_perm))
 				nfhsm++;
