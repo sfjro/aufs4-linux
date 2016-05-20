@@ -585,7 +585,7 @@ static void reinit_br_wh(void *arg)
 out:
 	if (wbr)
 		atomic_dec(&wbr->wbr_wh_running);
-	atomic_dec(&a->br->br_count);
+	au_br_put(a->br);
 	si_write_unlock(a->sb);
 	au_nwt_done(&au_sbi(a->sb)->si_nowait);
 	kfree(arg);
@@ -611,11 +611,11 @@ static void kick_reinit_br_wh(struct super_block *sb, struct au_branch *br)
 		 */
 		arg->sb = sb;
 		arg->br = br;
-		atomic_inc(&br->br_count);
+		au_br_get(br);
 		wkq_err = au_wkq_nowait(reinit_br_wh, arg, sb, /*flags*/0);
 		if (unlikely(wkq_err)) {
 			atomic_dec(&br->br_wbr->wbr_wh_running);
-			atomic_dec(&br->br_count);
+			au_br_put(br);
 			kfree(arg);
 		}
 		do_dec = 0;
@@ -904,7 +904,7 @@ out:
 void au_whtmp_rmdir_free(struct au_whtmp_rmdir *whtmp)
 {
 	if (whtmp->br)
-		atomic_dec(&whtmp->br->br_count);
+		au_br_put(whtmp->br);
 	dput(whtmp->wh_dentry);
 	iput(whtmp->dir);
 	au_nhash_wh_free(&whtmp->whlist);
@@ -963,7 +963,7 @@ int au_whtmp_rmdir(struct inode *dir, aufs_bindex_t bindex,
 	}
 
 	if (!err) {
-		if (au_ibstart(dir) == bindex) {
+		if (au_ibtop(dir) == bindex) {
 			/* todo: dir->i_mutex is necessary */
 			au_cpup_attr_timesizes(dir);
 			if (h_nlink)
@@ -1037,7 +1037,7 @@ void au_whtmp_kick_rmdir(struct inode *dir, aufs_bindex_t bindex,
 	sb = dir->i_sb;
 	args->dir = au_igrab(dir);
 	args->br = au_sbr(sb, bindex);
-	atomic_inc(&args->br->br_count);
+	au_br_get(args->br);
 	args->wh_dentry = dget(wh_dentry);
 	wkq_err = au_wkq_nowait(call_rmdir_whtmp, args, sb, /*flags*/0);
 	if (unlikely(wkq_err)) {
