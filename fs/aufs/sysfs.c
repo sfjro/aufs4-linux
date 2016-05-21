@@ -106,7 +106,7 @@ ssize_t sysaufs_si_show(struct kobject *kobj, struct attribute *attr,
 	ssize_t err;
 	int idx;
 	long l;
-	aufs_bindex_t bend;
+	aufs_bindex_t bbot;
 	struct au_sbinfo *sbinfo;
 	struct super_block *sb;
 	struct seq_file *seq;
@@ -159,8 +159,8 @@ ssize_t sysaufs_si_show(struct kobject *kobj, struct attribute *attr,
 
 	err = kstrtol(name, 10, &l);
 	if (!err) {
-		bend = au_sbend(sb);
-		if (l <= bend)
+		bbot = au_sbbot(sb);
+		if (l <= bbot)
 			err = sysaufs_si_br(seq, sb, (aufs_bindex_t)l, idx);
 		else
 			err = -ENOENT;
@@ -186,15 +186,15 @@ static int au_brinfo(struct super_block *sb, union aufs_brinfo __user *arg)
 {
 	int err;
 	int16_t brid;
-	aufs_bindex_t bindex, bend;
+	aufs_bindex_t bindex, bbot;
 	size_t sz;
 	char *buf;
 	struct seq_file *seq;
 	struct au_branch *br;
 
 	si_read_lock(sb, AuLock_FLUSH);
-	bend = au_sbend(sb);
-	err = bend + 1;
+	bbot = au_sbbot(sb);
+	err = bbot + 1;
 	if (!arg)
 		goto out;
 
@@ -209,7 +209,7 @@ static int au_brinfo(struct super_block *sb, union aufs_brinfo __user *arg)
 		goto out_buf;
 
 	sz = sizeof(*arg) - offsetof(union aufs_brinfo, path);
-	for (bindex = 0; bindex <= bend; bindex++, arg++) {
+	for (bindex = 0; bindex <= bbot; bindex++, arg++) {
 		err = !access_ok(VERIFY_WRITE, arg, sizeof(*arg));
 		if (unlikely(err))
 			break;
@@ -288,7 +288,7 @@ void sysaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 	struct kobject *kobj;
 	struct au_brsysfs *br_sysfs;
 	int i;
-	aufs_bindex_t bend;
+	aufs_bindex_t bbot;
 
 	dbgaufs_brs_del(sb, bindex);
 
@@ -296,8 +296,8 @@ void sysaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 		return;
 
 	kobj = &au_sbi(sb)->si_kobj;
-	bend = au_sbend(sb);
-	for (; bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (; bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		br_sysfs = br->br_sysfs;
 		for (i = 0; i < ARRAY_SIZE(br->br_sysfs); i++) {
@@ -310,7 +310,7 @@ void sysaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 void sysaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 {
 	int err, i;
-	aufs_bindex_t bend;
+	aufs_bindex_t bbot;
 	struct kobject *kobj;
 	struct au_branch *br;
 	struct au_brsysfs *br_sysfs;
@@ -321,8 +321,8 @@ void sysaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 		return;
 
 	kobj = &au_sbi(sb)->si_kobj;
-	bend = au_sbend(sb);
-	for (; bindex <= bend; bindex++) {
+	bbot = au_sbbot(sb);
+	for (; bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
 		br_sysfs = br->br_sysfs;
 		snprintf(br_sysfs[AuBrSysfs_BR].name, sizeof(br_sysfs->name),

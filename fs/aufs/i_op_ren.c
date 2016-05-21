@@ -32,7 +32,7 @@ struct au_ren_args {
 		struct inode *dir, *inode;
 		struct au_hinode *hdir;
 		struct au_dtime dt[AuParentChild];
-		aufs_bindex_t bstart;
+		aufs_bindex_t btop;
 	} sd[AuSrcDst];
 
 #define src_dentry	sd[AuSRC].dentry
@@ -45,7 +45,7 @@ struct au_ren_args {
 #define src_hdir	sd[AuSRC].hdir
 #define src_h_dir	sd[AuSRC].hdir->hi_inode
 #define src_dt		sd[AuSRC].dt
-#define src_bstart	sd[AuSRC].bstart
+#define src_btop	sd[AuSRC].btop
 
 #define dst_dentry	sd[AuDST].dentry
 #define dst_dir		sd[AuDST].dir
@@ -57,7 +57,7 @@ struct au_ren_args {
 #define dst_hdir	sd[AuDST].hdir
 #define dst_h_dir	sd[AuDST].hdir->hi_inode
 #define dst_dt		sd[AuDST].dt
-#define dst_bstart	sd[AuDST].bstart
+#define dst_btop	sd[AuDST].btop
 
 	struct dentry *h_trap;
 	struct au_branch *br;
@@ -189,12 +189,12 @@ static int au_ren_or_cpup(struct au_ren_args *a)
 	struct inode *delegated;
 
 	d = a->src_dentry;
-	if (au_dbstart(d) == a->btgt) {
+	if (au_dbtop(d) == a->btgt) {
 		a->h_path.dentry = a->dst_h_dentry;
 		if (au_ftest_ren(a->flags, DIROPQ)
 		    && au_dbdiropq(d) == a->btgt)
 			au_fclr_ren(a->flags, DIROPQ);
-		AuDebugOn(au_dbstart(d) != a->btgt);
+		AuDebugOn(au_dbtop(d) != a->btgt);
 		delegated = NULL;
 		err = vfsub_rename(a->src_h_dir, au_h_dptr(d, a->btgt),
 				   a->dst_h_dir, &a->h_path, &delegated);
@@ -313,7 +313,7 @@ static int do_rename(struct au_ren_args *a)
 		a->dst_h_dentry = au_h_dptr(d, a->btgt);
 	}
 
-	BUG_ON(d_is_positive(a->dst_h_dentry) && a->src_bstart != a->btgt);
+	BUG_ON(d_is_positive(a->dst_h_dentry) && a->src_btop != a->btgt);
 
 	/* rename by vfs_rename or cpup */
 	d = a->dst_dentry;
@@ -321,7 +321,7 @@ static int do_rename(struct au_ren_args *a)
 	    && (a->dst_wh_dentry
 		|| au_dbdiropq(d) == a->btgt
 		/* hide the lower to keep xino */
-		|| a->btgt < au_dbend(d)
+		|| a->btgt < au_dbbot(d)
 		|| au_opt_test(au_mntflags(d->d_sb), ALWAYS_DIROPQ)))
 		au_fset_ren(a->flags, DIROPQ);
 	err = au_ren_or_cpup(a);
@@ -337,7 +337,7 @@ static int do_rename(struct au_ren_args *a)
 	}
 
 	/* update target timestamps */
-	AuDebugOn(au_dbstart(a->src_dentry) != a->btgt);
+	AuDebugOn(au_dbtop(a->src_dentry) != a->btgt);
 	a->h_path.dentry = au_h_dptr(a->src_dentry, a->btgt);
 	vfsub_update_h_iattr(&a->h_path, /*did*/NULL); /*ignore*/
 	a->src_inode->i_ctime = d_inode(a->h_path.dentry)->i_ctime;
@@ -410,10 +410,10 @@ static int may_rename_srcdir(struct dentry *dentry, aufs_bindex_t btgt)
 {
 	int err;
 	unsigned int rdhash;
-	aufs_bindex_t bstart;
+	aufs_bindex_t btop;
 
-	bstart = au_dbstart(dentry);
-	if (bstart != btgt) {
+	btop = au_dbtop(dentry);
+	if (btop != btgt) {
 		struct au_nhash whlist;
 
 		SiMustAnyLock(dentry->d_sb);
@@ -429,7 +429,7 @@ static int may_rename_srcdir(struct dentry *dentry, aufs_bindex_t btgt)
 		goto out;
 	}
 
-	if (bstart == au_dbtaildir(dentry))
+	if (btop == au_dbtaildir(dentry))
 		return 0; /* success */
 
 	err = au_test_empty_lower(dentry);
@@ -462,16 +462,16 @@ static int au_ren_may_dir(struct au_ren_args *a)
 		if (unlikely(err))
 			goto out;
 
-		au_set_dbstart(d, a->dst_bstart);
+		au_set_dbtop(d, a->dst_btop);
 		err = may_rename_dstdir(d, &a->whlist);
-		au_set_dbstart(d, a->btgt);
+		au_set_dbtop(d, a->btgt);
 	}
-	a->dst_h_dentry = au_h_dptr(d, au_dbstart(d));
+	a->dst_h_dentry = au_h_dptr(d, au_dbtop(d));
 	if (unlikely(err))
 		goto out;
 
 	d = a->src_dentry;
-	a->src_h_dentry = au_h_dptr(d, au_dbstart(d));
+	a->src_h_dentry = au_h_dptr(d, au_dbtop(d));
 	if (au_ftest_ren(a->flags, ISDIR)) {
 		err = may_rename_srcdir(d, a->btgt);
 		if (unlikely(err)) {
@@ -494,7 +494,7 @@ static int au_may_ren(struct au_ren_args *a)
 	int err, isdir;
 	struct inode *h_inode;
 
-	if (a->src_bstart == a->btgt) {
+	if (a->src_btop == a->btgt) {
 		err = au_may_del(a->src_dentry, a->btgt, a->src_h_parent,
 				 au_ftest_ren(a->flags, ISDIR));
 		if (unlikely(err))
@@ -505,7 +505,7 @@ static int au_may_ren(struct au_ren_args *a)
 	}
 
 	err = 0;
-	if (a->dst_bstart != a->btgt)
+	if (a->dst_btop != a->btgt)
 		goto out;
 
 	err = -ENOTEMPTY;
@@ -588,11 +588,11 @@ static int au_ren_lock(struct au_ren_args *a)
 	if (unlikely(a->src_hdir->hi_inode != d_inode(a->src_h_parent)
 		     || a->dst_hdir->hi_inode != d_inode(a->dst_h_parent)))
 		err = au_busy_or_stale();
-	if (!err && au_dbstart(a->src_dentry) == a->btgt)
+	if (!err && au_dbtop(a->src_dentry) == a->btgt)
 		err = au_h_verify(a->src_h_dentry, udba,
 				  d_inode(a->src_h_parent), a->src_h_parent,
 				  a->br);
-	if (!err && au_dbstart(a->dst_dentry) == a->btgt)
+	if (!err && au_dbtop(a->dst_dentry) == a->btgt)
 		err = au_h_verify(a->dst_h_dentry, udba,
 				  d_inode(a->dst_h_parent), a->dst_h_parent,
 				  a->br);
@@ -634,7 +634,7 @@ static void au_ren_refresh_dir(struct au_ren_args *a)
 
 static void au_ren_refresh(struct au_ren_args *a)
 {
-	aufs_bindex_t bend, bindex;
+	aufs_bindex_t bbot, bindex;
 	struct dentry *d, *h_d;
 	struct inode *i, *h_i;
 	struct super_block *sb;
@@ -655,32 +655,32 @@ static void au_ren_refresh(struct au_ren_args *a)
 		}
 		au_update_dbrange(d, /*do_put_zero*/1);
 	} else {
-		bend = a->btgt;
-		for (bindex = au_dbstart(d); bindex < bend; bindex++)
+		bbot = a->btgt;
+		for (bindex = au_dbtop(d); bindex < bbot; bindex++)
 			au_set_h_dptr(d, bindex, NULL);
-		bend = au_dbend(d);
-		for (bindex = a->btgt + 1; bindex <= bend; bindex++)
+		bbot = au_dbbot(d);
+		for (bindex = a->btgt + 1; bindex <= bbot; bindex++)
 			au_set_h_dptr(d, bindex, NULL);
 		au_update_dbrange(d, /*do_put_zero*/0);
 	}
 
 	d = a->src_dentry;
 	au_set_dbwh(d, -1);
-	bend = au_dbend(d);
-	for (bindex = a->btgt + 1; bindex <= bend; bindex++) {
+	bbot = au_dbbot(d);
+	for (bindex = a->btgt + 1; bindex <= bbot; bindex++) {
 		h_d = au_h_dptr(d, bindex);
 		if (h_d)
 			au_set_h_dptr(d, bindex, NULL);
 	}
-	au_set_dbend(d, a->btgt);
+	au_set_dbbot(d, a->btgt);
 
 	sb = d->d_sb;
 	i = a->src_inode;
 	if (au_opt_test(au_mntflags(sb), PLINK) && au_plink_test(i))
 		return; /* success */
 
-	bend = au_ibend(i);
-	for (bindex = a->btgt + 1; bindex <= bend; bindex++) {
+	bbot = au_ibbot(i);
+	for (bindex = a->btgt + 1; bindex <= bbot; bindex++) {
 		h_i = au_h_iptr(i, bindex);
 		if (h_i) {
 			au_xino_write(sb, bindex, h_i->i_ino, /*ino*/0);
@@ -688,7 +688,7 @@ static void au_ren_refresh(struct au_ren_args *a)
 			au_set_h_iptr(i, bindex, NULL, 0);
 		}
 	}
-	au_set_ibend(i, a->btgt);
+	au_set_ibbot(i, a->btgt);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -715,7 +715,7 @@ int au_wbr(struct dentry *dentry, aufs_bindex_t btgt)
 	return btgt;
 }
 
-/* sets src_bstart, dst_bstart and btgt */
+/* sets src_btop, dst_btop and btgt */
 static int au_ren_wbr(struct au_ren_args *a)
 {
 	int err;
@@ -724,13 +724,13 @@ static int au_ren_wbr(struct au_ren_args *a)
 		.flags		= AuWrDir_ADD_ENTRY
 	};
 
-	a->src_bstart = au_dbstart(a->src_dentry);
-	a->dst_bstart = au_dbstart(a->dst_dentry);
+	a->src_btop = au_dbtop(a->src_dentry);
+	a->dst_btop = au_dbtop(a->dst_dentry);
 	if (au_ftest_ren(a->flags, ISDIR))
 		au_fset_wrdir(wr_dir_args.flags, ISDIR);
-	wr_dir_args.force_btgt = a->src_bstart;
-	if (a->dst_inode && a->dst_bstart < a->src_bstart)
-		wr_dir_args.force_btgt = a->dst_bstart;
+	wr_dir_args.force_btgt = a->src_btop;
+	if (a->dst_inode && a->dst_btop < a->src_btop)
+		wr_dir_args.force_btgt = a->dst_btop;
 	wr_dir_args.force_btgt = au_wbr(a->dst_dentry, wr_dir_args.force_btgt);
 	err = au_wr_dir(a->dst_dentry, a->src_dentry, &wr_dir_args);
 	a->btgt = err;
@@ -880,7 +880,7 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 		goto out_children;
 
 	/* prepare the writable parent dir on the same branch */
-	if (a->dst_bstart == a->btgt) {
+	if (a->dst_btop == a->btgt) {
 		au_fset_ren(a->flags, WHDST);
 	} else {
 		err = au_cpup_dirs(a->dst_dentry, a->btgt);
@@ -911,7 +911,7 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 		au_fset_ren(a->flags, WHSRC);
 
 	/* cpup src */
-	if (a->src_bstart != a->btgt) {
+	if (a->src_btop != a->btgt) {
 		struct au_pin pin;
 
 		err = au_pin(&pin, a->src_dentry, a->btgt,
@@ -921,18 +921,18 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 			struct au_cp_generic cpg = {
 				.dentry	= a->src_dentry,
 				.bdst	= a->btgt,
-				.bsrc	= a->src_bstart,
+				.bsrc	= a->src_btop,
 				.len	= -1,
 				.pin	= &pin,
 				.flags	= AuCpup_DTIME | AuCpup_HOPEN
 			};
-			AuDebugOn(au_dbstart(a->src_dentry) != a->src_bstart);
+			AuDebugOn(au_dbtop(a->src_dentry) != a->src_btop);
 			err = au_sio_cpup_simple(&cpg);
 			au_unpin(&pin);
 		}
 		if (unlikely(err))
 			goto out_children;
-		a->src_bstart = a->btgt;
+		a->src_btop = a->btgt;
 		a->src_h_dentry = au_h_dptr(a->src_dentry, a->btgt);
 		au_fset_ren(a->flags, WHSRC);
 	}
@@ -972,16 +972,16 @@ out_hdir:
 	au_ren_unlock(a);
 out_children:
 	au_nhash_wh_free(&a->whlist);
-	if (err && a->dst_inode && a->dst_bstart != a->btgt) {
-		AuDbg("bstart %d, btgt %d\n", a->dst_bstart, a->btgt);
+	if (err && a->dst_inode && a->dst_btop != a->btgt) {
+		AuDbg("btop %d, btgt %d\n", a->dst_btop, a->btgt);
 		au_set_h_dptr(a->dst_dentry, a->btgt, NULL);
-		au_set_dbstart(a->dst_dentry, a->dst_bstart);
+		au_set_dbtop(a->dst_dentry, a->dst_btop);
 	}
 out_parent:
 	if (!err)
 		d_move(a->src_dentry, a->dst_dentry);
 	else {
-		au_update_dbstart(a->dst_dentry);
+		au_update_dbtop(a->dst_dentry);
 		if (!a->dst_inode)
 			d_drop(a->dst_dentry);
 	}
