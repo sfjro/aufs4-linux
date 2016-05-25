@@ -579,7 +579,7 @@ static unsigned long long au_farray_cb(struct super_block *sb, void *a,
 static struct file **au_farray_alloc(struct super_block *sb,
 				     unsigned long long *max)
 {
-	*max = atomic_long_read(&au_sbi(sb)->si_nfiles);
+	*max = au_nfiles(sb);
 	return au_array_alloc(max, au_farray_cb, sb, /*arg*/NULL);
 }
 
