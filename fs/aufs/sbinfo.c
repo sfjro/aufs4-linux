@@ -33,7 +33,12 @@ void au_si_free(struct kobject *kobj)
 	sbinfo = container_of(kobj, struct au_sbinfo, si_kobj);
 	for (i = 0; i < AuPlink_NHASH; i++)
 		AuDebugOn(!hlist_empty(&sbinfo->si_plink[i].head));
-	AuDebugOn(atomic_read(&sbinfo->si_nowait.nw_len));
+	au_nwt_fin(&sbinfo->si_nowait);
+
+	AuDebugOn(percpu_counter_sum(&sbinfo->si_ninodes));
+	percpu_counter_destroy(&sbinfo->si_ninodes);
+	AuDebugOn(percpu_counter_sum(&sbinfo->si_nfiles));
+	percpu_counter_destroy(&sbinfo->si_nfiles);
 
 	au_rw_write_lock(&sbinfo->si_rwsem);
 	au_br_free(sbinfo);
@@ -72,8 +77,8 @@ int au_si_alloc(struct super_block *sb)
 	au_rw_init_wlock(&sbinfo->si_rwsem);
 	mutex_init(&sbinfo->au_si_pid.pid_mtx);
 
-	atomic_long_set(&sbinfo->si_ninodes, 0);
-	atomic_long_set(&sbinfo->si_nfiles, 0);
+	percpu_counter_init(&sbinfo->si_ninodes, 0, GFP_NOFS);
+	percpu_counter_init(&sbinfo->si_nfiles, 0, GFP_NOFS);
 
 	sbinfo->si_bbot = -1;
 	sbinfo->si_last_br_id = AUFS_BRANCH_MAX / 2;
