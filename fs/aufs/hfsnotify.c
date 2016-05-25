@@ -50,8 +50,6 @@ static int au_hfsn_alloc(struct au_hinode *hinode)
 	lockdep_off();
 	err = fsnotify_add_mark(mark, br->br_hfsn->hfsn_group, hinode->hi_inode,
 				 /*mnt*/NULL, /*allow_dups*/1);
-	/* even if err */
-	fsnotify_put_mark(mark);
 	lockdep_on();
 
 	return err;
@@ -73,6 +71,7 @@ static int au_hfsn_free(struct au_hinode *hinode, struct au_hnotify *hn)
 	spin_unlock(&mark->lock);
 	lockdep_off();
 	fsnotify_destroy_mark(mark, group);
+	fsnotify_put_mark(mark);
 	fsnotify_put_group(group);
 	lockdep_on();
 
