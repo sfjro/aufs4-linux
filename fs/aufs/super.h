@@ -104,7 +104,7 @@ struct au_sbinfo {
 	 * dirty approach to protect sb->sb_inodes and ->s_files (gone) from
 	 * remount.
 	 */
-	atomic_long_t		si_ninodes, si_nfiles;
+	struct percpu_counter	si_ninodes, si_nfiles;
 
 	/* branch management */
 	unsigned int		si_generation;
@@ -582,26 +582,40 @@ static inline unsigned int au_sigen(struct super_block *sb)
 	return au_sbi(sb)->si_generation;
 }
 
+static inline unsigned long long au_ninodes(struct super_block *sb)
+{
+	s64 n = percpu_counter_sum(&au_sbi(sb)->si_ninodes);
+
+	BUG_ON(n < 0);
+	return n;
+}
+
 static inline void au_ninodes_inc(struct super_block *sb)
 {
-	atomic_long_inc(&au_sbi(sb)->si_ninodes);
+	percpu_counter_inc(&au_sbi(sb)->si_ninodes);
 }
 
 static inline void au_ninodes_dec(struct super_block *sb)
 {
-	AuDebugOn(!atomic_long_read(&au_sbi(sb)->si_ninodes));
-	atomic_long_dec(&au_sbi(sb)->si_ninodes);
+	percpu_counter_dec(&au_sbi(sb)->si_ninodes);
+}
+
+static inline unsigned long long au_nfiles(struct super_block *sb)
+{
+	s64 n = percpu_counter_sum(&au_sbi(sb)->si_nfiles);
+
+	BUG_ON(n < 0);
+	return n;
 }
 
 static inline void au_nfiles_inc(struct super_block *sb)
 {
-	atomic_long_inc(&au_sbi(sb)->si_nfiles);
+	percpu_counter_inc(&au_sbi(sb)->si_nfiles);
 }
 
 static inline void au_nfiles_dec(struct super_block *sb)
 {
-	AuDebugOn(!atomic_long_read(&au_sbi(sb)->si_nfiles));
-	atomic_long_dec(&au_sbi(sb)->si_nfiles);
+	percpu_counter_dec(&au_sbi(sb)->si_nfiles);
 }
 
 static inline struct au_branch *au_sbr(struct super_block *sb,
