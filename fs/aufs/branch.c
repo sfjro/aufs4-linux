@@ -910,7 +910,7 @@ static void au_br_do_del_hdp(struct au_dinfo *dinfo, const aufs_bindex_t bindex,
 	if (bindex < bbot)
 		memmove(hdp + bindex, hdp + bindex + 1,
 			sizeof(*hdp) * (bbot - bindex));
-	hdp[0 + bbot].hd_dentry = NULL;
+	/* hdp[0 + bbot].hd_dentry = NULL; */
 	dinfo->di_bbot--;
 
 	p = krealloc(hdp, sizeof(*p) * bbot, AuGFP_SBILIST);
