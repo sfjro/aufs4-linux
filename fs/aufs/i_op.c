@@ -574,17 +574,17 @@ out:
 	return err;
 }
 
-void au_pin_hdir_set_owner(struct au_pin *p, struct task_struct *task)
+static void au_pin_hdir_set_owner(struct au_pin *p, struct task_struct *task)
 {
-#if defined(CONFIG_DEBUG_MUTEXES) || defined(CONFIG_SMP)
-	p->hdir->hi_inode->i_mutex.owner = task;
+#if !defined(CONFIG_RWSEM_GENERIC_SPINLOCK) && defined(CONFIG_RWSEM_SPIN_ON_OWNER)
+	p->hdir->hi_inode->i_rwsem.owner = task;
 #endif
 }
 
 void au_pin_hdir_acquire_nest(struct au_pin *p)
 {
 	if (p->hdir) {
-		mutex_acquire_nest(&p->hdir->hi_inode->i_mutex.dep_map,
+		rwsem_acquire_nest(&p->hdir->hi_inode->i_rwsem.dep_map,
 				   p->lsc_hi, 0, NULL, _RET_IP_);
 		au_pin_hdir_set_owner(p, current);
 	}
@@ -594,7 +594,7 @@ void au_pin_hdir_release(struct au_pin *p)
 {
 	if (p->hdir) {
 		au_pin_hdir_set_owner(p, p->task);
-		mutex_release(&p->hdir->hi_inode->i_mutex.dep_map, 1, _RET_IP_);
+		rwsem_release(&p->hdir->hi_inode->i_rwsem.dep_map, 1, _RET_IP_);
 	}
 }
 
