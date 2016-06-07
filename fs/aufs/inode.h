@@ -306,8 +306,8 @@ AuStubVoid(au_plink_half_refresh, struct super_block *sb, aufs_bindex_t br_id);
 int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
 		  unsigned int verbose);
 ssize_t aufs_listxattr(struct dentry *dentry, char *list, size_t size);
-ssize_t aufs_getxattr(struct dentry *dentry, const char *name, void *value,
-		      size_t size);
+ssize_t aufs_getxattr(struct dentry *dentry, struct inode *inode,
+		      const char *name, void *value, size_t size);
 int aufs_setxattr(struct dentry *dentry, const char *name, const void *value,
 		  size_t size, int flags);
 int aufs_removexattr(struct dentry *dentry, const char *name);
