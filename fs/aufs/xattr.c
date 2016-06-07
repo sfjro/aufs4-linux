@@ -277,8 +277,8 @@ ssize_t aufs_getxattr(struct dentry *dentry, struct inode *inode __maybe_unused,
 	return au_lgxattr(dentry, &arg);
 }
 
-int aufs_setxattr(struct dentry *dentry, const char *name, const void *value,
-		  size_t size, int flags)
+int aufs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
+		  const void *value, size_t size, int flags)
 {
 	struct au_srxattr arg = {
 		.type = AU_XATTR_SET,
@@ -290,7 +290,7 @@ int aufs_setxattr(struct dentry *dentry, const char *name, const void *value,
 		},
 	};
 
-	return au_srxattr(dentry, &arg);
+	return au_srxattr(dentry, inode, &arg);
 }
 
 int aufs_removexattr(struct dentry *dentry, const char *name)
@@ -302,7 +302,7 @@ int aufs_removexattr(struct dentry *dentry, const char *name)
 		},
 	};
 
-	return au_srxattr(dentry, &arg);
+	return au_srxattr(dentry, d_inode(dentry), &arg);
 }
 
 /* ---------------------------------------------------------------------- */

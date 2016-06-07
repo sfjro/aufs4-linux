@@ -308,8 +308,8 @@ int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
 ssize_t aufs_listxattr(struct dentry *dentry, char *list, size_t size);
 ssize_t aufs_getxattr(struct dentry *dentry, struct inode *inode,
 		      const char *name, void *value, size_t size);
-int aufs_setxattr(struct dentry *dentry, const char *name, const void *value,
-		  size_t size, int flags);
+int aufs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
+		  const void *value, size_t size, int flags);
 int aufs_removexattr(struct dentry *dentry, const char *name);
 
 /* void au_xattr_init(struct super_block *sb); */
@@ -349,7 +349,8 @@ struct au_srxattr {
 		} acl_set;
 	} u;
 };
-ssize_t au_srxattr(struct dentry *dentry, struct au_srxattr *arg);
+ssize_t au_srxattr(struct dentry *dentry, struct inode *inode,
+		   struct au_srxattr *arg);
 #endif
 
 /* ---------------------------------------------------------------------- */

@@ -1023,15 +1023,15 @@ out:
 	return err;
 }
 
-ssize_t au_srxattr(struct dentry *dentry, struct au_srxattr *arg)
+ssize_t au_srxattr(struct dentry *dentry, struct inode *inode,
+		   struct au_srxattr *arg)
 {
 	int err;
 	struct path h_path;
 	struct super_block *sb;
 	struct au_icpup_args *a;
-	struct inode *inode, *h_inode;
+	struct inode *h_inode;
 
-	inode = d_inode(dentry);
 	IMustLock(inode);
 
 	err = -ENOMEM;
@@ -1053,6 +1053,7 @@ ssize_t au_srxattr(struct dentry *dentry, struct au_srxattr *arg)
 	inode_unlock(a->h_inode);
 	switch (arg->type) {
 	case AU_XATTR_SET:
+		AuDebugOn(d_is_negative(h_path.dentry));
 		err = vfsub_setxattr(h_path.dentry,
 				     arg->u.set.name, arg->u.set.value,
 				     arg->u.set.size, arg->u.set.flags);
