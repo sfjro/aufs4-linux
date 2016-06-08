@@ -563,7 +563,7 @@ void au_xino_delete_inode(struct inode *inode, const int unlinked)
 	struct au_branch *br;
 	au_writef_t xwrite;
 
-	AuDebugOn(is_bad_inode(inode));
+	AuDebugOn(au_is_bad_inode(inode));
 
 	sb = inode->i_sb;
 	mnt_flags = au_mntflags(sb);
@@ -1116,7 +1116,6 @@ static int au_xino_set_br(struct super_block *sb, struct file *base)
 	ino = AUFS_ROOT_INO;
 	writef = au_sbi(sb)->si_xwrite;
 	for (bindex = 0, p = fpair; bindex <= bbot; bindex++, p++) {
-		br = au_sbr(sb, bindex);
 		bshared = is_sb_shared(sb, bindex, bindex - 1);
 		if (bshared >= 0) {
 			/* shared xino */
@@ -1126,6 +1125,7 @@ static int au_xino_set_br(struct super_block *sb, struct file *base)
 
 		if (!p->new) {
 			/* new xino */
+			br = au_sbr(sb, bindex);
 			p->old = br->br_xino.xi_file;
 			p->new = au_xino_create2(base, br->br_xino.xi_file);
 			err = PTR_ERR(p->new);
