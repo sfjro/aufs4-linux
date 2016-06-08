@@ -1045,7 +1045,7 @@ static int aufs_d_revalidate(struct dentry *dentry, unsigned int flags)
 		goto out;
 	}
 	inode = dentry->d_inode;
-	if (unlikely(inode && is_bad_inode(inode))) {
+	if (unlikely(inode && au_is_bad_inode(inode))) {
 		err = -EINVAL;
 		AuTraceErr(err);
 		goto out_dgrade;

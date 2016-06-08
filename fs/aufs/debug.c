@@ -146,7 +146,7 @@ void au_dpri_inode(struct inode *inode)
 	int err, hn;
 
 	err = do_pri_inode(-1, inode, -1, NULL);
-	if (err || !au_test_aufs(inode->i_sb) || is_bad_inode(inode))
+	if (err || !au_test_aufs(inode->i_sb) || au_is_bad_inode(inode))
 		return;
 
 	iinfo = au_ii(inode);
@@ -192,7 +192,7 @@ static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 	     d_unhashed(dentry) ? "un" : "");
 	hn = -1;
 	if (bindex >= 0 && dentry->d_inode && au_test_aufs(dentry->d_sb)
-	    && !is_bad_inode(dentry->d_inode)) {
+	    && !au_is_bad_inode(dentry->d_inode)) {
 		iinfo = au_ii(dentry->d_inode);
 		hi = au_hinode(iinfo, bindex);
 		hn = !!au_hn(hi);

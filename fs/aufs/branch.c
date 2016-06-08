@@ -1120,7 +1120,7 @@ static int au_ibusy(struct super_block *sb, struct aufs_ibusy __user *arg)
 	inode = ilookup(sb, ibusy.ino);
 	if (!inode
 	    || inode->i_ino == AUFS_ROOT_INO
-	    || is_bad_inode(inode))
+	    || au_is_bad_inode(inode))
 		goto out_unlock;
 
 	ii_read_lock_child(inode);

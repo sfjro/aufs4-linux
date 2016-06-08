@@ -135,7 +135,7 @@ void au_update_ibrange(struct inode *inode, int do_put_zero)
 	struct au_iinfo *iinfo;
 	aufs_bindex_t bindex, bbot;
 
-	AuDebugOn(is_bad_inode(inode));
+	AuDebugOn(au_is_bad_inode(inode));
 	IiMustWriteLock(inode);
 
 	iinfo = au_ii(inode);
@@ -247,7 +247,7 @@ void au_iinfo_fin(struct inode *inode)
 	aufs_bindex_t bindex, bbot;
 	const unsigned char unlinked = !inode->i_nlink;
 
-	AuDebugOn(is_bad_inode(inode));
+	AuDebugOn(au_is_bad_inode(inode));
 
 	sb = inode->i_sb;
 	au_ninodes_dec(sb);

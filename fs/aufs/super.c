@@ -36,6 +36,7 @@ static struct inode *aufs_alloc_inode(struct super_block *sb __maybe_unused)
 	if (c) {
 		au_icntnr_init(c);
 		c->vfs_inode.i_version = 1; /* sigen(sb); */
+		c->iinfo.ii_hinode = NULL;
 		return &c->vfs_inode;
 	}
 	return NULL;
@@ -51,7 +52,7 @@ static void aufs_destroy_inode_cb(struct rcu_head *head)
 
 static void aufs_destroy_inode(struct inode *inode)
 {
-	if (!is_bad_inode(inode))
+	if (!au_is_bad_inode(inode))
 		au_iinfo_fin(inode);
 	call_rcu(&inode->i_rcu, aufs_destroy_inode_cb);
 }
@@ -514,7 +515,7 @@ static unsigned long long au_iarray_cb(void *a,
 	head = arg;
 	spin_lock(&inode_sb_list_lock);
 	list_for_each_entry(inode, head, i_sb_list) {
-		if (!is_bad_inode(inode)
+		if (!au_is_bad_inode(inode)
 		    && au_ii(inode)->ii_btop >= 0) {
 			spin_lock(&inode->i_lock);
 			if (atomic_read(&inode->i_count)) {

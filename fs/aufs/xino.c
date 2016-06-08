@@ -576,7 +576,7 @@ void au_xino_delete_inode(struct inode *inode, const int unlinked)
 	struct au_branch *br;
 	au_writef_t xwrite;
 
-	AuDebugOn(is_bad_inode(inode));
+	AuDebugOn(au_is_bad_inode(inode));
 
 	sb = inode->i_sb;
 	mnt_flags = au_mntflags(sb);
