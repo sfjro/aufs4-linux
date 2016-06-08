@@ -430,7 +430,7 @@ static void au_br_do_add_hdp(struct au_dinfo *dinfo, aufs_bindex_t bindex,
 
 	AuRwMustWriteLock(&dinfo->di_rwsem);
 
-	hdp = dinfo->di_hdentry + bindex;
+	hdp = au_hdentry(dinfo, bindex);
 	memmove(hdp + 1, hdp, sizeof(*hdp) * amount);
 	au_h_dentry_init(hdp);
 	dinfo->di_bbot++;
@@ -906,14 +906,13 @@ static void au_br_do_del_hdp(struct au_dinfo *dinfo, const aufs_bindex_t bindex,
 
 	AuRwMustWriteLock(&dinfo->di_rwsem);
 
-	hdp = dinfo->di_hdentry;
+	hdp = au_hdentry(dinfo, bindex);
 	if (bindex < bbot)
-		memmove(hdp + bindex, hdp + bindex + 1,
-			sizeof(*hdp) * (bbot - bindex));
-	hdp[0 + bbot].hd_dentry = NULL;
+		memmove(hdp, hdp + 1, sizeof(*hdp) * (bbot - bindex));
+	/* au_h_dentry_init(au_hdentry(dinfo, bbot); */
 	dinfo->di_bbot--;
 
-	p = krealloc(hdp, sizeof(*p) * bbot, AuGFP_SBILIST);
+	p = krealloc(dinfo->di_hdentry, sizeof(*p) * bbot, AuGFP_SBILIST);
 	if (p)
 		dinfo->di_hdentry = p;
 	/* harmless error */
@@ -1121,7 +1120,7 @@ static int au_ibusy(struct super_block *sb, struct aufs_ibusy __user *arg)
 	inode = ilookup(sb, ibusy.ino);
 	if (!inode
 	    || inode->i_ino == AUFS_ROOT_INO
-	    || is_bad_inode(inode))
+	    || au_is_bad_inode(inode))
 		goto out_unlock;
 
 	ii_read_lock_child(inode);
