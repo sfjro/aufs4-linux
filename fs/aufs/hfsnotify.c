@@ -31,7 +31,7 @@ static void au_hfsn_free_mark(struct fsnotify_mark *mark)
 {
 	struct au_hnotify *hn = container_of(mark, struct au_hnotify,
 					     hn_mark);
-	AuDbg("here\n");
+	/* AuDbg("here\n"); */
 	au_cache_free_hnotify(hn);
 	smp_mb__before_atomic();
 	if (atomic64_dec_and_test(&au_hfsn_ifree))
@@ -155,7 +155,7 @@ static void au_hfsn_free_group(struct fsnotify_group *group)
 {
 	struct au_br_hfsnotify *hfsn = group->private;
 
-	AuDbg("here\n");
+	/* AuDbg("here\n"); */
 	kfree(hfsn);
 }
 

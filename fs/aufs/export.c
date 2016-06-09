@@ -233,7 +233,7 @@ static struct dentry *decode_by_ino(struct super_block *sb, ino_t ino,
 
 	dentry = ERR_PTR(-ESTALE);
 	sigen = au_sigen(sb);
-	if (unlikely(is_bad_inode(inode)
+	if (unlikely(au_is_bad_inode(inode)
 		     || IS_DEADDIR(inode)
 		     || sigen != au_iigen(inode, NULL)))
 		goto out_iput;
