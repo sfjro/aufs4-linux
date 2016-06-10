@@ -47,7 +47,7 @@ static int au_ii_refresh(struct inode *inode, int *update)
 	struct au_iinfo *iinfo;
 	struct au_hinode *p, *q, tmp;
 
-	AuDebugOn(is_bad_inode(inode));
+	AuDebugOn(au_is_bad_inode(inode));
 	IiMustWriteLock(inode);
 
 	*update = 0;

@@ -480,6 +480,11 @@ static inline struct au_hinode *au_hinode(struct au_iinfo *iinfo,
 	return iinfo->ii_hinode + bindex;
 }
 
+static inline int au_is_bad_inode(struct inode *inode)
+{
+	return !!(is_bad_inode(inode) || !au_hinode(au_ii(inode), 0));
+}
+
 static inline aufs_bindex_t au_ii_br_id(struct inode *inode,
 					aufs_bindex_t bindex)
 {

@@ -60,17 +60,17 @@ int au_test_loopback_kthread(void)
 {
 	int ret;
 	struct task_struct *tsk = current;
-	char c, comm[sizeof(tsk->comm)];
+	char comm[sizeof(tsk->comm)];
+#define KTHREAD_NAME "kworker/"
 
 	ret = 0;
 	if (tsk->flags & PF_KTHREAD) {
 		get_task_comm(comm, tsk);
-		c = comm[4];
-		ret = ('0' <= c && c <= '9'
-		       && !strncmp(comm, "loop", 4));
+		ret = !strncmp(comm, KTHREAD_NAME, sizeof(KTHREAD_NAME) - 1);
 	}
 
 	return ret;
+#undef KTHREAD_NAME
 }
 
 /* ---------------------------------------------------------------------- */
