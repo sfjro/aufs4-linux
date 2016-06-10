@@ -220,6 +220,7 @@ static ssize_t au_lgxattr(struct dentry *dentry, struct au_lgxattr *arg)
 				    arg->u.list.list, arg->u.list.size);
 		break;
 	case AU_XATTR_GET:
+		AuDebugOn(d_is_negative(h_path.dentry));
 		err = vfs_getxattr(h_path.dentry,
 				   arg->u.get.name, arg->u.get.value,
 				   arg->u.get.size);
@@ -248,8 +249,8 @@ ssize_t aufs_listxattr(struct dentry *dentry, char *list, size_t size)
 	return au_lgxattr(dentry, &arg);
 }
 
-ssize_t aufs_getxattr(struct dentry *dentry, const char *name, void *value,
-		      size_t size)
+ssize_t aufs_getxattr(struct dentry *dentry, struct inode *inode __maybe_unused,
+		      const char *name, void *value, size_t size)
 {
 	struct au_lgxattr arg = {
 		.type = AU_XATTR_GET,
@@ -263,8 +264,8 @@ ssize_t aufs_getxattr(struct dentry *dentry, const char *name, void *value,
 	return au_lgxattr(dentry, &arg);
 }
 
-int aufs_setxattr(struct dentry *dentry, const char *name, const void *value,
-		  size_t size, int flags)
+int aufs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
+		  const void *value, size_t size, int flags)
 {
 	struct au_srxattr arg = {
 		.type = AU_XATTR_SET,
@@ -276,7 +277,7 @@ int aufs_setxattr(struct dentry *dentry, const char *name, const void *value,
 		},
 	};
 
-	return au_srxattr(dentry, &arg);
+	return au_srxattr(dentry, inode, &arg);
 }
 
 int aufs_removexattr(struct dentry *dentry, const char *name)
@@ -288,7 +289,7 @@ int aufs_removexattr(struct dentry *dentry, const char *name)
 		},
 	};
 
-	return au_srxattr(dentry, &arg);
+	return au_srxattr(dentry, d_inode(dentry), &arg);
 }
 
 /* ---------------------------------------------------------------------- */
