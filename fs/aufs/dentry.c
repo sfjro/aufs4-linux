@@ -394,8 +394,9 @@ static int au_do_refresh_hdentry(struct dentry *dentry, struct dentry *parent)
 	bbot = dinfo->di_bbot;
 	bwh = dinfo->di_bwh;
 	bdiropq = dinfo->di_bdiropq;
-	p = dinfo->di_hdentry + dinfo->di_btop;
-	for (bindex = dinfo->di_btop; bindex <= bbot; bindex++, p++) {
+	bindex = dinfo->di_btop;
+	p = au_hdentry(dinfo, bindex);
+	for (; bindex <= bbot; bindex++, p++) {
 		if (!p->hd_dentry)
 			continue;
 
@@ -414,7 +415,7 @@ static int au_do_refresh_hdentry(struct dentry *dentry, struct dentry *parent)
 		}
 
 		/* swap two lower dentries, and loop again */
-		q = dinfo->di_hdentry + new_bindex;
+		q = au_hdentry(dinfo, new_bindex);
 		tmp = *q;
 		*q = *p;
 		*p = tmp;
@@ -438,16 +439,18 @@ static int au_do_refresh_hdentry(struct dentry *dentry, struct dentry *parent)
 	dinfo->di_btop = -1;
 	dinfo->di_bbot = -1;
 	bbot = au_dbbot(parent);
-	p = dinfo->di_hdentry;
-	for (bindex = 0; bindex <= bbot; bindex++, p++)
+	bindex = 0;
+	p = au_hdentry(dinfo, bindex);
+	for (; bindex <= bbot; bindex++, p++)
 		if (p->hd_dentry) {
 			dinfo->di_btop = bindex;
 			break;
 		}
 
 	if (dinfo->di_btop >= 0) {
-		p = dinfo->di_hdentry + bbot;
-		for (bindex = bbot; bindex >= 0; bindex--, p--)
+		bindex = bbot;
+		p = au_hdentry(dinfo, bindex);
+		for (; bindex >= 0; bindex--, p--)
 			if (p->hd_dentry) {
 				dinfo->di_bbot = bindex;
 				err = 0;
@@ -564,14 +567,14 @@ static int au_refresh_by_dinfo(struct dentry *dentry, struct au_dinfo *dinfo,
 	err = 0;
 	AuDebugOn(dinfo->di_btop < 0);
 	orig_h.mode = 0;
-	orig_h.dentry = dinfo->di_hdentry[dinfo->di_btop].hd_dentry;
+	orig_h.dentry = au_hdentry(dinfo, dinfo->di_btop)->hd_dentry;
 	orig_h.inode = NULL;
 	if (d_is_positive(orig_h.dentry)) {
 		orig_h.inode = d_inode(orig_h.dentry);
 		orig_h.mode = orig_h.inode->i_mode & S_IFMT;
 	}
 	if (tmp->di_btop >= 0) {
-		tmp_h.dentry = tmp->di_hdentry[tmp->di_btop].hd_dentry;
+		tmp_h.dentry = au_hdentry(tmp, tmp->di_btop)->hd_dentry;
 		if (d_is_positive(tmp_h.dentry)) {
 			tmp_h.inode = d_inode(tmp_h.dentry);
 			tmp_h.mode = tmp_h.inode->i_mode & S_IFMT;
@@ -600,7 +603,7 @@ static int au_refresh_by_dinfo(struct dentry *dentry, struct au_dinfo *dinfo,
 				AuDebugOn(dinfo->di_btop != dinfo->di_bbot);
 				au_set_h_dptr(dentry, dinfo->di_btop, NULL);
 				au_di_cp(dinfo, tmp);
-				hd = tmp->di_hdentry + tmp->di_btop;
+				hd = au_hdentry(tmp, tmp->di_btop);
 				au_set_h_dptr(dentry, tmp->di_btop,
 					      dget(hd->hd_dentry));
 			}
@@ -651,13 +654,13 @@ static int au_refresh_by_dinfo(struct dentry *dentry, struct au_dinfo *dinfo,
 					dinfo->di_bbot = tmp->di_bbot;
 				dinfo->di_bwh = tmp->di_bwh;
 				dinfo->di_bdiropq = tmp->di_bdiropq;
-				hd = tmp->di_hdentry;
 				bbot = dinfo->di_bbot;
-				for (bindex = tmp->di_btop; bindex <= bbot;
-				     bindex++) {
+				bindex = tmp->di_btop;
+				hd = au_hdentry(tmp, bindex);
+				for (; bindex <= bbot; bindex++, hd++) {
 					if (au_h_dptr(dentry, bindex))
 						continue;
-					h_dentry = hd[bindex].hd_dentry;
+					h_dentry = hd->hd_dentry;
 					if (!h_dentry)
 						continue;
 					AuDebugOn(d_is_negative(h_dentry));
@@ -1036,7 +1039,7 @@ static int aufs_d_revalidate(struct dentry *dentry, unsigned int flags)
 	inode = NULL;
 	if (d_really_is_positive(dentry))
 		inode = d_inode(dentry);
-	if (unlikely(inode && is_bad_inode(inode))) {
+	if (unlikely(inode && au_is_bad_inode(inode))) {
 		err = -EINVAL;
 		AuTraceErr(err);
 		goto out_dgrade;
