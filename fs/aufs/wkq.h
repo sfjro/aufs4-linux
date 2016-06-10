@@ -12,6 +12,8 @@
 
 #ifdef __KERNEL__
 
+#include <linux/percpu_counter.h>
+
 struct super_block;
 
 /* ---------------------------------------------------------------------- */
