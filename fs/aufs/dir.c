@@ -466,7 +466,7 @@ static int aufs_fsync_dir(struct file *file, loff_t start, loff_t end,
 
 /* ---------------------------------------------------------------------- */
 
-static int aufs_iterate(struct file *file, struct dir_context *ctx)
+static int aufs_iterate_shared(struct file *file, struct dir_context *ctx)
 {
 	int err;
 	struct dentry *dentry;
@@ -744,7 +744,7 @@ const struct file_operations aufs_dir_fop = {
 	.owner		= THIS_MODULE,
 	.llseek		= default_llseek,
 	.read		= generic_read_dir,
-	.iterate	= aufs_iterate,
+	.iterate_shared	= aufs_iterate_shared,
 	.unlocked_ioctl	= aufs_ioctl_dir,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl	= aufs_compat_ioctl_dir,

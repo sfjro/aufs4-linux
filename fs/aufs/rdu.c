@@ -148,7 +148,7 @@ static int au_rdu(struct file *file, struct aufs_rdu *rdu)
 	arg.end += rdu->sz;
 
 	err = -ENOTDIR;
-	if (unlikely(!file->f_op->iterate))
+	if (unlikely(!file->f_op->iterate && !file->f_op->iterate_shared))
 		goto out;
 
 	err = security_file_permission(file, MAY_READ);
@@ -158,15 +158,7 @@ static int au_rdu(struct file *file, struct aufs_rdu *rdu)
 
 	dentry = file->f_path.dentry;
 	inode = d_inode(dentry);
-#if 1
-	inode_lock(inode);
-#else
-	/* todo: create a new inline func inode_lock_killable() */
-	err = mutex_lock_killable(&inode->i_mutex);
-	AuTraceErr(err);
-	if (unlikely(err))
-		goto out;
-#endif
+	inode_lock_shared(inode);
 
 	arg.sb = inode->i_sb;
 	err = si_read_lock(arg.sb, AuLock_FLUSH | AuLock_NOPLM);
@@ -223,7 +215,7 @@ out_unlock:
 out_si:
 	si_read_unlock(arg.sb);
 out_mtx:
-	inode_unlock(inode);
+	inode_unlock_shared(inode);
 out:
 	AuTraceErr(err);
 	return err;
