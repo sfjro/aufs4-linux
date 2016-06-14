@@ -637,6 +637,7 @@ static int read_vdir(struct file *file, int may_read)
 	err = 0;
 	inode = file_inode(file);
 	IMustLock(inode);
+	IiMustWriteLock(inode);
 	SiMustAnyLock(inode->i_sb);
 
 	allocated = NULL;

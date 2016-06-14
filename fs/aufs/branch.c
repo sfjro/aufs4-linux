@@ -494,6 +494,7 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 	root = sb->s_root;
 	root_inode = d_inode(root);
 	IMustLock(root_inode);
+	IiMustWriteLock(root_inode);
 	err = test_add(sb, add, remount);
 	if (unlikely(err < 0))
 		goto out;
