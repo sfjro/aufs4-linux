@@ -1669,13 +1669,13 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 			continue;
 
 		hdir = au_hi(dir, bindex);
-		au_hn_imtx_lock_nested(hdir, AuLsc_I_PARENT);
+		au_hn_inode_lock_nested(hdir, AuLsc_I_PARENT);
 		if (wbr)
 			wbr_wh_write_lock(wbr);
 		err = au_wh_init(br, sb);
 		if (wbr)
 			wbr_wh_write_unlock(wbr);
-		au_hn_imtx_unlock(hdir);
+		au_hn_inode_unlock(hdir);
 
 		if (!err && do_free) {
 			kfree(wbr);

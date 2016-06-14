@@ -566,7 +566,7 @@ static void reinit_br_wh(void *arg)
 	h_root = au_h_dptr(a->sb->s_root, bindex);
 	AuDebugOn(h_root != au_br_dentry(a->br));
 
-	au_hn_imtx_lock_nested(hdir, AuLsc_I_PARENT);
+	au_hn_inode_lock_nested(hdir, AuLsc_I_PARENT);
 	wbr_wh_write_lock(wbr);
 	err = au_h_verify(wbr->wbr_whbase, au_opt_udba(a->sb), hdir->hi_inode,
 			  h_root, a->br);
@@ -590,7 +590,7 @@ static void reinit_br_wh(void *arg)
 	if (!err)
 		err = au_wh_init(a->br, a->sb);
 	wbr_wh_write_unlock(wbr);
-	au_hn_imtx_unlock(hdir);
+	au_hn_inode_unlock(hdir);
 	di_read_unlock(a->sb->s_root, AuLock_IR);
 	if (!err)
 		au_fhsm_wrote(a->sb, bindex, /*force*/0);
@@ -1018,12 +1018,12 @@ static void call_rmdir_whtmp(void *args)
 	err = vfsub_mnt_want_write(au_br_mnt(a->br));
 	if (unlikely(err))
 		goto out_mnt;
-	au_hn_imtx_lock_nested(hdir, AuLsc_I_PARENT);
+	au_hn_inode_lock_nested(hdir, AuLsc_I_PARENT);
 	err = au_h_verify(a->wh_dentry, au_opt_udba(sb), h_dir, h_parent,
 			  a->br);
 	if (!err)
 		err = au_whtmp_rmdir(a->dir, bindex, a->wh_dentry, &a->whlist);
-	au_hn_imtx_unlock(hdir);
+	au_hn_inode_unlock(hdir);
 	vfsub_mnt_drop_write(au_br_mnt(a->br));
 
 out_mnt:
