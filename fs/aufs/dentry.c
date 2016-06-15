@@ -680,7 +680,8 @@ static int au_refresh_by_dinfo(struct dentry *dentry, struct au_dinfo *dinfo,
 					au_set_h_dptr(dentry, bindex,
 						      dget(h_dentry));
 				}
-				err = au_refresh_hinode(inode, dentry);
+				if (inode)
+					err = au_refresh_hinode(inode, dentry);
 				au_dbg_verify_dinode(dentry);
 			}
 		} else {
