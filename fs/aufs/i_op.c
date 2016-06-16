@@ -307,8 +307,8 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 			 * another error will be returned later.
 			 */
 			d_drop(d);
-			dput(d);
 			AuDbgDentry(d);
+			dput(d);
 		}
 		AuDbgDentry(dentry);
 	}
@@ -521,7 +521,7 @@ out:
 void au_pin_hdir_unlock(struct au_pin *p)
 {
 	if (p->hdir)
-		au_hn_imtx_unlock(p->hdir);
+		au_hn_inode_unlock(p->hdir);
 }
 
 int au_pin_hdir_lock(struct au_pin *p)
@@ -533,7 +533,7 @@ int au_pin_hdir_lock(struct au_pin *p)
 		goto out;
 
 	/* even if an error happens later, keep this lock */
-	au_hn_imtx_lock_nested(p->hdir, p->lsc_hi);
+	au_hn_inode_lock_nested(p->hdir, p->lsc_hi);
 
 	err = -EBUSY;
 	if (unlikely(p->hdir->hi_inode != d_inode(p->h_parent)))

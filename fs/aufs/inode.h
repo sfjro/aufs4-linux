@@ -671,20 +671,20 @@ static inline void au_hn_resume(struct au_hinode *hdir)
 	au_hn_ctl(hdir, /*do_set*/1);
 }
 
-static inline void au_hn_imtx_lock(struct au_hinode *hdir)
+static inline void au_hn_inode_lock(struct au_hinode *hdir)
 {
 	inode_lock(hdir->hi_inode);
 	au_hn_suspend(hdir);
 }
 
-static inline void au_hn_imtx_lock_nested(struct au_hinode *hdir,
+static inline void au_hn_inode_lock_nested(struct au_hinode *hdir,
 					  unsigned int sc __maybe_unused)
 {
 	inode_lock_nested(hdir->hi_inode, sc);
 	au_hn_suspend(hdir);
 }
 
-static inline void au_hn_imtx_unlock(struct au_hinode *hdir)
+static inline void au_hn_inode_unlock(struct au_hinode *hdir)
 {
 	au_hn_resume(hdir);
 	inode_unlock(hdir->hi_inode);
