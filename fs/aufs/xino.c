@@ -245,7 +245,7 @@ static void au_xino_lock_dir(struct super_block *sb, struct file *xino,
 		bindex = au_br_index(sb, brid);
 	if (bindex >= 0) {
 		ldir->hdir = au_hi(d_inode(sb->s_root), bindex);
-		au_hn_imtx_lock_nested(ldir->hdir, AuLsc_I_PARENT);
+		au_hn_inode_lock_nested(ldir->hdir, AuLsc_I_PARENT);
 	} else {
 		ldir->parent = dget_parent(xino->f_path.dentry);
 		ldir->dir = d_inode(ldir->parent);
@@ -256,7 +256,7 @@ static void au_xino_lock_dir(struct super_block *sb, struct file *xino,
 static void au_xino_unlock_dir(struct au_xino_lock_dir *ldir)
 {
 	if (ldir->hdir)
-		au_hn_imtx_unlock(ldir->hdir);
+		au_hn_inode_unlock(ldir->hdir);
 	else {
 		inode_unlock(ldir->dir);
 		dput(ldir->parent);

@@ -105,9 +105,9 @@ static void au_ren_rev_diropq(int err, struct au_ren_args *a)
 {
 	int rerr;
 
-	au_hn_imtx_lock_nested(a->src_hinode, AuLsc_I_CHILD);
+	au_hn_inode_lock_nested(a->src_hinode, AuLsc_I_CHILD);
 	rerr = au_diropq_remove(a->src_dentry, a->btgt);
-	au_hn_imtx_unlock(a->src_hinode);
+	au_hn_inode_unlock(a->src_hinode);
 	au_set_dbdiropq(a->src_dentry, a->src_bdiropq);
 	if (rerr)
 		RevertFailure("remove diropq %pd", a->src_dentry);
@@ -262,9 +262,9 @@ static int au_ren_diropq(struct au_ren_args *a)
 	err = 0;
 	a->src_bdiropq = au_dbdiropq(a->src_dentry);
 	a->src_hinode = au_hi(a->src_inode, a->btgt);
-	au_hn_imtx_lock_nested(a->src_hinode, AuLsc_I_CHILD);
+	au_hn_inode_lock_nested(a->src_hinode, AuLsc_I_CHILD);
 	diropq = au_diropq_create(a->src_dentry, a->btgt);
-	au_hn_imtx_unlock(a->src_hinode);
+	au_hn_inode_unlock(a->src_hinode);
 	if (IS_ERR(diropq))
 		err = PTR_ERR(diropq);
 	else
