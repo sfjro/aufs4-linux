@@ -176,9 +176,9 @@ static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 {
 	struct dentry *wh = NULL;
 	int hn;
+	struct inode *inode;
 	struct au_iinfo *iinfo;
 	struct au_hinode *hi;
-	struct inode *inode;
 
 	if (!dentry || IS_ERR(dentry)) {
 		dpri("d%d: err %ld\n", bindex, PTR_ERR(dentry));
@@ -193,11 +193,12 @@ static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 	     d_unhashed(dentry) ? "un" : "");
 	hn = -1;
 	inode = NULL;
-	if (bindex >= 0
-	    && d_is_positive(dentry)
-	    && au_test_aufs(dentry->d_sb))
+	if (d_is_positive(dentry))
 		inode = d_inode(dentry);
-	if (inode && !au_is_bad_inode(inode)) {
+	if (inode
+	    && au_test_aufs(dentry->d_sb)
+	    && bindex >= 0
+	    && !au_is_bad_inode(inode)) {
 		iinfo = au_ii(inode);
 		hi = au_hinode(iinfo, bindex);
 		hn = !!au_hn(hi);
