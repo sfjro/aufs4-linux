@@ -217,7 +217,7 @@ static inline void vfsub_touch_atime(struct vfsmount *h_mnt,
 static inline int vfsub_update_time(struct inode *h_inode, struct timespec *ts,
 				    int flags)
 {
-	return generic_update_time(h_inode, ts, flags);
+	return update_time(h_inode, ts, flags);
 	/* no vfsub_update_h_iattr() since we don't have struct path */
 }
 

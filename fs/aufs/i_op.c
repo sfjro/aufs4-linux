@@ -198,8 +198,9 @@ static struct dentry *aufs_lookup(struct inode *dir, struct dentry *dentry,
 	if (!err)
 		err = au_digen_test(parent, au_sigen(sb));
 	if (!err) {
+		/* regardless LOOKUP_CREATE, always ALLOW_NEG */
 		npositive = au_lkup_dentry(dentry, au_dbtop(parent),
-					   /*type*/0);
+					   AuLkup_ALLOW_NEG);
 		err = npositive;
 	}
 	di_read_unlock(parent, AuLock_IR);
@@ -280,6 +281,7 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 			    umode_t create_mode, int *opened)
 {
 	int err, h_opened = *opened;
+	unsigned int lkup_flags;
 	struct dentry *parent;
 	struct dentry *d;
 	struct au_sphlhead *aopen;
@@ -293,14 +295,18 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 	};
 
 	IMustLock(dir);
-	AuDbg("open_flag 0x%x\n", open_flag);
+	AuDbg("open_flag 0%o\n", open_flag);
 	AuDbgDentry(dentry);
 
 	err = 0;
 	if (!au_di(dentry)) {
-		d = aufs_lookup(dir, dentry, /*flags*/0);
+		lkup_flags = LOOKUP_OPEN;
+		if (open_flag & O_CREAT)
+			lkup_flags |= LOOKUP_CREATE;
+		d = aufs_lookup(dir, dentry, lkup_flags);
 		if (IS_ERR(d)) {
 			err = PTR_ERR(d);
+			AuTraceErr(err);
 			goto out;
 		} else if (d) {
 			/*
@@ -326,7 +332,7 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 
 	parent = dentry->d_parent;	/* dir is locked */
 	di_write_lock_parent(parent);
-	err = au_lkup_dentry(dentry, /*btop*/0, /*type*/0);
+	err = au_lkup_dentry(dentry, /*btop*/0, AuLkup_ALLOW_NEG);
 	if (unlikely(err))
 		goto out_unlock;
 

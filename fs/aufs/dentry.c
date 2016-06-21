@@ -22,14 +22,6 @@
 #include <linux/namei.h>
 #include "aufs.h"
 
-#define AuLkup_ALLOW_NEG	1
-#define AuLkup_IGNORE_PERM	(1 << 1)
-#define au_ftest_lkup(flags, name)	((flags) & AuLkup_##name)
-#define au_fset_lkup(flags, name) \
-	do { (flags) |= AuLkup_##name; } while (0)
-#define au_fclr_lkup(flags, name) \
-	do { (flags) &= ~AuLkup_##name; } while (0)
-
 struct au_do_lookup_args {
 	unsigned int		flags;
 	mode_t			type;
@@ -132,15 +124,15 @@ static int au_test_shwh(struct super_block *sb, const struct qstr *name)
  * otherwise an error.
  * can be called at unlinking with @type is zero.
  */
-int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t btop, mode_t type)
+int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t btop,
+		   unsigned int flags)
 {
 	int npositive, err;
 	aufs_bindex_t bindex, btail, bdiropq;
 	unsigned char isdir, dirperm1;
 	struct qstr whname;
 	struct au_do_lookup_args args = {
-		.flags		= 0,
-		.type		= type
+		.flags		= flags
 	};
 	const struct qstr *name = &dentry->d_name;
 	struct dentry *parent;
@@ -158,8 +150,6 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t btop, mode_t type)
 
 	inode = dentry->d_inode;
 	isdir = !!d_is_dir(dentry);
-	if (!type)
-		au_fset_lkup(args.flags, ALLOW_NEG);
 	dirperm1 = !!au_opt_test(au_mntflags(sb), DIRPERM1);
 
 	npositive = 0;
@@ -173,9 +163,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t btop, mode_t type)
 		if (h_dentry) {
 			if (h_dentry->d_inode)
 				npositive++;
-			if (type != S_IFDIR)
-				break;
-			continue;
+			break;
 		}
 		h_parent = au_h_dptr(parent, bindex);
 		if (!h_parent || !d_is_dir(h_parent))
@@ -769,7 +757,7 @@ int au_refresh_dentry(struct dentry *dentry, struct dentry *parent)
 	 * if current working dir is removed, it returns an error.
 	 * but the dentry is legal.
 	 */
-	err = au_lkup_dentry(dentry, /*btop*/0, /*type*/0);
+	err = au_lkup_dentry(dentry, /*btop*/0, AuLkup_ALLOW_NEG);
 	AuDbgDentry(dentry);
 	au_di_swap(tmp, dinfo);
 	if (err == -ENOENT)
