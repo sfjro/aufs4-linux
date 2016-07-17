@@ -114,7 +114,7 @@ int aufs_release_nondir(struct inode *inode __maybe_unused, struct file *file);
 struct file *au_read_pre(struct file *file, int keep_fi);
 
 /* finfo.c */
-void au_hfput(struct au_hfile *hf, struct file *file);
+void au_hfput(struct au_hfile *hf, int execed);
 void au_set_h_fptr(struct file *file, aufs_bindex_t bindex,
 		   struct file *h_file);
 

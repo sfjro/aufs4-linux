@@ -21,10 +21,9 @@
 
 #include "aufs.h"
 
-void au_hfput(struct au_hfile *hf, struct file *file)
+void au_hfput(struct au_hfile *hf, int execed)
 {
-	/* todo: direct access f_flags */
-	if (vfsub_file_flags(file) & __FMODE_EXEC)
+	if (execed)
 		allow_write_access(hf->hf_file);
 	fput(hf->hf_file);
 	hf->hf_file = NULL;
@@ -46,7 +45,7 @@ void au_set_h_fptr(struct file *file, aufs_bindex_t bindex, struct file *val)
 		hf = fidir->fd_hfile + bindex;
 
 	if (hf && hf->hf_file)
-		au_hfput(hf, file);
+		au_hfput(hf, vfsub_file_execed(file));
 	if (val) {
 		FiMustWriteLock(file);
 		AuDebugOn(IS_ERR_OR_NULL(file->f_path.dentry));

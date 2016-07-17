@@ -323,7 +323,9 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 	struct au_vdir *vdir_cache;
 	struct au_finfo *finfo;
 	struct au_fidir *fidir;
+	struct au_hfile *hf;
 	aufs_bindex_t bindex, bbot;
+	int execed;
 
 	finfo = au_fi(file);
 	fidir = finfo->fi_hdir;
@@ -336,13 +338,16 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 
 		bindex = finfo->fi_btop;
 		if (bindex >= 0) {
+			execed = vfsub_file_execed(file);
+			hf = fidir->fd_hfile + bindex;
 			/*
 			 * calls fput() instead of filp_close(),
 			 * since no dnotify or lock for the lower file.
 			 */
 			bbot = fidir->fd_bbot;
-			for (; bindex <= bbot; bindex++)
-				au_set_h_fptr(file, bindex, NULL);
+			for (; bindex <= bbot; bindex++, hf++)
+				if (hf->hf_file)
+					au_hfput(hf, execed);
 		}
 		kfree(fidir);
 		finfo->fi_hdir = NULL;
