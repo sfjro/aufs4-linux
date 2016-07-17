@@ -393,7 +393,7 @@ static void xino_try_trunc(struct super_block *sb, struct au_branch *br)
 	args = kmalloc(sizeof(*args), GFP_NOFS);
 	if (unlikely(!args)) {
 		AuErr1("no memory\n");
-		goto out_args;
+		goto out;
 	}
 
 	au_br_get(br);
@@ -405,9 +405,8 @@ static void xino_try_trunc(struct super_block *sb, struct au_branch *br)
 
 	pr_err("wkq %d\n", wkq_err);
 	au_br_put(br);
-
-out_args:
 	kfree(args);
+
 out:
 	atomic_dec(&br->br_xino_running);
 }
