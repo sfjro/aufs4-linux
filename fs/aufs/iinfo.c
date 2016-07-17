@@ -279,6 +279,6 @@ void au_iinfo_fin(struct inode *inode)
 			hi++;
 		}
 	}
-	kfree(iinfo->ii_hinode);
+	au_delayed_kfree(iinfo->ii_hinode);
 	AuRwDestroy(&iinfo->ii_rwsem);
 }

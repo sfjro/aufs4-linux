@@ -316,7 +316,7 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex)
 		AuErr1("statfs err %d, ignored\n", err);
 
 out_st:
-	kfree(st);
+	au_delayed_kfree(st);
 out:
 	return err;
 }
@@ -351,7 +351,7 @@ static void xino_do_trunc(void *_args)
 	au_br_put(br);
 	si_write_unlock(sb);
 	au_nwt_done(&au_sbi(sb)->si_nowait);
-	kfree(args);
+	au_delayed_kfree(args);
 }
 
 static int xino_trunc_test(struct super_block *sb, struct au_branch *br)
@@ -405,7 +405,7 @@ static void xino_try_trunc(struct super_block *sb, struct au_branch *br)
 
 	pr_err("wkq %d\n", wkq_err);
 	au_br_put(br);
-	kfree(args);
+	au_delayed_kfree(args);
 
 out:
 	atomic_dec(&br->br_xino_running);
@@ -1167,7 +1167,7 @@ out_pair:
 			fput(p->new);
 		else
 			break;
-	kfree(fpair);
+	au_delayed_kfree(fpair);
 out:
 	return err;
 }

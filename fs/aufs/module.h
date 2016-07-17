@@ -90,5 +90,13 @@ AuCacheFuncs(vdir_dehstr, DEHSTR);
 AuCacheFuncs(hnotify, HNOTIFY);
 #endif
 
+/* ---------------------------------------------------------------------- */
+
+static inline void au_delayed_kfree(const void *p)
+{
+	AuDebugOn(ksize(p) < sizeof(struct rcu_head));
+	__kfree_rcu((void *)p, /*offset*/0);
+}
+
 #endif /* __KERNEL__ */
 #endif /* __AUFS_MODULE_H__ */

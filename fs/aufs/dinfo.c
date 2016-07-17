@@ -73,7 +73,7 @@ void au_di_free(struct au_dinfo *dinfo)
 		while (bindex++ <= bbot)
 			au_hdput(p++);
 	}
-	kfree(dinfo->di_hdentry);
+	au_delayed_kfree(dinfo->di_hdentry);
 	au_cache_delayed_free_dinfo(dinfo);
 }
 

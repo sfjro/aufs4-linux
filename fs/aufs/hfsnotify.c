@@ -156,7 +156,7 @@ static void au_hfsn_free_group(struct fsnotify_group *group)
 	struct au_br_hfsnotify *hfsn = group->private;
 
 	/* AuDbg("here\n"); */
-	kfree(hfsn);
+	au_delayed_kfree(hfsn);
 }
 
 static int au_hfsn_handle_event(struct fsnotify_group *group,
@@ -250,7 +250,7 @@ static int au_hfsn_init_br(struct au_branch *br, int perm)
 	goto out; /* success */
 
 out_hfsn:
-	kfree(hfsn);
+	au_delayed_kfree(hfsn);
 out:
 	return err;
 }
