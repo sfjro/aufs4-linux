@@ -267,7 +267,7 @@ void au_iinfo_fin(struct inode *inode)
 
 	iinfo = au_ii(inode);
 	if (iinfo->ii_vdir)
-		au_vdir_free(iinfo->ii_vdir);
+		au_vdir_free(iinfo->ii_vdir, /*atonce*/0);
 
 	bindex = iinfo->ii_btop;
 	if (bindex >= 0) {

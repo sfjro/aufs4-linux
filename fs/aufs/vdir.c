@@ -119,7 +119,7 @@ static void au_nhash_de_do_free(struct hlist_head *head)
 	struct hlist_node *node;
 
 	hlist_for_each_entry_safe(pos, node, head, hash)
-		au_cache_free_vdir_dehstr(pos);
+		au_cache_delayed_free_vdir_dehstr(pos);
 }
 
 static void au_nhash_do_free(struct au_nhash *nhash,
@@ -348,7 +348,7 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
-void au_vdir_free(struct au_vdir *vdir)
+void au_vdir_free(struct au_vdir *vdir, int atonce)
 {
 	unsigned char **deblk;
 
@@ -356,7 +356,10 @@ void au_vdir_free(struct au_vdir *vdir)
 	while (vdir->vd_nblk--)
 		kfree(*deblk++);
 	kfree(vdir->vd_deblk);
-	au_cache_free_vdir(vdir);
+	if (!atonce)
+		au_cache_delayed_free_vdir(vdir);
+	else
+		au_cache_free_vdir(vdir);
 }
 
 static struct au_vdir *alloc_vdir(struct file *file)
@@ -393,7 +396,7 @@ static struct au_vdir *alloc_vdir(struct file *file)
 	kfree(vdir->vd_deblk);
 
 out_free:
-	au_cache_free_vdir(vdir);
+	au_cache_delayed_free_vdir(vdir);
 out:
 	vdir = ERR_PTR(err);
 	return vdir;
@@ -674,7 +677,7 @@ static int read_vdir(struct file *file, int may_read)
 		if (allocated)
 			au_set_ivdir(inode, allocated);
 	} else if (allocated)
-		au_vdir_free(allocated);
+		au_vdir_free(allocated, /*atonce*/0);
 
 out:
 	return err;
@@ -768,7 +771,7 @@ int au_vdir_init(struct file *file)
 		if (allocated)
 			au_set_fvdir_cache(file, allocated);
 	} else if (allocated)
-		au_vdir_free(allocated);
+		au_vdir_free(allocated, /*atonce*/0);
 
 out:
 	return err;

@@ -123,7 +123,7 @@ struct au_fidir *au_fidir_alloc(struct super_block *sb);
 int au_fidir_realloc(struct au_finfo *finfo, int nbr);
 
 void au_fi_init_once(void *_fi);
-void au_finfo_fin(struct file *file);
+void au_finfo_fin(struct file *file, int atonce);
 int au_finfo_init(struct file *file, struct au_fidir *fidir);
 
 /* ioctl.c */

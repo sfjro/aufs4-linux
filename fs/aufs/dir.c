@@ -325,8 +325,9 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 	struct au_fidir *fidir;
 	struct au_hfile *hf;
 	aufs_bindex_t bindex, bbot;
-	int execed;
+	int execed, delayed;
 
+	delayed = (current->flags & PF_KTHREAD) || in_interrupt();
 	finfo = au_fi(file);
 	fidir = finfo->fi_hdir;
 	if (fidir) {
@@ -334,7 +335,7 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 			    &au_sbi(file->f_path.dentry->d_sb)->si_files);
 		vdir_cache = fidir->fd_vdir_cache; /* lock-free */
 		if (vdir_cache)
-			au_vdir_free(vdir_cache);
+			au_vdir_free(vdir_cache, delayed);
 
 		bindex = finfo->fi_btop;
 		if (bindex >= 0) {
@@ -352,7 +353,7 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 		kfree(fidir);
 		finfo->fi_hdir = NULL;
 	}
-	au_finfo_fin(file);
+	au_finfo_fin(file, delayed);
 	return 0;
 }
 
