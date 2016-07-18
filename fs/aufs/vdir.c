@@ -180,6 +180,8 @@ static struct hlist_head *au_name_hash(struct au_nhash *nhash,
 	AuDebugOn(!nhash->nh_num || !nhash->nh_head);
 
 	v = 0;
+	if (len > 8)
+		len = 8;
 	while (len--)
 		v += *name++;
 	/* v = hash_long(v, magic_bit); */
