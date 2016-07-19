@@ -86,6 +86,7 @@ int aufs_release_nondir(struct inode *inode __maybe_unused, struct file *file)
 {
 	struct au_finfo *finfo;
 	aufs_bindex_t bindex;
+	int delayed;
 
 	finfo = au_fi(file);
 	au_sphl_del(&finfo->fi_hlist,
@@ -94,7 +95,8 @@ int aufs_release_nondir(struct inode *inode __maybe_unused, struct file *file)
 	if (bindex >= 0)
 		au_set_h_fptr(file, bindex, NULL);
 
-	au_finfo_fin(file);
+	delayed = (current->flags & PF_KTHREAD) || in_interrupt();
+	au_finfo_fin(file, delayed);
 	return 0;
 }
 
