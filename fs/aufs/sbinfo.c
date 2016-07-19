@@ -123,9 +123,9 @@ int au_si_alloc(struct super_block *sb)
 	return 0; /* success */
 
 out_br:
-	kfree(sbinfo->si_branch);
+	au_delayed_kfree(sbinfo->si_branch);
 out_sbinfo:
-	kfree(sbinfo);
+	au_delayed_kfree(sbinfo);
 out:
 	return err;
 }

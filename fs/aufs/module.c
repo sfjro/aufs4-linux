@@ -62,6 +62,12 @@ static void au_cache_fin(void)
 
 static int __init au_cache_init(void)
 {
+	BUILD_BUG_ON(sizeof(struct au_dinfo) < sizeof(struct rcu_head));
+	BUILD_BUG_ON(sizeof(struct au_icntnr) < sizeof(struct rcu_head));
+	BUILD_BUG_ON(sizeof(struct au_finfo) < sizeof(struct rcu_head));
+	BUILD_BUG_ON(sizeof(struct au_vdir) < sizeof(struct rcu_head));
+	BUILD_BUG_ON(sizeof(struct au_vdir_dehstr) < sizeof(struct rcu_head));
+
 	au_cachep[AuCache_DINFO] = AuCacheCtor(au_dinfo, au_di_init_once);
 	if (au_cachep[AuCache_DINFO])
 		/* SLAB_DESTROY_BY_RCU */

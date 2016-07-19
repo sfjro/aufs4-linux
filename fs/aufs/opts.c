@@ -1256,7 +1256,7 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 		}
 	}
 
-	kfree(a);
+	au_delayed_kfree(a);
 	dump_opts(opts);
 	if (unlikely(err))
 		au_opts_free(opts);
@@ -1678,7 +1678,8 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		au_hn_imtx_unlock(hdir);
 
 		if (!err && do_free) {
-			kfree(wbr);
+			if (wbr)
+				au_delayed_kfree(wbr);
 			br->br_wbr = NULL;
 		}
 	}
