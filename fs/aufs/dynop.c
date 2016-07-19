@@ -227,7 +227,7 @@ static struct au_dykey *dy_get(struct au_dynop *op, struct au_branch *br)
 	p->set(key, op->dy_hop, au_br_sb(br));
 	old = dy_gadd(spl, key);
 	if (old) {
-		kfree(key);
+		au_delayed_kfree(key);
 		key = old;
 	}
 

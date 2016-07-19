@@ -182,6 +182,12 @@ static inline unsigned int vfsub_file_flags(struct file *file)
 	return flags;
 }
 
+static inline int vfsub_file_execed(struct file *file)
+{
+	/* todo: direct access f_flags */
+	return !!(vfsub_file_flags(file) & __FMODE_EXEC);
+}
+
 #if 0 /* reserved */
 static inline void vfsub_file_accessed(struct file *h_file)
 {

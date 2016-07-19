@@ -163,10 +163,12 @@ int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
 		AuTraceErr(err);
 	}
 
-	kfree(value);
+	if (value)
+		au_delayed_kfree(value);
 
 out_free:
-	kfree(o);
+	if (o)
+		au_delayed_kfree(o);
 out:
 	if (!unlocked)
 		mutex_unlock(&h_isrc->i_mutex);
