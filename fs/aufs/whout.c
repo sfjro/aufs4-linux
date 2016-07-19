@@ -149,7 +149,7 @@ struct dentry *au_whtmp_lkup(struct dentry *h_parent, struct au_branch *br,
 
 out_name:
 	if (name != defname)
-		kfree(name);
+		au_delayed_kfree(name);
 out:
 	AuTraceErrPtr(dentry);
 	return dentry;
@@ -589,7 +589,7 @@ out:
 	au_br_put(a->br);
 	si_write_unlock(a->sb);
 	au_nwt_done(&au_sbi(a->sb)->si_nowait);
-	kfree(arg);
+	au_delayed_kfree(arg);
 	if (unlikely(err))
 		AuIOErr("err %d\n", err);
 }
@@ -617,7 +617,7 @@ static void kick_reinit_br_wh(struct super_block *sb, struct au_branch *br)
 		if (unlikely(wkq_err)) {
 			atomic_dec(&br->br_wbr->wbr_wh_running);
 			au_br_put(br);
-			kfree(arg);
+			au_delayed_kfree(arg);
 		}
 		do_dec = 0;
 	}
@@ -776,7 +776,7 @@ struct dentry *au_wh_lkup(struct dentry *h_parent, struct qstr *base_name,
 	wh_dentry = ERR_PTR(err);
 	if (!err) {
 		wh_dentry = vfsub_lkup_one(&wh_name, h_parent);
-		kfree(wh_name.name);
+		au_delayed_kfree(wh_name.name);
 	}
 	return wh_dentry;
 }
@@ -909,7 +909,7 @@ void au_whtmp_rmdir_free(struct au_whtmp_rmdir *whtmp)
 	dput(whtmp->wh_dentry);
 	iput(whtmp->dir);
 	au_nhash_wh_free(&whtmp->whlist);
-	kfree(whtmp);
+	au_delayed_kfree(whtmp);
 }
 
 /*
