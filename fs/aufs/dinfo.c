@@ -40,7 +40,7 @@ struct au_dinfo *au_di_alloc(struct super_block *sb, unsigned int lsc)
 		goto out;
 	}
 
-	au_cache_free_dinfo(dinfo);
+	au_cache_delayed_free_dinfo(dinfo);
 	dinfo = NULL;
 
 out:
@@ -60,8 +60,8 @@ void au_di_free(struct au_dinfo *dinfo)
 		while (bindex++ <= bbot)
 			au_hdput(p++);
 	}
-	kfree(dinfo->di_hdentry);
-	au_cache_free_dinfo(dinfo);
+	au_delayed_kfree(dinfo->di_hdentry);
+	au_cache_delayed_free_dinfo(dinfo);
 }
 
 void au_di_swap(struct au_dinfo *a, struct au_dinfo *b)
