@@ -35,7 +35,7 @@ int au_hn_alloc(struct au_hinode *hinode, struct inode *inode)
 		AuTraceErr(err);
 		if (unlikely(err)) {
 			hinode->hi_notify = NULL;
-			au_cache_free_hnotify(hn);
+			au_cache_delayed_free_hnotify(hn);
 			/*
 			 * The upper dir was removed by udba, but the same named
 			 * dir left. In this case, aufs assignes a new inode
@@ -59,7 +59,7 @@ void au_hn_free(struct au_hinode *hinode)
 	if (hn) {
 		hinode->hi_notify = NULL;
 		if (au_hnotify_op.free(hinode, hn))
-			au_cache_free_hnotify(hn);
+			au_cache_delayed_free_hnotify(hn);
 	}
 }
 
@@ -532,7 +532,7 @@ out:
 	iput(a->dir);
 	si_write_unlock(sb);
 	au_nwt_done(&sbinfo->si_nowait);
-	kfree(a);
+	au_delayed_kfree(a);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -638,7 +638,7 @@ int au_hnotify(struct inode *h_dir, struct au_hnotify *hnotify, u32 mask,
 		iput(args->h_child_inode);
 		iput(args->h_dir);
 		iput(args->dir);
-		kfree(args);
+		au_delayed_kfree(args);
 	}
 
 out:
@@ -686,6 +686,8 @@ static void au_hn_destroy_cache(void)
 int __init au_hnotify_init(void)
 {
 	int err;
+
+	BUILD_BUG_ON(sizeof(struct au_hnotify) < sizeof(struct rcu_head));
 
 	err = -ENOMEM;
 	au_cachep[AuCache_HNOTIFY] = AuCache(au_hnotify);
