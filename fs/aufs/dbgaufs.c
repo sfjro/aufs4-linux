@@ -28,7 +28,7 @@ struct dbgaufs_arg {
 static int dbgaufs_xi_release(struct inode *inode __maybe_unused,
 			      struct file *file)
 {
-	kfree(file->private_data);
+	au_delayed_kfree(file->private_data);
 	return 0;
 }
 
