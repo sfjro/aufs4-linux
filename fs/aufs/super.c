@@ -33,8 +33,8 @@ static void aufs_destroy_inode_cb(struct rcu_head *head)
 {
 	struct inode *inode = container_of(head, struct inode, i_rcu);
 
-	INIT_HLIST_HEAD(&inode->i_dentry);
-	au_cache_free_icntnr(container_of(inode, struct au_icntnr, vfs_inode));
+	au_cache_delayed_free_icntnr(container_of(inode, struct au_icntnr,
+						  vfs_inode));
 }
 
 static void aufs_destroy_inode(struct inode *inode)
