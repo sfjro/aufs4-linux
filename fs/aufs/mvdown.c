@@ -684,7 +684,7 @@ out_free:
 	e = copy_to_user(uarg, &args->mvdown, sizeof(args->mvdown));
 	if (unlikely(e))
 		err = -EFAULT;
-	kfree(args);
+	au_delayed_kfree(args);
 out:
 	AuTraceErr(err);
 	return err;
