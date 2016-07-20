@@ -104,7 +104,7 @@ int au_nhash_test_known_wh(struct au_nhash *whlist, char *name, int nlen);
 int au_nhash_append_wh(struct au_nhash *whlist, char *name, int nlen, ino_t ino,
 		       unsigned int d_type, aufs_bindex_t bindex,
 		       unsigned char shwh);
-void au_vdir_free(struct au_vdir *vdir);
+void au_vdir_free(struct au_vdir *vdir, int atonce);
 int au_vdir_init(struct file *file);
 int au_vdir_fill_de(struct file *file, struct dir_context *ctx);
 
