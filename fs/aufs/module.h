@@ -12,6 +12,7 @@
 #ifdef __KERNEL__
 
 #include <linux/slab.h>
+#include "debug.h"
 
 struct path;
 struct seq_file;
@@ -61,7 +62,11 @@ extern struct kmem_cache *au_cachep[];
 static inline struct au_##name *au_cache_alloc_##name(void) \
 { return kmem_cache_alloc(au_cachep[AuCache_##index], GFP_NOFS); } \
 static inline void au_cache_free_##name(struct au_##name *p) \
-{ kmem_cache_free(au_cachep[AuCache_##index], p); }
+{ kmem_cache_free(au_cachep[AuCache_##index], p); } \
+static inline void au_cache_do_free_##name##_rcu(struct rcu_head *head) \
+{ kmem_cache_free(au_cachep[AuCache_##index], head); } \
+static inline void au_cache_delayed_free_##name(struct au_##name *p) \
+{ call_rcu((void *)p, au_cache_do_free_##name##_rcu); }
 
 AuCacheFuncs(dinfo, DINFO);
 AuCacheFuncs(icntnr, ICNTNR);
@@ -71,6 +76,14 @@ AuCacheFuncs(vdir_dehstr, DEHSTR);
 #ifdef CONFIG_AUFS_HNOTIFY
 AuCacheFuncs(hnotify, HNOTIFY);
 #endif
+
+/* ---------------------------------------------------------------------- */
+
+static inline void au_delayed_kfree(const void *p)
+{
+	AuDebugOn(ksize(p) < sizeof(struct rcu_head));
+	__kfree_rcu((void *)p, /*offset*/0);
+}
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_MODULE_H__ */
