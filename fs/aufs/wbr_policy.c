@@ -461,7 +461,7 @@ static void au_mfs(struct dentry *dentry, struct dentry *parent)
 
 	mfs->mfsrr_bytes = bavail;
 	AuDbg("b%d\n", mfs->mfs_bindex);
-	kfree(st);
+	au_delayed_kfree(st);
 }
 
 static int au_wbr_create_mfs(struct dentry *dentry, unsigned int flags)
