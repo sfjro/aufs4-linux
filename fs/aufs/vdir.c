@@ -546,7 +546,7 @@ static int au_handle_shwh(struct super_block *sb, struct au_vdir *vdir,
 		}
 	}
 
-	free_page((unsigned long)o);
+	au_delayed_free_page((unsigned long)o);
 
 out:
 	AuTraceErr(err);

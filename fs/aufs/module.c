@@ -77,6 +77,7 @@ static void au_do_dfree(struct work_struct *work __maybe_unused)
 	} while (0)
 
 	AU_DFREE_DO_BODY(au_dfree.llist + AU_DFREE_KFREE, kfree);
+	AU_DFREE_DO_BODY(au_dfree.llist + AU_DFREE_FREE_PAGE, au_free_page);
 
 #undef AU_CACHE_DFREE_DO_BODY
 #undef AU_DFREE_DO_BODY

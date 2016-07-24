@@ -65,6 +65,7 @@ enum {
 
 enum {
 	AU_DFREE_KFREE,
+	AU_DFREE_FREE_PAGE,
 	AU_DFREE_Last
 };
 
@@ -126,6 +127,17 @@ static inline void au_delayed_kfree(const void *p)
 	AuDebugOn(ksize(p) < sizeof(struct llist_node));
 
 	AU_DFREE_BODY((void *)p, au_dfree.llist + AU_DFREE_KFREE);
+}
+
+/* cast only */
+static inline void au_free_page(void *p)
+{
+	free_page((unsigned long)p);
+}
+
+static inline void au_delayed_free_page(unsigned long addr)
+{
+	AU_DFREE_BODY((void *)addr, au_dfree.llist + AU_DFREE_FREE_PAGE);
 }
 
 #endif /* __KERNEL__ */

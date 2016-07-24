@@ -865,7 +865,7 @@ static int del_wh_children(struct dentry *h_dentry, struct au_nhash *whlist,
 			break;
 		}
 	}
-	free_page((unsigned long)wh_name.name);
+	au_delayed_free_page((unsigned long)wh_name.name);
 
 out:
 	return err;

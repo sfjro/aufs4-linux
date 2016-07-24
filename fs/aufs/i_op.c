@@ -1321,7 +1321,7 @@ static void *aufs_follow_link(struct dentry *dentry, struct nameidata *nd)
 	}
 
 out_name:
-	free_page((unsigned long)buf.k);
+	au_delayed_free_page((unsigned long)buf.k);
 out:
 	AuTraceErr(err);
 	return ERR_PTR(err);
@@ -1334,7 +1334,7 @@ static void aufs_put_link(struct dentry *dentry __maybe_unused,
 
 	p = nd_get_link(nd);
 	if (!IS_ERR_OR_NULL(p))
-		free_page((unsigned long)p);
+		au_delayed_free_page((unsigned long)p);
 }
 
 /* ---------------------------------------------------------------------- */

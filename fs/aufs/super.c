@@ -829,7 +829,7 @@ static int aufs_remount_fs(struct super_block *sb, int *flags, char *data)
 out_mtx:
 	mutex_unlock(&inode->i_mutex);
 out_opts:
-	free_page((unsigned long)opts.opt);
+	au_delayed_free_page((unsigned long)opts.opt);
 out:
 	err = cvt_err(err);
 	AuTraceErr(err);
@@ -970,7 +970,7 @@ out_info:
 	kobject_put(&sbinfo->si_kobj);
 	sb->s_fs_info = NULL;
 out_opts:
-	free_page((unsigned long)opts.opt);
+	au_delayed_free_page((unsigned long)opts.opt);
 out:
 	AuTraceErr(err);
 	err = cvt_err(err);
