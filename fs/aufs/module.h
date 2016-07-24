@@ -63,6 +63,11 @@ enum {
 	AuCache_Last
 };
 
+enum {
+	AU_DFREE_KFREE,
+	AU_DFREE_Last
+};
+
 struct au_cache {
 	struct kmem_cache	*cache;
 	struct llist_head	llist;	/* delayed free */
@@ -74,6 +79,7 @@ struct au_cache {
  */
 struct au_dfree {
 	struct au_cache		cache[AuCache_Last];
+	struct llist_head	llist[AU_DFREE_Last];
 	struct delayed_work	dwork;
 };
 
@@ -114,12 +120,12 @@ AuCacheFuncs(vdir_dehstr, DEHSTR);
 AuCacheFuncs(hnotify, HNOTIFY);
 #endif
 
-/* ---------------------------------------------------------------------- */
-
 static inline void au_delayed_kfree(const void *p)
 {
-	AuDebugOn(ksize(p) < sizeof(struct rcu_head));
-	__kfree_rcu((void *)p, /*offset*/0);
+	AuDebugOn(!p);
+	AuDebugOn(ksize(p) < sizeof(struct llist_node));
+
+	AU_DFREE_BODY((void *)p, au_dfree.llist + AU_DFREE_KFREE);
 }
 
 #endif /* __KERNEL__ */

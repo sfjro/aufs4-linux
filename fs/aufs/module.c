@@ -68,7 +68,18 @@ static void au_do_dfree(struct work_struct *work __maybe_unused)
 	AU_CACHE_DFREE_DO_BODY(hnotify, HNOTIFY, hn_lnode);
 #endif
 
+#define AU_DFREE_DO_BODY(llist, func) do {		\
+		node = llist_del_all(llist);		\
+		for (; node; node = next) {		\
+			next = llist_next(node);	\
+			func(node);			\
+		}					\
+	} while (0)
+
+	AU_DFREE_DO_BODY(au_dfree.llist + AU_DFREE_KFREE, kfree);
+
 #undef AU_CACHE_DFREE_DO_BODY
+#undef AU_DFREE_DO_BODY
 }
 
 AU_CACHE_DFREE_FUNC(dinfo, DINFO, di_lnode);
@@ -199,6 +210,8 @@ static int __init aufs_init(void)
 		cp->cache = NULL;
 		init_llist_head(&cp->llist);
 	}
+	for (i = 0; i < AU_DFREE_Last; i++)
+		init_llist_head(au_dfree.llist + i);
 	INIT_DELAYED_WORK(&au_dfree.dwork, au_do_dfree);
 
 	au_sbilist_init();
@@ -267,6 +280,7 @@ static void __exit aufs_exit(void)
 	au_procfs_fin();
 	sysaufs_fin();
 	au_dy_fin();
+	flush_delayed_work(&au_dfree.dwork);
 }
 
 module_init(aufs_init);
