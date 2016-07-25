@@ -33,7 +33,7 @@ void au_si_free(struct kobject *kobj)
 	sbinfo = container_of(kobj, struct au_sbinfo, si_kobj);
 	for (i = 0; i < AuPlink_NHASH; i++)
 		AuDebugOn(!hlist_empty(&sbinfo->si_plink[i].head));
-	au_nwt_fin(&sbinfo->si_nowait);
+	AuDebugOn(atomic_read(&sbinfo->si_nowait.nw_len));
 
 	AuDebugOn(percpu_counter_sum(&sbinfo->si_ninodes));
 	percpu_counter_destroy(&sbinfo->si_ninodes);
