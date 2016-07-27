@@ -282,8 +282,7 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 {
 	int err, h_opened = *opened;
 	unsigned int lkup_flags;
-	struct dentry *parent;
-	struct dentry *d;
+	struct dentry *parent, *d;
 	struct au_sphlhead *aopen;
 	struct vfsub_aopen_args args = {
 		.open_flag	= open_flag,
@@ -378,10 +377,10 @@ out_unlock:
 	di_write_unlock(parent);
 	aufs_read_unlock(dentry, AuLock_DW);
 	AuDbgDentry(dentry);
-	if (unlikely(err))
+	if (unlikely(err < 0))
 		goto out;
 out_no_open:
-	if (!err && !(*opened & FILE_CREATED)) {
+	if (err >= 0 && !(*opened & FILE_CREATED)) {
 		AuLabel(out_no_open);
 		dget(dentry);
 		err = finish_no_open(file, dentry);
@@ -1321,7 +1320,7 @@ static void *aufs_follow_link(struct dentry *dentry, struct nameidata *nd)
 	}
 
 out_name:
-	free_page((unsigned long)buf.k);
+	au_delayed_free_page((unsigned long)buf.k);
 out:
 	AuTraceErr(err);
 	return ERR_PTR(err);
@@ -1334,7 +1333,7 @@ static void aufs_put_link(struct dentry *dentry __maybe_unused,
 
 	p = nd_get_link(nd);
 	if (!IS_ERR_OR_NULL(p))
-		free_page((unsigned long)p);
+		au_delayed_free_page((unsigned long)p);
 }
 
 /* ---------------------------------------------------------------------- */

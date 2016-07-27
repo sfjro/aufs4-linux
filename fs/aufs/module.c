@@ -35,17 +35,64 @@ void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp)
 }
 
 /* ---------------------------------------------------------------------- */
-
 /*
  * aufs caches
  */
-struct kmem_cache *au_cachep[AuCache_Last] = {
-	[0] = NULL
-};
+
+struct au_dfree au_dfree;
+
+/* delayed free */
+static void au_do_dfree(struct work_struct *work __maybe_unused)
+{
+	struct llist_head *head;
+	struct llist_node *node, *next;
+
+#define AU_CACHE_DFREE_DO_BODY(name, idx, lnode) do {			\
+		head = &au_dfree.cache[AuCache_##idx].llist;		\
+		node = llist_del_all(head);				\
+		for (; node; node = next) {				\
+			struct au_##name *p =				\
+				p = llist_entry(node, struct au_##name,	\
+						lnode);			\
+			next = llist_next(node);			\
+			au_cache_free_##name(p);			\
+		}							\
+	} while (0)
+
+	AU_CACHE_DFREE_DO_BODY(dinfo, DINFO, di_lnode);
+	AU_CACHE_DFREE_DO_BODY(icntnr, ICNTNR, lnode);
+	AU_CACHE_DFREE_DO_BODY(finfo, FINFO, fi_lnode);
+	AU_CACHE_DFREE_DO_BODY(vdir, VDIR, vd_lnode);
+	AU_CACHE_DFREE_DO_BODY(vdir_dehstr, DEHSTR, lnode);
+#ifdef CONFIG_AUFS_HNOTIFY
+	AU_CACHE_DFREE_DO_BODY(hnotify, HNOTIFY, hn_lnode);
+#endif
+
+#define AU_DFREE_DO_BODY(llist, func) do {		\
+		node = llist_del_all(llist);		\
+		for (; node; node = next) {		\
+			next = llist_next(node);	\
+			func(node);			\
+		}					\
+	} while (0)
+
+	AU_DFREE_DO_BODY(au_dfree.llist + AU_DFREE_KFREE, kfree);
+	AU_DFREE_DO_BODY(au_dfree.llist + AU_DFREE_FREE_PAGE, au_free_page);
+
+#undef AU_CACHE_DFREE_DO_BODY
+#undef AU_DFREE_DO_BODY
+}
+
+AU_CACHE_DFREE_FUNC(dinfo, DINFO, di_lnode);
+AU_CACHE_DFREE_FUNC(icntnr, ICNTNR, lnode);
+AU_CACHE_DFREE_FUNC(finfo, FINFO, fi_lnode);
+AU_CACHE_DFREE_FUNC(vdir, VDIR, vd_lnode);
+AU_CACHE_DFREE_FUNC(vdir_dehstr, DEHSTR, lnode);
 
 static void au_cache_fin(void)
 {
 	int i;
+	struct au_cache *cp;
 
 	/*
 	 * Make sure all delayed rcu free inodes are flushed before we
@@ -55,32 +102,33 @@ static void au_cache_fin(void)
 
 	/* excluding AuCache_HNOTIFY */
 	BUILD_BUG_ON(AuCache_HNOTIFY + 1 != AuCache_Last);
-	for (i = 0; i < AuCache_HNOTIFY; i++)
-		if (au_cachep[i])
-			kmem_cache_destroy(au_cachep[i]);
+	flush_delayed_work(&au_dfree.dwork);
+	for (i = 0; i < AuCache_HNOTIFY; i++) {
+		cp = au_dfree.cache + i;
+		AuDebugOn(!llist_empty(&cp->llist));
+		if (cp->cache)
+			kmem_cache_destroy(cp->cache);
+	}
 }
 
 static int __init au_cache_init(void)
 {
-	BUILD_BUG_ON(sizeof(struct au_dinfo) < sizeof(struct rcu_head));
-	BUILD_BUG_ON(sizeof(struct au_icntnr) < sizeof(struct rcu_head));
-	BUILD_BUG_ON(sizeof(struct au_finfo) < sizeof(struct rcu_head));
-	BUILD_BUG_ON(sizeof(struct au_vdir) < sizeof(struct rcu_head));
-	BUILD_BUG_ON(sizeof(struct au_vdir_dehstr) < sizeof(struct rcu_head));
+	struct au_cache *cp;
 
-	au_cachep[AuCache_DINFO] = AuCacheCtor(au_dinfo, au_di_init_once);
-	if (au_cachep[AuCache_DINFO])
+	cp = au_dfree.cache;
+	cp[AuCache_DINFO].cache = AuCacheCtor(au_dinfo, au_di_init_once);
+	if (cp[AuCache_DINFO].cache)
 		/* SLAB_DESTROY_BY_RCU */
-		au_cachep[AuCache_ICNTNR] = AuCacheCtor(au_icntnr,
-							au_icntnr_init_once);
-	if (au_cachep[AuCache_ICNTNR])
-		au_cachep[AuCache_FINFO] = AuCacheCtor(au_finfo,
-						       au_fi_init_once);
-	if (au_cachep[AuCache_FINFO])
-		au_cachep[AuCache_VDIR] = AuCache(au_vdir);
-	if (au_cachep[AuCache_VDIR])
-		au_cachep[AuCache_DEHSTR] = AuCache(au_vdir_dehstr);
-	if (au_cachep[AuCache_DEHSTR])
+		cp[AuCache_ICNTNR].cache = AuCacheCtor(au_icntnr,
+						       au_icntnr_init_once);
+	if (cp[AuCache_ICNTNR].cache)
+		cp[AuCache_FINFO].cache = AuCacheCtor(au_finfo,
+						      au_fi_init_once);
+	if (cp[AuCache_FINFO].cache)
+		cp[AuCache_VDIR].cache = AuCache(au_vdir);
+	if (cp[AuCache_VDIR].cache)
+		cp[AuCache_DEHSTR].cache = AuCache(au_vdir_dehstr);
+	if (cp[AuCache_DEHSTR].cache)
 		return 0;
 
 	au_cache_fin();
@@ -142,6 +190,7 @@ static int __init aufs_init(void)
 {
 	int err, i;
 	char *p;
+	struct au_cache *cp;
 
 	p = au_esc_chars;
 	for (i = 1; i <= ' '; i++)
@@ -155,6 +204,16 @@ static int __init aufs_init(void)
 	memcpy(aufs_iop_nogetattr, aufs_iop, sizeof(aufs_iop));
 	for (i = 0; i < AuIop_Last; i++)
 		aufs_iop_nogetattr[i].getattr = NULL;
+
+	/* First, initialize au_dfree */
+	for (i = 0; i < AuCache_Last; i++) {	/* including hnotify */
+		cp = au_dfree.cache + i;
+		cp->cache = NULL;
+		init_llist_head(&cp->llist);
+	}
+	for (i = 0; i < AU_DFREE_Last; i++)
+		init_llist_head(au_dfree.llist + i);
+	INIT_DELAYED_WORK(&au_dfree.dwork, au_do_dfree);
 
 	au_sbilist_init();
 	sysaufs_brs_init();
@@ -206,6 +265,7 @@ out_procfs:
 out_sysaufs:
 	sysaufs_fin();
 	au_dy_fin();
+	flush_delayed_work(&au_dfree.dwork);
 out:
 	return err;
 }
@@ -221,6 +281,7 @@ static void __exit aufs_exit(void)
 	au_procfs_fin();
 	sysaufs_fin();
 	au_dy_fin();
+	flush_delayed_work(&au_dfree.dwork);
 }
 
 module_init(aufs_init);

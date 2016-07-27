@@ -865,7 +865,7 @@ static int del_wh_children(struct dentry *h_dentry, struct au_nhash *whlist,
 			break;
 		}
 	}
-	free_page((unsigned long)wh_name.name);
+	au_delayed_free_page((unsigned long)wh_name.name);
 
 out:
 	return err;
@@ -907,7 +907,7 @@ struct au_whtmp_rmdir *au_whtmp_rmdir_alloc(struct super_block *sb, gfp_t gfp)
 		rdhash = AUFS_RDHASH_DEF;
 	err = au_nhash_alloc(&whtmp->whlist, rdhash, gfp);
 	if (unlikely(err)) {
-		kfree(whtmp);
+		au_delayed_kfree(whtmp);
 		whtmp = ERR_PTR(err);
 	}
 

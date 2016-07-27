@@ -929,7 +929,7 @@ static int xib_restore(struct super_block *sb)
 				(sb, au_sbr(sb, bindex)->br_xino.xi_file, page);
 		else
 			AuDbg("b%d\n", bindex);
-	free_page((unsigned long)page);
+	au_delayed_free_page((unsigned long)page);
 
 out:
 	return err;
@@ -1031,7 +1031,8 @@ static void xino_clear_xib(struct super_block *sb)
 	if (sbinfo->si_xib)
 		fput(sbinfo->si_xib);
 	sbinfo->si_xib = NULL;
-	free_page((unsigned long)sbinfo->si_xib_buf);
+	if (sbinfo->si_xib_buf)
+		au_delayed_free_page((unsigned long)sbinfo->si_xib_buf);
 	sbinfo->si_xib_buf = NULL;
 }
 
@@ -1074,7 +1075,8 @@ static int au_xino_set_xib(struct super_block *sb, struct file *base)
 	goto out; /* success */
 
 out_free:
-	free_page((unsigned long)sbinfo->si_xib_buf);
+	if (sbinfo->si_xib_buf)
+		au_delayed_free_page((unsigned long)sbinfo->si_xib_buf);
 	sbinfo->si_xib_buf = NULL;
 	if (err >= 0)
 		err = -EIO;
@@ -1278,7 +1280,7 @@ struct file *au_xino_def(struct super_block *sb)
 			if (!IS_ERR(file))
 				au_xino_brid_set(sb, br->br_id);
 		}
-		free_page((unsigned long)page);
+		au_delayed_free_page((unsigned long)page);
 	} else {
 		file = au_xino_create(sb, AUFS_XINO_DEFPATH, /*silent*/0);
 		if (IS_ERR(file))

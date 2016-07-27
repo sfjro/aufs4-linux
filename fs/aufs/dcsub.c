@@ -29,7 +29,7 @@ static void au_dpage_free(struct au_dpage *dpage)
 	p = dpage->dentries;
 	for (i = 0; i < dpage->ndentry; i++)
 		dput(*p++);
-	free_page((unsigned long)dpage->dentries);
+	au_delayed_free_page((unsigned long)dpage->dentries);
 }
 
 int au_dpages_init(struct au_dcsub_pages *dpages, gfp_t gfp)
