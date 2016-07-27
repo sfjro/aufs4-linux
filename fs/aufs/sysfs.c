@@ -246,7 +246,7 @@ static int au_brinfo(struct super_block *sb, union aufs_brinfo __user *arg)
 out_seq:
 	au_delayed_kfree(seq);
 out_buf:
-	free_page((unsigned long)buf);
+	au_delayed_free_page((unsigned long)buf);
 out:
 	si_read_unlock(sb);
 	return err;
