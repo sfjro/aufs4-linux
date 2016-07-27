@@ -39,7 +39,7 @@ struct au_dynop {
 
 struct au_dykey {
 	union {
-		struct list_head	dk_list;
+		struct hlist_node	dk_hnode;
 		struct rcu_head		dk_rcu;
 	};
 	struct au_dynop		dk_op;

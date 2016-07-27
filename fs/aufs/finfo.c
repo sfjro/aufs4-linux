@@ -112,7 +112,7 @@ void au_finfo_fin(struct file *file, int atonce)
 	AuDebugOn(finfo->fi_hdir);
 	AuRwDestroy(&finfo->fi_rwsem);
 	if (!atonce)
-		au_cache_delayed_free_finfo(finfo);
+		au_cache_dfree_finfo(finfo);
 	else
 		au_cache_free_finfo(finfo);
 }
