@@ -63,7 +63,10 @@ struct au_finfo {
 	struct au_fidir		*fi_hdir;	/* for dir only */
 
 	struct hlist_node	fi_hlist;
-	struct file		*fi_file;	/* very ugly */
+	union {
+		struct file		*fi_file;	/* very ugly */
+		struct llist_node	fi_lnode;	/* delayed free */
+	};
 } ____cacheline_aligned_in_smp;
 
 /* ---------------------------------------------------------------------- */
