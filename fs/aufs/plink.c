@@ -45,6 +45,7 @@ int au_plink_maint(struct super_block *sb, int flags)
 {
 	int err;
 	pid_t pid, ppid;
+	struct task_struct *parent, *prev;
 	struct au_sbinfo *sbi;
 
 	SiMustAnyLock(sb);
@@ -59,11 +60,22 @@ int au_plink_maint(struct super_block *sb, int flags)
 		goto out;
 
 	/* todo: it highly depends upon /sbin/mount.aufs */
+	prev = NULL;
+	parent = current;
+	ppid = 0;
 	rcu_read_lock();
-	ppid = task_pid_vnr(rcu_dereference(current->real_parent));
+	while (1) {
+		parent = rcu_dereference(parent->real_parent);
+		if (parent == prev)
+			break;
+		ppid = task_pid_vnr(parent);
+		if (pid == ppid) {
+			rcu_read_unlock();
+			goto out;
+		}
+		prev = parent;
+	}
 	rcu_read_unlock();
-	if (pid == ppid)
-		goto out;
 
 	if (au_ftest_lock(flags, NOPLMW)) {
 		/* if there is no i_mutex lock in VFS, we don't need to wait */
