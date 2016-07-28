@@ -24,6 +24,7 @@
 
 #ifdef __KERNEL__
 
+#if 0
 struct au_splhead {
 	spinlock_t		spin;
 	struct list_head	head;
@@ -56,6 +57,7 @@ static inline void au_spl_del_rcu(struct list_head *list,
 	list_del_rcu(list);
 	spin_unlock(&spl->spin);
 }
+#endif
 
 /* ---------------------------------------------------------------------- */
 

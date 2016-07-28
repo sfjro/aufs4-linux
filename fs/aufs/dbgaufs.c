@@ -103,7 +103,7 @@ struct dbgaufs_plink_arg {
 static int dbgaufs_plink_release(struct inode *inode __maybe_unused,
 				 struct file *file)
 {
-	free_page((unsigned long)file->private_data);
+	au_delayed_free_page((unsigned long)file->private_data);
 	return 0;
 }
 
@@ -167,7 +167,7 @@ static int dbgaufs_plink_open(struct inode *inode, struct file *file)
 	goto out; /* success */
 
 out_free:
-	free_page((unsigned long)p);
+	au_delayed_free_page((unsigned long)p);
 out:
 	return err;
 }

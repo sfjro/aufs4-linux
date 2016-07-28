@@ -42,7 +42,10 @@ struct au_vdir_destr {
 
 struct au_vdir_dehstr {
 	struct hlist_node	hash;
-	struct au_vdir_destr	*str;
+	union {
+		struct au_vdir_destr	*str;
+		struct llist_node	lnode;	/* delayed free */
+	};
 } ____cacheline_aligned_in_smp;
 
 struct au_vdir_de {
@@ -80,7 +83,10 @@ struct au_vdir {
 
 	unsigned long	vd_version;
 	unsigned int	vd_deblk_sz;
-	unsigned long	vd_jiffy;
+	union {
+		unsigned long		vd_jiffy;
+		struct llist_node	vd_lnode;	/* delayed free */
+	};
 } ____cacheline_aligned_in_smp;
 
 /* ---------------------------------------------------------------------- */
