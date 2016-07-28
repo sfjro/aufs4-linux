@@ -33,7 +33,7 @@ void au_si_free(struct kobject *kobj)
 	sbinfo = container_of(kobj, struct au_sbinfo, si_kobj);
 	for (i = 0; i < AuPlink_NHASH; i++)
 		AuDebugOn(!hlist_empty(&sbinfo->si_plink[i].head));
-	au_nwt_fin(&sbinfo->si_nowait);
+	AuDebugOn(atomic_read(&sbinfo->si_nowait.nw_len));
 
 	AuDebugOn(percpu_counter_sum(&sbinfo->si_ninodes));
 	percpu_counter_destroy(&sbinfo->si_ninodes);
@@ -44,14 +44,15 @@ void au_si_free(struct kobject *kobj)
 	au_br_free(sbinfo);
 	au_rw_write_unlock(&sbinfo->si_rwsem);
 
-	kfree(sbinfo->si_branch);
+	au_delayed_kfree(sbinfo->si_branch);
 	for (i = 0; i < AU_NPIDMAP; i++)
-		kfree(sbinfo->au_si_pid.pid_bitmap[i]);
+		if (sbinfo->au_si_pid.pid_bitmap[i])
+			au_delayed_kfree(sbinfo->au_si_pid.pid_bitmap[i]);
 	mutex_destroy(&sbinfo->au_si_pid.pid_mtx);
 	mutex_destroy(&sbinfo->si_xib_mtx);
 	AuRwDestroy(&sbinfo->si_rwsem);
 
-	kfree(sbinfo);
+	au_delayed_kfree(sbinfo);
 }
 
 int au_si_alloc(struct super_block *sb)

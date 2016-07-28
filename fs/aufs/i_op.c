@@ -281,8 +281,7 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 {
 	int err, h_opened = *opened;
 	unsigned int lkup_flags;
-	struct dentry *parent;
-	struct dentry *d;
+	struct dentry *parent, *d;
 	struct au_sphlhead *aopen;
 	struct vfsub_aopen_args args = {
 		.open_flag	= open_flag,
@@ -377,10 +376,10 @@ out_unlock:
 	di_write_unlock(parent);
 	aufs_read_unlock(dentry, AuLock_DW);
 	AuDbgDentry(dentry);
-	if (unlikely(err))
+	if (unlikely(err < 0))
 		goto out;
 out_no_open:
-	if (!err && !(*opened & FILE_CREATED)) {
+	if (err >= 0 && !(*opened & FILE_CREATED)) {
 		AuLabel(out_no_open);
 		dget(dentry);
 		err = finish_no_open(file, dentry);
