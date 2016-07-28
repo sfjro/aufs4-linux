@@ -404,7 +404,7 @@ static struct dentry *au_lkup_by_ino(struct path *path, ino_t ino,
 	}
 
 out_name:
-	free_page((unsigned long)arg.name);
+	au_delayed_free_page((unsigned long)arg.name);
 out_file:
 	fput(file);
 out:
@@ -558,7 +558,7 @@ out_relock:
 			dentry = ERR_PTR(-ESTALE);
 		}
 out_pathname:
-	free_page((unsigned long)pathname);
+	au_delayed_free_page((unsigned long)pathname);
 out_h_parent:
 	dput(h_parent);
 out:
