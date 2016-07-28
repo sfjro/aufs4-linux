@@ -119,7 +119,7 @@ static void au_nhash_de_do_free(struct hlist_head *head)
 	struct hlist_node *node;
 
 	hlist_for_each_entry_safe(pos, node, head, hash)
-		au_cache_delayed_free_vdir_dehstr(pos);
+		au_cache_dfree_vdir_dehstr(pos);
 }
 
 static void au_nhash_do_free(struct au_nhash *nhash,
@@ -359,8 +359,9 @@ void au_vdir_free(struct au_vdir *vdir, int atonce)
 		while (vdir->vd_nblk--)
 			au_delayed_kfree(*deblk++);
 		au_delayed_kfree(vdir->vd_deblk);
-		au_cache_delayed_free_vdir(vdir);
+		au_cache_dfree_vdir(vdir);
 	} else {
+		/* not delayed */
 		while (vdir->vd_nblk--)
 			kfree(*deblk++);
 		kfree(vdir->vd_deblk);
@@ -402,7 +403,7 @@ static struct au_vdir *alloc_vdir(struct file *file)
 	au_delayed_kfree(vdir->vd_deblk);
 
 out_free:
-	au_cache_delayed_free_vdir(vdir);
+	au_cache_dfree_vdir(vdir);
 out:
 	vdir = ERR_PTR(err);
 	return vdir;
@@ -545,7 +546,7 @@ static int au_handle_shwh(struct super_block *sb, struct au_vdir *vdir,
 		}
 	}
 
-	free_page((unsigned long)o);
+	au_delayed_free_page((unsigned long)o);
 
 out:
 	AuTraceErr(err);
