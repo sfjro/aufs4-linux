@@ -497,7 +497,7 @@ static void au_hn_bh(void *_args)
 		|| au_ftest_hnjob(a->flags[AuHn_CHILD], GEN))) {
 		inode = lookup_wlock_by_ino(sb, bfound, h_ino);
 		try_iput = 1;
-	    }
+	}
 
 	args.flags = a->flags[AuHn_CHILD];
 	args.dentry = dentry;
