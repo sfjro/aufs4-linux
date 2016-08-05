@@ -110,7 +110,7 @@ static inline struct au_##name *au_cache_alloc_##name(void) \
 { return kmem_cache_alloc(au_dfree.cache[AuCache_##index].cache, GFP_NOFS); } \
 static inline void au_cache_free_##name(struct au_##name *p) \
 { kmem_cache_free(au_dfree.cache[AuCache_##index].cache, p); } \
-void au_cache_dfree_##name(struct au_##name *p);
+void au_cache_dfree_##name(struct au_##name *p)
 
 AuCacheFuncs(dinfo, DINFO);
 AuCacheFuncs(icntnr, ICNTNR);
