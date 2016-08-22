@@ -51,9 +51,9 @@ static void au_do_dfree(struct work_struct *work __maybe_unused)
 		head = &au_dfree.cache[AuCache_##idx].llist;		\
 		node = llist_del_all(head);				\
 		for (; node; node = next) {				\
-			struct au_##name *p =				\
-				p = llist_entry(node, struct au_##name,	\
-						lnode);			\
+			struct au_##name *p				\
+				= llist_entry(node, struct au_##name,	\
+					      lnode);			\
 			next = llist_next(node);			\
 			au_cache_free_##name(p);			\
 		}							\
