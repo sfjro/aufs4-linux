@@ -27,7 +27,7 @@ static void au_refresh_hinode_attr(struct inode *inode, int do_version)
 
 static int au_ii_refresh(struct inode *inode, int *update)
 {
-	int err, e;
+	int err, e, nbr;
 	umode_t type;
 	aufs_bindex_t bindex, new_bindex;
 	struct super_block *sb;
@@ -39,9 +39,10 @@ static int au_ii_refresh(struct inode *inode, int *update)
 
 	*update = 0;
 	sb = inode->i_sb;
+	nbr = au_sbbot(sb) + 1;
 	type = inode->i_mode & S_IFMT;
 	iinfo = au_ii(inode);
-	err = au_hinode_realloc(iinfo, au_sbbot(sb) + 1);
+	err = au_hinode_realloc(iinfo, nbr, /*may_shrink*/0);
 	if (unlikely(err))
 		goto out;
 
@@ -79,6 +80,7 @@ static int au_ii_refresh(struct inode *inode, int *update)
 		}
 	}
 	au_update_ibrange(inode, /*do_put_zero*/0);
+	au_hinode_realloc(iinfo, nbr, /*may_shrink*/1); /* harmless if err */
 	e = au_dy_irefresh(inode);
 	if (unlikely(e && !err))
 		err = e;
