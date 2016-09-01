@@ -110,7 +110,7 @@ void au_set_h_fptr(struct file *file, aufs_bindex_t bindex,
 
 void au_update_figen(struct file *file);
 struct au_fidir *au_fidir_alloc(struct super_block *sb);
-int au_fidir_realloc(struct au_finfo *finfo, int nbr);
+int au_fidir_realloc(struct au_finfo *finfo, int nbr, int may_shrink);
 
 void au_fi_init_once(void *_fi);
 void au_finfo_fin(struct file *file, int atonce);
