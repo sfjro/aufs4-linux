@@ -655,23 +655,26 @@ static void au_do_refresh_dir(struct file *file)
  */
 static int refresh_file(struct file *file, int (*reopen)(struct file *file))
 {
-	int err, need_reopen;
+	int err, need_reopen, nbr;
 	aufs_bindex_t bbot, bindex;
 	struct dentry *dentry;
+	struct super_block *sb;
 	struct au_finfo *finfo;
 	struct au_hfile *hfile;
 
 	dentry = file->f_path.dentry;
+	sb = dentry->d_sb;
+	nbr = au_sbbot(sb) + 1;
 	finfo = au_fi(file);
 	if (!finfo->fi_hdir) {
 		hfile = &finfo->fi_htop;
 		AuDebugOn(!hfile->hf_file);
-		bindex = au_br_index(dentry->d_sb, hfile->hf_br->br_id);
+		bindex = au_br_index(sb, hfile->hf_br->br_id);
 		AuDebugOn(bindex < 0);
 		if (bindex != finfo->fi_btop)
 			au_set_fbtop(file, bindex);
 	} else {
-		err = au_fidir_realloc(finfo, au_sbbot(dentry->d_sb) + 1);
+		err = au_fidir_realloc(finfo, nbr, /*may_shrink*/0);
 		if (unlikely(err))
 			goto out;
 		au_do_refresh_dir(file);
@@ -681,6 +684,9 @@ static int refresh_file(struct file *file, int (*reopen)(struct file *file))
 	need_reopen = 1;
 	if (!au_test_mmapped(file))
 		err = au_file_refresh_by_inode(file, &need_reopen);
+	if (finfo->fi_hdir)
+		/* harmless if err */
+		au_fidir_realloc(finfo, nbr, /*may_shrink*/1);
 	if (!err && need_reopen && !d_unlinked(dentry))
 		err = reopen(file);
 	if (!err) {
