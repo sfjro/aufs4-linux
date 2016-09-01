@@ -66,7 +66,7 @@ void au_di_swap(struct au_dinfo *a, struct au_dinfo *b);
 void au_di_cp(struct au_dinfo *dst, struct au_dinfo *src);
 int au_di_init(struct dentry *dentry);
 void au_di_fin(struct dentry *dentry);
-int au_di_realloc(struct au_dinfo *dinfo, int nbr);
+int au_di_realloc(struct au_dinfo *dinfo, int nbr, int may_shrink);
 
 void di_read_lock(struct dentry *d, int flags, unsigned int lsc);
 void di_read_unlock(struct dentry *d, int flags);
