@@ -91,7 +91,8 @@ void au_warn_loopback(struct super_block *h_sb)
 	new_nelem = au_warn_loopback_nelem + au_warn_loopback_step;
 	a = au_kzrealloc(au_warn_loopback_array,
 			 au_warn_loopback_nelem * sizeof(unsigned long),
-			 new_nelem * sizeof(unsigned long), GFP_ATOMIC);
+			 new_nelem * sizeof(unsigned long), GFP_ATOMIC,
+			 /*may_shrink*/0);
 	if (a) {
 		au_warn_loopback_nelem = new_nelem;
 		au_warn_loopback_array = a;
