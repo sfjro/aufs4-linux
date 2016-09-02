@@ -141,12 +141,12 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 			goto out_wbr;
 	}
 
-	err = au_sbr_realloc(au_sbi(sb), new_nbranch);
+	err = au_sbr_realloc(au_sbi(sb), new_nbranch, /*may_shrink*/0);
 	if (!err)
-		err = au_di_realloc(au_di(root), new_nbranch);
+		err = au_di_realloc(au_di(root), new_nbranch, /*may_shrink*/0);
 	if (!err) {
 		inode = d_inode(root);
-		err = au_hinode_realloc(au_ii(inode), new_nbranch);
+		err = au_hinode_realloc(au_ii(inode), new_nbranch, /*may_shrink*/0);
 	}
 	if (!err)
 		return add_branch; /* success */
@@ -890,7 +890,8 @@ static void au_br_do_del_brp(struct au_sbinfo *sbinfo,
 	sbinfo->si_branch[0 + bbot] = NULL;
 	sbinfo->si_bbot--;
 
-	p = krealloc(sbinfo->si_branch, sizeof(*p) * bbot, AuGFP_SBILIST);
+	p = au_krealloc(sbinfo->si_branch, sizeof(*p) * bbot, AuGFP_SBILIST,
+			/*may_shrink*/1);
 	if (p)
 		sbinfo->si_branch = p;
 	/* harmless error */
@@ -909,7 +910,8 @@ static void au_br_do_del_hdp(struct au_dinfo *dinfo, const aufs_bindex_t bindex,
 	/* au_h_dentry_init(au_hdentry(dinfo, bbot); */
 	dinfo->di_bbot--;
 
-	p = krealloc(dinfo->di_hdentry, sizeof(*p) * bbot, AuGFP_SBILIST);
+	p = au_krealloc(dinfo->di_hdentry, sizeof(*p) * bbot, AuGFP_SBILIST,
+			/*may_shrink*/1);
 	if (p)
 		dinfo->di_hdentry = p;
 	/* harmless error */
@@ -928,7 +930,8 @@ static void au_br_do_del_hip(struct au_iinfo *iinfo, const aufs_bindex_t bindex,
 	/* au_hinode_init(au_hinode(iinfo, bbot)); */
 	iinfo->ii_bbot--;
 
-	p = krealloc(iinfo->ii_hinode, sizeof(*p) * bbot, AuGFP_SBILIST);
+	p = au_krealloc(iinfo->ii_hinode, sizeof(*p) * bbot, AuGFP_SBILIST,
+			/*may_shrink*/1);
 	if (p)
 		iinfo->ii_hinode = p;
 	/* harmless error */

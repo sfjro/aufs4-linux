@@ -129,7 +129,7 @@ void au_di_fin(struct dentry *dentry)
 	au_di_free(dinfo);
 }
 
-int au_di_realloc(struct au_dinfo *dinfo, int nbr)
+int au_di_realloc(struct au_dinfo *dinfo, int nbr, int may_shrink)
 {
 	int err, sz;
 	struct au_hdentry *hdp;
@@ -140,7 +140,8 @@ int au_di_realloc(struct au_dinfo *dinfo, int nbr)
 	sz = sizeof(*hdp) * (dinfo->di_bbot + 1);
 	if (!sz)
 		sz = sizeof(*hdp);
-	hdp = au_kzrealloc(dinfo->di_hdentry, sz, sizeof(*hdp) * nbr, GFP_NOFS);
+	hdp = au_kzrealloc(dinfo->di_hdentry, sz, sizeof(*hdp) * nbr, GFP_NOFS,
+			   may_shrink);
 	if (hdp) {
 		dinfo->di_hdentry = hdp;
 		err = 0;

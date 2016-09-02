@@ -258,7 +258,7 @@ void au_icntnr_init_once(void *_c);
 void au_hinode_init(struct au_hinode *hinode);
 int au_iinfo_init(struct inode *inode);
 void au_iinfo_fin(struct inode *inode);
-int au_hinode_realloc(struct au_iinfo *iinfo, int nbr);
+int au_hinode_realloc(struct au_iinfo *iinfo, int nbr, int may_shrink);
 
 #ifdef CONFIG_PROC_FS
 /* plink.c */

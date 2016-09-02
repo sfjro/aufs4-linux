@@ -205,7 +205,7 @@ int au_iinfo_init(struct inode *inode)
 	return -ENOMEM;
 }
 
-int au_hinode_realloc(struct au_iinfo *iinfo, int nbr)
+int au_hinode_realloc(struct au_iinfo *iinfo, int nbr, int may_shrink)
 {
 	int err, i;
 	struct au_hinode *hip;
@@ -213,7 +213,8 @@ int au_hinode_realloc(struct au_iinfo *iinfo, int nbr)
 	AuRwMustWriteLock(&iinfo->ii_rwsem);
 
 	err = -ENOMEM;
-	hip = krealloc(iinfo->ii_hinode, sizeof(*hip) * nbr, GFP_NOFS);
+	hip = au_krealloc(iinfo->ii_hinode, sizeof(*hip) * nbr, GFP_NOFS,
+			  may_shrink);
 	if (hip) {
 		iinfo->ii_hinode = hip;
 		i = iinfo->ii_bbot + 1;
