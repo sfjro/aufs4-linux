@@ -266,7 +266,7 @@ void au_iarray_free(struct inode **a, unsigned long long max);
 /* sbinfo.c */
 void au_si_free(struct kobject *kobj);
 int au_si_alloc(struct super_block *sb);
-int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr);
+int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr, int may_shrink);
 
 unsigned int au_sigen_inc(struct super_block *sb);
 aufs_bindex_t au_new_br_id(struct super_block *sb);
