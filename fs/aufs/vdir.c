@@ -266,8 +266,8 @@ static int append_deblk(struct au_vdir *vdir)
 	unsigned char **o;
 
 	err = -ENOMEM;
-	o = krealloc(vdir->vd_deblk, sizeof(*o) * (vdir->vd_nblk + 1),
-		     GFP_NOFS);
+	o = au_krealloc(vdir->vd_deblk, sizeof(*o) * (vdir->vd_nblk + 1),
+			GFP_NOFS, /*may_shrink*/0);
 	if (unlikely(!o))
 		goto out;
 
@@ -690,8 +690,8 @@ static int copy_vdir(struct au_vdir *tgt, struct au_vdir *src)
 	if (tgt->vd_nblk < src->vd_nblk) {
 		unsigned char **p;
 
-		p = krealloc(tgt->vd_deblk, sizeof(*p) * src->vd_nblk,
-			     GFP_NOFS);
+		p = au_krealloc(tgt->vd_deblk, sizeof(*p) * src->vd_nblk,
+				GFP_NOFS, /*may_shrink*/0);
 		if (unlikely(!p))
 			goto out;
 		tgt->vd_deblk = p;
@@ -701,7 +701,8 @@ static int copy_vdir(struct au_vdir *tgt, struct au_vdir *src)
 		unsigned char *p;
 
 		tgt->vd_deblk_sz = deblk_sz;
-		p = krealloc(tgt->vd_deblk[0], deblk_sz, GFP_NOFS);
+		p = au_krealloc(tgt->vd_deblk[0], deblk_sz, GFP_NOFS,
+				/*may_shrink*/1);
 		if (unlikely(!p))
 			goto out;
 		tgt->vd_deblk[0] = p;

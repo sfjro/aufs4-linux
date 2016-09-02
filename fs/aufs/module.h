@@ -25,7 +25,19 @@ extern bool au_userns;
 
 extern int au_dir_roflags;
 
-void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp);
+void *au_krealloc(void *p, unsigned int new_sz, gfp_t gfp, int may_shrink);
+void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp,
+		   int may_shrink);
+
+static inline int au_kmidx_sub(size_t sz, size_t new_sz)
+{
+#ifndef CONFIG_SLOB
+	return kmalloc_index(sz) - kmalloc_index(new_sz);
+#else
+	return -1; /* SLOB is untested */
+#endif
+}
+
 int au_seq_path(struct seq_file *seq, struct path *path);
 
 #ifdef CONFIG_PROC_FS
