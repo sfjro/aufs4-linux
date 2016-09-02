@@ -69,7 +69,8 @@ static int au_dpages_append(struct au_dcsub_pages *dpages,
 		err = -ENOMEM;
 		sz = dpages->ndpage * sizeof(*dpages->dpages);
 		p = au_kzrealloc(dpages->dpages, sz,
-				 sz + sizeof(*dpages->dpages), gfp);
+				 sz + sizeof(*dpages->dpages), gfp,
+				 /*may_shrink*/0);
 		if (unlikely(!p))
 			goto out;
 

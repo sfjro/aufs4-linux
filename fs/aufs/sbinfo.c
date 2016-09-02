@@ -118,7 +118,7 @@ out:
 	return err;
 }
 
-int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr)
+int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr, int may_shrink)
 {
 	int err, sz;
 	struct au_branch **brp;
@@ -129,7 +129,8 @@ int au_sbr_realloc(struct au_sbinfo *sbinfo, int nbr)
 	sz = sizeof(*brp) * (sbinfo->si_bbot + 1);
 	if (unlikely(!sz))
 		sz = sizeof(*brp);
-	brp = au_kzrealloc(sbinfo->si_branch, sz, sizeof(*brp) * nbr, GFP_NOFS);
+	brp = au_kzrealloc(sbinfo->si_branch, sz, sizeof(*brp) * nbr, GFP_NOFS,
+			   may_shrink);
 	if (brp) {
 		sbinfo->si_branch = brp;
 		err = 0;
