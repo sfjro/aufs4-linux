@@ -381,6 +381,7 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		}
 	};
 	struct super_block *sb;
+	struct inode *h_src_inode;
 	struct task_struct *tsk = current;
 
 	/* bsrc branch can be ro/rw. */
@@ -396,7 +397,9 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 	}
 
 	/* try stopping to update while we copyup */
-	IMustLock(d_inode(file[SRC].dentry));
+	h_src_inode = d_inode(file[SRC].dentry);
+	if (!au_test_nfs(h_src_inode->i_sb))
+		IMustLock(h_src_inode);
 	err = au_copy_file(file[DST].file, file[SRC].file, cpg->len);
 
 	/* i wonder if we had O_NO_DELAY_FPUT flag */
@@ -456,8 +459,13 @@ static int au_do_cpup_regular(struct au_cp_generic *cpg,
 			goto out;
 		}
 		h_src_attr->valid = 1;
-		err = au_cp_regular(cpg);
-		inode_unlock(h_src_inode);
+		if (!au_test_nfs(h_src_inode->i_sb)) {
+			err = au_cp_regular(cpg);
+			inode_unlock(h_src_inode);
+		} else {
+			inode_unlock(h_src_inode);
+			err = au_cp_regular(cpg);
+		}
 		rerr = au_pin_hdir_relock(cpg->pin);
 		if (!err && rerr)
 			err = rerr;
