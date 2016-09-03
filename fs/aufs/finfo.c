@@ -66,7 +66,7 @@ struct au_fidir *au_fidir_alloc(struct super_block *sb)
 	return fidir;
 }
 
-int au_fidir_realloc(struct au_finfo *finfo, int nbr)
+int au_fidir_realloc(struct au_finfo *finfo, int nbr, int may_shrink)
 {
 	int err;
 	struct au_fidir *fidir, *p;
@@ -77,7 +77,7 @@ int au_fidir_realloc(struct au_finfo *finfo, int nbr)
 
 	err = -ENOMEM;
 	p = au_kzrealloc(fidir, au_fidir_sz(fidir->fd_nent), au_fidir_sz(nbr),
-			 GFP_NOFS);
+			 GFP_NOFS, may_shrink);
 	if (p) {
 		p->fd_nent = nbr;
 		finfo->fi_hdir = p;

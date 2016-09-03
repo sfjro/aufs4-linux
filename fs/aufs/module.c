@@ -10,13 +10,57 @@
 #include <linux/seq_file.h>
 #include "aufs.h"
 
-void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp)
+/* shrinkable realloc */
+void *au_krealloc(void *p, unsigned int new_sz, gfp_t gfp, int may_shrink)
 {
-	if (new_sz <= nused)
-		return p;
+	size_t sz;
+	int diff;
 
-	p = krealloc(p, new_sz, gfp);
-	if (p)
+	sz = 0;
+	diff = -1;
+	if (p) {
+#if 0 /* unused */
+		if (!new_sz) {
+			au_delayed_kfree(p);
+			p = NULL;
+			goto out;
+		}
+#else
+		AuDebugOn(!new_sz);
+#endif
+		sz = ksize(p);
+		diff = au_kmidx_sub(sz, new_sz);
+	}
+	if (sz && !diff)
+		goto out;
+
+	if (sz < new_sz)
+		/* expand or SLOB */
+		p = krealloc(p, new_sz, gfp);
+	else if (new_sz < sz && may_shrink) {
+		/* shrink */
+		void *q;
+
+		q = kmalloc(new_sz, gfp);
+		if (q) {
+			if (p) {
+				memcpy(q, p, new_sz);
+				au_delayed_kfree(p);
+			}
+			p = q;
+		} else
+			p = NULL;
+	}
+
+out:
+	return p;
+}
+
+void *au_kzrealloc(void *p, unsigned int nused, unsigned int new_sz, gfp_t gfp,
+		   int may_shrink)
+{
+	p = au_krealloc(p, new_sz, gfp, may_shrink);
+	if (p && new_sz > nused)
 		memset(p + nused, 0, new_sz - nused);
 	return p;
 }
