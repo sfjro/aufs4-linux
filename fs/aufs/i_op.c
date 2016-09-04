@@ -1351,6 +1351,7 @@ static int aufs_update_time(struct inode *inode, struct timespec *ts, int flags)
 	aufs_bindex_t bindex;
 	struct super_block *sb;
 	struct inode *h_inode;
+	struct vfsmount *h_mnt;
 
 	sb = inode->i_sb;
 	WARN_ONCE((flags & S_ATIME) && !IS_NOATIME(inode),
@@ -1365,9 +1366,14 @@ static int aufs_update_time(struct inode *inode, struct timespec *ts, int flags)
 	err = 0;
 	bindex = au_ibtop(inode);
 	h_inode = au_h_iptr(inode, bindex);
-	if (!au_test_ro(sb, bindex, inode))
-		err = vfsub_update_time(h_inode, ts, flags);
-	else if (au_is_special(h_inode)) {
+	if (!au_test_ro(sb, bindex, inode)) {
+		h_mnt = au_sbr_mnt(sb, bindex);
+		err = vfsub_mnt_want_write(h_mnt);
+		if (!err) {
+			err = vfsub_update_time(h_inode, ts, flags);
+			vfsub_mnt_drop_write(h_mnt);
+		}
+	} else if (au_is_special(h_inode)) {
 		/*
 		 * Never copy-up here.
 		 * These special files may already be opened and used for
