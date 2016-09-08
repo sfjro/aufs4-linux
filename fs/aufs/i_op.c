@@ -18,12 +18,15 @@ static int h_permission(struct inode *h_inode, int mask,
 	int err;
 	const unsigned char write_mask = !!(mask & (MAY_WRITE | MAY_APPEND));
 
+	err = -EPERM;
+	if (write_mask && IS_IMMUTABLE(h_inode))
+		goto out;
+
 	err = -EACCES;
-	if ((write_mask && IS_IMMUTABLE(h_inode))
-	    || ((mask & MAY_EXEC)
-		&& S_ISREG(h_inode->i_mode)
-		&& (path_noexec(h_path)
-		    || !(h_inode->i_mode & S_IXUGO))))
+	if (((mask & MAY_EXEC)
+	     && S_ISREG(h_inode->i_mode)
+	     && (path_noexec(h_path)
+		 || !(h_inode->i_mode & S_IXUGO))))
 		goto out;
 
 	/*
