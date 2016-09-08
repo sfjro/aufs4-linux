@@ -13,7 +13,7 @@
 #include "aufs.h"
 
 static int h_permission(struct inode *h_inode, int mask,
-			struct vfsmount *h_mnt, int brperm)
+			struct path *h_path, int brperm)
 {
 	int err;
 	const unsigned char write_mask = !!(mask & (MAY_WRITE | MAY_APPEND));
@@ -22,7 +22,7 @@ static int h_permission(struct inode *h_inode, int mask,
 	if ((write_mask && IS_IMMUTABLE(h_inode))
 	    || ((mask & MAY_EXEC)
 		&& S_ISREG(h_inode->i_mode)
-		&& ((h_mnt->mnt_flags & MNT_NOEXEC)
+		&& (path_noexec(h_path)
 		    || !(h_inode->i_mode & S_IXUGO))))
 		goto out;
 
@@ -107,7 +107,7 @@ static int aufs_permission(struct inode *inode, int mask)
 		err = 0;
 		bindex = au_ibtop(inode);
 		br = au_sbr(sb, bindex);
-		err = h_permission(h_inode, mask, au_br_mnt(br), br->br_perm);
+		err = h_permission(h_inode, mask, &br->br_path, br->br_perm);
 		if (write_mask
 		    && !err
 		    && !special_file(h_inode->i_mode)) {
@@ -133,7 +133,7 @@ static int aufs_permission(struct inode *inode, int mask)
 				break;
 
 			br = au_sbr(sb, bindex);
-			err = h_permission(h_inode, mask, au_br_mnt(br),
+			err = h_permission(h_inode, mask, &br->br_path,
 					   br->br_perm);
 		}
 	}
@@ -1293,20 +1293,55 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+static int au_is_special(struct inode *inode)
+{
+	return (inode->i_mode & (S_IFBLK | S_IFCHR | S_IFIFO | S_IFSOCK));
+}
+
 static int aufs_update_time(struct inode *inode, struct timespec *ts, int flags)
 {
 	int err;
+	aufs_bindex_t bindex;
 	struct super_block *sb;
 	struct inode *h_inode;
+	struct vfsmount *h_mnt;
 
 	sb = inode->i_sb;
+	WARN_ONCE((flags & S_ATIME) && !IS_NOATIME(inode),
+		  "unexpected s_flags 0x%lx", sb->s_flags);
+
 	/* mmap_sem might be acquired already, cf. aufs_mmap() */
 	lockdep_off();
 	si_read_lock(sb, AuLock_FLUSH);
 	ii_write_lock_child(inode);
 	lockdep_on();
-	h_inode = au_h_iptr(inode, au_ibtop(inode));
-	err = vfsub_update_time(h_inode, ts, flags);
+
+	err = 0;
+	bindex = au_ibtop(inode);
+	h_inode = au_h_iptr(inode, bindex);
+	if (!au_test_ro(sb, bindex, inode)) {
+		h_mnt = au_sbr_mnt(sb, bindex);
+		err = vfsub_mnt_want_write(h_mnt);
+		if (!err) {
+			err = vfsub_update_time(h_inode, ts, flags);
+			vfsub_mnt_drop_write(h_mnt);
+		}
+	} else if (au_is_special(h_inode)) {
+		/*
+		 * Never copy-up here.
+		 * These special files may already be opened and used for
+		 * communicating. If we copied it up, then the communication
+		 * would be corrupted.
+		 */
+		AuWarn1("timestamps for i%lu are ignored "
+			"since it is on readonly branch (hi%lu).\n",
+			inode->i_ino, h_inode->i_ino);
+	} else if (flags & ~S_ATIME) {
+		err = -EIO;
+		AuIOErr1("unexpected flags 0x%x\n", flags);
+		AuDebugOn(1);
+	}
+
 	lockdep_off();
 	if (!err)
 		au_cpup_attr_timesizes(inode);
