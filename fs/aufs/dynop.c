@@ -176,6 +176,8 @@ static void dy_aop(struct au_dykey *key, const void *h_op,
 	/* this one will be changed according to an aufs mount option */
 	DySetAop(direct_IO);
 	DySetAop(migratepage);
+	DySetAop(isolate_page);
+	DySetAop(putback_page);
 	DySetAop(launder_page);
 	DySetAop(is_partially_uptodate);
 	DySetAop(is_dirty_writeback);

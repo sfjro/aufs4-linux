@@ -794,6 +794,10 @@ static int aufs_migratepage(struct address_space *mapping, struct page *newpage,
 			    struct page *page, enum migrate_mode mode)
 { AuUnsupport(); return 0; }
 #endif
+static bool aufs_isolate_page(struct page *page, isolate_mode_t mode)
+{ AuUnsupport(); return true; }
+static void aufs_putback_page(struct page *page)
+{ AuUnsupport(); }
 static int aufs_launder_page(struct page *page)
 { AuUnsupport(); return 0; }
 static int aufs_is_partially_uptodate(struct page *page,
@@ -828,6 +832,8 @@ const struct address_space_operations aufs_aop = {
 	.releasepage		= aufs_releasepage,
 	/* is fallback_migrate_page ok? */
 	/* .migratepage		= aufs_migratepage, */
+	.isolate_page		= aufs_isolate_page,
+	.putback_page		= aufs_putback_page,
 	.launder_page		= aufs_launder_page,
 	.is_partially_uptodate	= aufs_is_partially_uptodate,
 	.is_dirty_writeback	= aufs_is_dirty_writeback,
