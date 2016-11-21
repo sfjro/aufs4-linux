@@ -25,7 +25,6 @@
 #include <linux/nsproxy.h>
 #include <linux/random.h>
 #include <linux/writeback.h>
-#include "../fs/mount.h"
 #include "aufs.h"
 
 union conv {
