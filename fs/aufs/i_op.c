@@ -1031,8 +1031,8 @@ out:
 	return err;
 }
 
-ssize_t au_srxattr(struct dentry *dentry, struct inode *inode,
-		   struct au_srxattr *arg)
+ssize_t au_sxattr(struct dentry *dentry, struct inode *inode,
+		  struct au_sxattr *arg)
 {
 	int err;
 	struct path h_path;
@@ -1065,9 +1065,6 @@ ssize_t au_srxattr(struct dentry *dentry, struct inode *inode,
 		err = vfsub_setxattr(h_path.dentry,
 				     arg->u.set.name, arg->u.set.value,
 				     arg->u.set.size, arg->u.set.flags);
-		break;
-	case AU_XATTR_REMOVE:
-		err = vfsub_removexattr(h_path.dentry, arg->u.remove.name);
 		break;
 	case AU_ACL_SET:
 		err = -EOPNOTSUPP;
@@ -1126,7 +1123,7 @@ static void au_refresh_iattr(struct inode *inode, struct kstat *st,
 }
 
 /*
- * common routine for aufs_getattr() and aufs_getxattr().
+ * common routine for aufs_getattr() and au_getxattr().
  * returns zero or negative (an error).
  * @dentry will be read-locked in success.
  */
@@ -1387,10 +1384,7 @@ struct inode_operations aufs_iop_nogetattr[AuIop_Last],
 		.getattr	= aufs_getattr,
 
 #ifdef CONFIG_AUFS_XATTR
-		.setxattr	= aufs_setxattr,
-		.getxattr	= aufs_getxattr,
 		.listxattr	= aufs_listxattr,
-		.removexattr	= aufs_removexattr,
 #endif
 
 		.readlink	= generic_readlink,
@@ -1419,10 +1413,7 @@ struct inode_operations aufs_iop_nogetattr[AuIop_Last],
 		.getattr	= aufs_getattr,
 
 #ifdef CONFIG_AUFS_XATTR
-		.setxattr	= aufs_setxattr,
-		.getxattr	= aufs_getxattr,
 		.listxattr	= aufs_listxattr,
-		.removexattr	= aufs_removexattr,
 #endif
 
 		.update_time	= aufs_update_time,
@@ -1440,10 +1431,7 @@ struct inode_operations aufs_iop_nogetattr[AuIop_Last],
 		.getattr	= aufs_getattr,
 
 #ifdef CONFIG_AUFS_XATTR
-		.setxattr	= aufs_setxattr,
-		.getxattr	= aufs_getxattr,
 		.listxattr	= aufs_listxattr,
-		.removexattr	= aufs_removexattr,
 #endif
 
 		.update_time	= aufs_update_time

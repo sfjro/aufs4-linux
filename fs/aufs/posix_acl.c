@@ -63,7 +63,7 @@ int aufs_set_acl(struct inode *inode, struct posix_acl *acl, int type)
 	int err;
 	ssize_t ssz;
 	struct dentry *dentry;
-	struct au_srxattr arg = {
+	struct au_sxattr arg = {
 		.type = AU_ACL_SET,
 		.u.acl_set = {
 			.acl	= acl,
@@ -87,7 +87,7 @@ int aufs_set_acl(struct inode *inode, struct posix_acl *acl, int type)
 		}
 	}
 
-	ssz = au_srxattr(dentry, inode, &arg);
+	ssz = au_sxattr(dentry, inode, &arg);
 	dput(dentry);
 	err = ssz;
 	if (ssz >= 0)

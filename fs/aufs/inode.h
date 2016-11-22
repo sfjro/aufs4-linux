@@ -312,17 +312,11 @@ AuStubVoid(au_plink_half_refresh, struct super_block *sb, aufs_bindex_t br_id);
 int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
 		  unsigned int verbose);
 ssize_t aufs_listxattr(struct dentry *dentry, char *list, size_t size);
-ssize_t aufs_getxattr(struct dentry *dentry, struct inode *inode,
-		      const char *name, void *value, size_t size);
-int aufs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
-		  const void *value, size_t size, int flags);
-int aufs_removexattr(struct dentry *dentry, const char *name);
-
-/* void au_xattr_init(struct super_block *sb); */
+void au_xattr_init(struct super_block *sb);
 #else
 AuStubInt0(au_cpup_xattr, struct dentry *h_dst, struct dentry *h_src,
 	   int ignore_flags, unsigned int verbose);
-/* AuStubVoid(au_xattr_init, struct super_block *sb); */
+AuStubVoid(au_xattr_init, struct super_block *sb);
 #endif
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -333,11 +327,10 @@ int aufs_set_acl(struct inode *inode, struct posix_acl *acl, int type);
 #if IS_ENABLED(CONFIG_AUFS_XATTR) || IS_ENABLED(CONFIG_FS_POSIX_ACL)
 enum {
 	AU_XATTR_SET,
-	AU_XATTR_REMOVE,
 	AU_ACL_SET
 };
 
-struct au_srxattr {
+struct au_sxattr {
 	int type;
 	union {
 		struct {
@@ -347,16 +340,13 @@ struct au_srxattr {
 			int		flags;
 		} set;
 		struct {
-			const char	*name;
-		} remove;
-		struct {
 			struct posix_acl *acl;
 			int		type;
 		} acl_set;
 	} u;
 };
-ssize_t au_srxattr(struct dentry *dentry, struct inode *inode,
-		   struct au_srxattr *arg);
+ssize_t au_sxattr(struct dentry *dentry, struct inode *inode,
+		  struct au_sxattr *arg);
 #endif
 
 /* ---------------------------------------------------------------------- */
