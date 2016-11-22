@@ -804,7 +804,7 @@ static void au_ren_rev_dt(int err, struct au_ren_args *a)
 int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 		struct inode *_dst_dir, struct dentry *_dst_dentry)
 {
-	int err, flags;
+	int err, lock_flags;
 	/* reduce stack space */
 	struct au_ren_args *a;
 
@@ -836,15 +836,15 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 	}
 
 	err = -ENOTDIR;
-	flags = AuLock_FLUSH | AuLock_NOPLM | AuLock_GEN;
+	lock_flags = AuLock_FLUSH | AuLock_NOPLM | AuLock_GEN;
 	if (d_is_dir(a->src_dentry)) {
 		au_fset_ren(a->auren_flags, ISDIR);
 		if (unlikely(d_really_is_positive(a->dst_dentry)
 			     && !d_is_dir(a->dst_dentry)))
 			goto out_free;
-		flags |= AuLock_DIRS;
+		lock_flags |= AuLock_DIRS;
 	}
-	err = aufs_read_and_write_lock2(a->dst_dentry, a->src_dentry, flags);
+	err = aufs_read_and_write_lock2(a->dst_dentry, a->src_dentry, lock_flags);
 	if (unlikely(err))
 		goto out_free;
 
