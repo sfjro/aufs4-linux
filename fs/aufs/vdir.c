@@ -829,7 +829,7 @@ static int seek_vdir(struct file *file, struct dir_context *ctx)
 
 out:
 	/* smp_mb(); */
-	AuTraceErr(!valid);
+	AuTraceErr(valid - 1);
 	return valid;
 }
 
