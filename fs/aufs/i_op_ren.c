@@ -79,7 +79,10 @@ struct au_ren_args {
 	struct au_nhash whlist;
 	aufs_bindex_t btgt, src_bwh, src_bdiropq;
 
-	unsigned int auren_flags;
+	struct {
+		unsigned short auren_flags;
+		unsigned short flags;	/* syscall parameter */
+	} __packed;
 
 	struct au_whtmp_rmdir *thargs;
 	struct dentry *h_dst;
@@ -129,7 +132,7 @@ static void au_ren_rev_rename(int err, struct au_ren_args *a)
 	delegated = NULL;
 	rerr = vfsub_rename(a->dst_h_dir,
 			    au_h_dptr(a->src_dentry, a->btgt),
-			    a->src_h_dir, &a->h_path, &delegated);
+			    a->src_h_dir, &a->h_path, &delegated, a->flags);
 	if (unlikely(rerr == -EWOULDBLOCK)) {
 		pr_warn("cannot retry for NFSv4 delegation"
 			" for an internal rename\n");
@@ -162,7 +165,7 @@ static void au_ren_rev_whtmp(int err, struct au_ren_args *a)
 
 	delegated = NULL;
 	rerr = vfsub_rename(a->dst_h_dir, a->h_dst, a->dst_h_dir, &a->h_path,
-			    &delegated);
+			    &delegated, a->flags);
 	if (unlikely(rerr == -EWOULDBLOCK)) {
 		pr_warn("cannot retry for NFSv4 delegation"
 			" for an internal rename\n");
@@ -210,7 +213,8 @@ static int au_ren_or_cpup(struct au_ren_args *a)
 		AuDebugOn(au_dbtop(d) != a->btgt);
 		delegated = NULL;
 		err = vfsub_rename(a->src_h_dir, au_h_dptr(d, a->btgt),
-				   a->dst_h_dir, &a->h_path, &delegated);
+				   a->dst_h_dir, &a->h_path, &delegated,
+				   a->flags);
 		if (unlikely(err == -EWOULDBLOCK)) {
 			pr_warn("cannot retry for NFSv4 delegation"
 				" for an internal rename\n");
@@ -802,15 +806,21 @@ static void au_ren_rev_dt(int err, struct au_ren_args *a)
 /* ---------------------------------------------------------------------- */
 
 int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
-		struct inode *_dst_dir, struct dentry *_dst_dentry)
+		struct inode *_dst_dir, struct dentry *_dst_dentry,
+		unsigned int _flags)
 {
 	int err, lock_flags;
 	/* reduce stack space */
 	struct au_ren_args *a;
 
-	AuDbg("%pd, %pd\n", _src_dentry, _dst_dentry);
+	AuDbg("%pd, %pd, 0x%x\n", _src_dentry, _dst_dentry, _flags);
 	IMustLock(_src_dir);
 	IMustLock(_dst_dir);
+
+	err = -EINVAL;
+	/* tmp, fix it by the next git-commit */
+	if (unlikely(_flags))
+		goto out;
 
 	err = -ENOMEM;
 	BUILD_BUG_ON(sizeof(*a) > PAGE_SIZE);
@@ -818,6 +828,7 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 	if (unlikely(!a))
 		goto out;
 
+	a->flags = _flags;
 	a->src_dir = _src_dir;
 	a->src_dentry = _src_dentry;
 	a->src_inode = NULL;
