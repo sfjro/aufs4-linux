@@ -875,6 +875,10 @@ static int aufs_setattr(struct dentry *dentry, struct iattr *ia)
 	inode = d_inode(dentry);
 	IMustLock(inode);
 
+	err = setattr_prepare(dentry, ia);
+	if (unlikely(err))
+		goto out;
+
 	err = -ENOMEM;
 	a = kzalloc(sizeof(*a), GFP_NOFS);
 	if (unlikely(!a))
@@ -1018,8 +1022,8 @@ out:
 	return err;
 }
 
-ssize_t au_srxattr(struct dentry *dentry, struct inode *inode,
-		   struct au_srxattr *arg)
+ssize_t au_sxattr(struct dentry *dentry, struct inode *inode,
+		  struct au_sxattr *arg)
 {
 	int err;
 	struct path h_path;
@@ -1053,13 +1057,11 @@ ssize_t au_srxattr(struct dentry *dentry, struct inode *inode,
 				     arg->u.set.name, arg->u.set.value,
 				     arg->u.set.size, arg->u.set.flags);
 		break;
-	case AU_XATTR_REMOVE:
-		err = vfsub_removexattr(h_path.dentry, arg->u.remove.name);
-		break;
 	case AU_ACL_SET:
 		err = -EOPNOTSUPP;
 		h_inode = d_inode(h_path.dentry);
 		if (h_inode->i_op->set_acl)
+			/* this will call posix_acl_update_mode */
 			err = h_inode->i_op->set_acl(h_inode,
 						     arg->u.acl_set.acl,
 						     arg->u.acl_set.type);
@@ -1113,7 +1115,7 @@ static void au_refresh_iattr(struct inode *inode, struct kstat *st,
 }
 
 /*
- * common routine for aufs_getattr() and aufs_getxattr().
+ * common routine for aufs_getattr() and au_getxattr().
  * returns zero or negative (an error).
  * @dentry will be read-locked in success.
  */
@@ -1280,7 +1282,7 @@ static const char *aufs_get_link(struct dentry *dentry, struct inode *inode,
 	err = 0;
 	AuDbg("%pf\n", h_inode->i_op->get_link);
 	AuDbgDentry(h_dentry);
-	ret = h_inode->i_op->get_link(h_dentry, h_inode, done);
+	ret = vfs_get_link(h_dentry, done);
 	dput(h_dentry);
 	if (IS_ERR(ret))
 		err = PTR_ERR(ret);
@@ -1374,10 +1376,7 @@ struct inode_operations aufs_iop_nogetattr[AuIop_Last],
 		.getattr	= aufs_getattr,
 
 #ifdef CONFIG_AUFS_XATTR
-		.setxattr	= aufs_setxattr,
-		.getxattr	= aufs_getxattr,
 		.listxattr	= aufs_listxattr,
-		.removexattr	= aufs_removexattr,
 #endif
 
 		.readlink	= generic_readlink,
@@ -1406,10 +1405,7 @@ struct inode_operations aufs_iop_nogetattr[AuIop_Last],
 		.getattr	= aufs_getattr,
 
 #ifdef CONFIG_AUFS_XATTR
-		.setxattr	= aufs_setxattr,
-		.getxattr	= aufs_getxattr,
 		.listxattr	= aufs_listxattr,
-		.removexattr	= aufs_removexattr,
 #endif
 
 		.update_time	= aufs_update_time,
@@ -1427,10 +1423,7 @@ struct inode_operations aufs_iop_nogetattr[AuIop_Last],
 		.getattr	= aufs_getattr,
 
 #ifdef CONFIG_AUFS_XATTR
-		.setxattr	= aufs_setxattr,
-		.getxattr	= aufs_getxattr,
 		.listxattr	= aufs_listxattr,
-		.removexattr	= aufs_removexattr,
 #endif
 
 		.update_time	= aufs_update_time

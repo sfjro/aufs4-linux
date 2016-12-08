@@ -706,7 +706,8 @@ static int au_do_ren_after_cpup(struct au_cp_generic *cpg, struct path *h_path)
 	IMustLock(h_dir);
 	AuDbg("%pd %pd\n", h_dentry, h_path->dentry);
 	/* no delegation since it is just created */
-	err = vfsub_rename(h_dir, h_dentry, h_dir, h_path, /*delegated*/NULL);
+	err = vfsub_rename(h_dir, h_dentry, h_dir, h_path, /*delegated*/NULL,
+			   /*flags*/0);
 	dput(h_path->dentry);
 
 out:
@@ -719,6 +720,8 @@ out:
  * @len is for truncating when it is -1 copyup the entire file.
  * in link/rename cases, @dst_parent may be different from the real one.
  * basic->bsrc can be larger than basic->bdst.
+ * aufs doesn't touch the credential so
+ * security_inode_copy_up{,_xattr}() are unnecrssary.
  */
 static int au_cpup_single(struct au_cp_generic *cpg, struct dentry *dst_parent)
 {

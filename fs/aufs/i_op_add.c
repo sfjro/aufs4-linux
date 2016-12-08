@@ -699,6 +699,10 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 		goto out_parent;
 	}
 
+	/*
+	 * aufs doesn't touch the credential so
+	 * security_dentry_create_files_as() is unnecrssary.
+	 */
 	if (au_opt_test(au_mntflags(sb), PLINK)) {
 		if (a->bdst < a->bsrc
 		    /* && h_src_dentry->d_sb != a->h_path.dentry->d_sb */)
