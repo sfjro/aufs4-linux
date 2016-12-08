@@ -1294,7 +1294,7 @@ static const char *aufs_get_link(struct dentry *dentry, struct inode *inode,
 	err = 0;
 	AuDbg("%pf\n", h_inode->i_op->get_link);
 	AuDbgDentry(h_dentry);
-	ret = h_inode->i_op->get_link(h_dentry, h_inode, done);
+	ret = vfs_get_link(h_dentry, done);
 	dput(h_dentry);
 	if (IS_ERR(ret))
 		err = PTR_ERR(ret);
