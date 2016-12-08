@@ -1074,6 +1074,7 @@ ssize_t au_sxattr(struct dentry *dentry, struct inode *inode,
 		err = -EOPNOTSUPP;
 		h_inode = d_inode(h_path.dentry);
 		if (h_inode->i_op->set_acl)
+			/* this will call posix_acl_update_mode */
 			err = h_inode->i_op->set_acl(h_inode,
 						     arg->u.acl_set.acl,
 						     arg->u.acl_set.type);

@@ -733,6 +733,8 @@ out:
  * @len is for truncating when it is -1 copyup the entire file.
  * in link/rename cases, @dst_parent may be different from the real one.
  * basic->bsrc can be larger than basic->bdst.
+ * aufs doesn't touch the credential so
+ * security_inode_copy_up{,_xattr}() are unnecrssary.
  */
 static int au_cpup_single(struct au_cp_generic *cpg, struct dentry *dst_parent)
 {
