@@ -617,54 +617,6 @@ out:
 	return err;
 }
 
-/* no one supports this operation, currently */
-#if 0
-static int aufs_aio_fsync_nondir(struct kiocb *kio, int datasync)
-{
-	int err;
-	struct au_write_pre wpre;
-	struct inode *inode, *h_inode;
-	struct file *file, *h_file;
-
-	err = 0; /* -EBADF; */ /* posix? */
-	if (unlikely(!(file->f_mode & FMODE_WRITE)))
-		goto out;
-
-	file = kio->ki_filp;
-	inode = file_inode(file);
-	au_mtx_and_read_lock(inode);
-
-	h_file = au_write_pre(file, /*do_ready*/1, &wpre);
-	err = PTR_ERR(h_file);
-	if (IS_ERR(h_file))
-		goto out_unlock;
-
-	err = -ENOSYS;
-	h_file = au_hf_top(file);
-	if (h_file->f_op->aio_fsync) {
-		h_inode = file_inode(h_file);
-		if (!is_sync_kiocb(kio)) {
-			get_file(h_file);
-			fput(file);
-		}
-		kio->ki_filp = h_file;
-		err = h_file->f_op->aio_fsync(kio, datasync);
-		inode_lock_nested(h_inode, AuLsc_I_CHILD);
-		if (!err)
-			vfsub_update_h_iattr(&h_file->f_path, /*did*/NULL);
-		/*ignore*/
-		inode_unlock(h_inode);
-	}
-	au_write_post(inode, h_file, &wpre, /*written*/0);
-
-out_unlock:
-	si_read_unlock(inode->sb);
-	inode_unlock(inode);
-out:
-	return err;
-}
-#endif
-
 static int aufs_fasync(int fd, struct file *file, int flag)
 {
 	int err;
@@ -745,7 +697,6 @@ const struct file_operations aufs_file_fop = {
 	.flush		= aufs_flush_nondir,
 	.release	= aufs_release_nondir,
 	.fsync		= aufs_fsync_nondir,
-	/* .aio_fsync	= aufs_aio_fsync_nondir, */
 	.fasync		= aufs_fasync,
 	/* .sendpage	= aufs_sendpage, */
 	.setfl		= aufs_setfl,
