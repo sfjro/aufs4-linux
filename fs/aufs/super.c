@@ -118,15 +118,31 @@ static int au_show_brs(struct seq_file *seq, struct super_block *sb)
 	return err;
 }
 
+static void au_gen_fmt(char *fmt, int len __maybe_unused, const char *pat,
+		       const char *append)
+{
+	char *p;
+
+	p = fmt;
+	while (*pat != ':')
+		*p++ = *pat++;
+	*p++ = *pat++;
+	strcpy(p, append);
+	AuDebugOn(strlen(fmt) >= len);
+}
+
 static void au_show_wbr_create(struct seq_file *m, int v,
 			       struct au_sbinfo *sbinfo)
 {
 	const char *pat;
+	char fmt[32];
+	struct au_wbr_mfs *mfs;
 
 	AuRwMustAnyLock(&sbinfo->si_rwsem);
 
 	seq_puts(m, ",create=");
 	pat = au_optstr_wbr_create(v);
+	mfs = &sbinfo->si_wbr_mfs;
 	switch (v) {
 	case AuWbrCreate_TDP:
 	case AuWbrCreate_RR:
@@ -134,36 +150,26 @@ static void au_show_wbr_create(struct seq_file *m, int v,
 	case AuWbrCreate_PMFS:
 		seq_puts(m, pat);
 		break;
-	case AuWbrCreate_MFSV:
-		seq_printf(m, /*pat*/"mfs:%lu",
-			   jiffies_to_msecs(sbinfo->si_wbr_mfs.mfs_expire)
-			   / MSEC_PER_SEC);
-		break;
-	case AuWbrCreate_PMFSV:
-		seq_printf(m, /*pat*/"pmfs:%lu",
-			   jiffies_to_msecs(sbinfo->si_wbr_mfs.mfs_expire)
-			   / MSEC_PER_SEC);
-		break;
 	case AuWbrCreate_MFSRR:
-		seq_printf(m, /*pat*/"mfsrr:%llu",
-			   sbinfo->si_wbr_mfs.mfsrr_watermark);
+	case AuWbrCreate_PMFSRR:
+		au_gen_fmt(fmt, sizeof(fmt), pat, "%llu");
+		seq_printf(m, fmt, mfs->mfsrr_watermark);
+		break;
+	case AuWbrCreate_MFSV:
+	case AuWbrCreate_PMFSV:
+		au_gen_fmt(fmt, sizeof(fmt), pat, "%lu");
+		seq_printf(m, fmt,
+			   jiffies_to_msecs(mfs->mfs_expire)
+			   / MSEC_PER_SEC);
 		break;
 	case AuWbrCreate_MFSRRV:
-		seq_printf(m, /*pat*/"mfsrr:%llu:%lu",
-			   sbinfo->si_wbr_mfs.mfsrr_watermark,
-			   jiffies_to_msecs(sbinfo->si_wbr_mfs.mfs_expire)
-			   / MSEC_PER_SEC);
-		break;
-	case AuWbrCreate_PMFSRR:
-		seq_printf(m, /*pat*/"pmfsrr:%llu",
-			   sbinfo->si_wbr_mfs.mfsrr_watermark);
-		break;
 	case AuWbrCreate_PMFSRRV:
-		seq_printf(m, /*pat*/"pmfsrr:%llu:%lu",
-			   sbinfo->si_wbr_mfs.mfsrr_watermark,
-			   jiffies_to_msecs(sbinfo->si_wbr_mfs.mfs_expire)
-			   / MSEC_PER_SEC);
+		au_gen_fmt(fmt, sizeof(fmt), pat, "%llu:%lu");
+		seq_printf(m, fmt, mfs->mfsrr_watermark,
+			   jiffies_to_msecs(mfs->mfs_expire) / MSEC_PER_SEC);
 		break;
+	default:
+		BUG();
 	}
 }
 
