@@ -424,6 +424,10 @@ static match_table_t au_wbr_create_policy = {
 	{AuWbrCreate_MFSV, "mfs:%d"},
 	{AuWbrCreate_MFSV, "most-free-space:%d"},
 
+	/* top-down regardless the parent, and then mfs */
+	{AuWbrCreate_TDMFS, "tdmfs:%d"},
+	{AuWbrCreate_TDMFSV, "tdmfs:%d:%d"},
+
 	{AuWbrCreate_MFSRR, "mfsrr:%d"},
 	{AuWbrCreate_MFSRRV, "mfsrr:%d:%d"},
 	{AuWbrCreate_PMFS, "pmfs"},
@@ -499,6 +503,7 @@ au_wbr_create_val(char *str, struct au_opt_wbr_create *create)
 	create->wbr_create = err;
 	switch (err) {
 	case AuWbrCreate_MFSRRV:
+	case AuWbrCreate_TDMFSV:
 	case AuWbrCreate_PMFSRRV:
 		e = au_wbr_mfs_wmark(&args[0], str, create);
 		if (!e)
@@ -507,6 +512,7 @@ au_wbr_create_val(char *str, struct au_opt_wbr_create *create)
 			err = e;
 		break;
 	case AuWbrCreate_MFSRR:
+	case AuWbrCreate_TDMFS:
 	case AuWbrCreate_PMFSRR:
 		e = au_wbr_mfs_wmark(&args[0], str, create);
 		if (unlikely(e)) {
@@ -717,10 +723,12 @@ static void dump_opts(struct au_opts *opts)
 				AuDbg("%d sec\n", u.create->mfs_second);
 				break;
 			case AuWbrCreate_MFSRR:
+			case AuWbrCreate_TDMFS:
 				AuDbg("%llu watermark\n",
 					  u.create->mfsrr_watermark);
 				break;
 			case AuWbrCreate_MFSRRV:
+			case AuWbrCreate_TDMFSV:
 			case AuWbrCreate_PMFSRRV:
 				AuDbg("%llu watermark, %d sec\n",
 					  u.create->mfsrr_watermark,
@@ -1286,6 +1294,8 @@ static int au_opt_wbr_create(struct super_block *sb,
 	switch (create->wbr_create) {
 	case AuWbrCreate_MFSRRV:
 	case AuWbrCreate_MFSRR:
+	case AuWbrCreate_TDMFS:
+	case AuWbrCreate_TDMFSV:
 	case AuWbrCreate_PMFSRR:
 	case AuWbrCreate_PMFSRRV:
 		sbinfo->si_wbr_mfs.mfsrr_watermark = create->mfsrr_watermark;

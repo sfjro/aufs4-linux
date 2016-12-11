@@ -151,6 +151,7 @@ static void au_show_wbr_create(struct seq_file *m, int v,
 		seq_puts(m, pat);
 		break;
 	case AuWbrCreate_MFSRR:
+	case AuWbrCreate_TDMFS:
 	case AuWbrCreate_PMFSRR:
 		au_gen_fmt(fmt, sizeof(fmt), pat, "%llu");
 		seq_printf(m, fmt, mfs->mfsrr_watermark);
@@ -163,6 +164,7 @@ static void au_show_wbr_create(struct seq_file *m, int v,
 			   / MSEC_PER_SEC);
 		break;
 	case AuWbrCreate_MFSRRV:
+	case AuWbrCreate_TDMFSV:
 	case AuWbrCreate_PMFSRRV:
 		au_gen_fmt(fmt, sizeof(fmt), pat, "%llu:%lu");
 		seq_printf(m, fmt, mfs->mfsrr_watermark,
