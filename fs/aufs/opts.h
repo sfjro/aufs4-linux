@@ -99,6 +99,8 @@ enum {
 	AuWbrCreate_MFSV,	/* mfs with seconds */
 	AuWbrCreate_MFSRR,	/* mfs then rr */
 	AuWbrCreate_MFSRRV,	/* mfs then rr with seconds */
+	AuWbrCreate_TDMFS,	/* top down regardless parent and mfs */
+	AuWbrCreate_TDMFSV,	/* top down regardless parent and mfs */
 	AuWbrCreate_PMFS,	/* parent and mfs */
 	AuWbrCreate_PMFSV,	/* parent and mfs with seconds */
 	AuWbrCreate_PMFSRR,	/* parent, mfs and round-robin */
