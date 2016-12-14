@@ -504,6 +504,61 @@ static int au_wbr_create_fin_mfs(struct super_block *sb __maybe_unused)
 
 /* ---------------------------------------------------------------------- */
 
+/* top down regardless parent, and then mfs */
+static int au_wbr_create_tdmfs(struct dentry *dentry,
+			       unsigned int flags __maybe_unused)
+{
+	int err;
+	aufs_bindex_t bwh, btail, bindex, bfound, bmfs;
+	unsigned long long watermark;
+	struct super_block *sb;
+	struct au_wbr_mfs *mfs;
+	struct au_branch *br;
+	struct dentry *parent;
+
+	sb = dentry->d_sb;
+	mfs = &au_sbi(sb)->si_wbr_mfs;
+	mutex_lock(&mfs->mfs_lock);
+	if (time_after(jiffies, mfs->mfs_jiffy + mfs->mfs_expire)
+	    || mfs->mfs_bindex < 0)
+		au_mfs(dentry, /*parent*/NULL);
+	watermark = mfs->mfsrr_watermark;
+	bmfs = mfs->mfs_bindex;
+	mutex_unlock(&mfs->mfs_lock);
+
+	/* another style of au_wbr_create_exp() */
+	bwh = au_dbwh(dentry);
+	parent = dget_parent(dentry);
+	btail = au_dbtaildir(parent);
+	if (bwh >= 0 && bwh < btail)
+		btail = bwh;
+
+	err = au_wbr_nonopq(dentry, btail);
+	if (unlikely(err < 0))
+		goto out;
+	btail = err;
+	bfound = -1;
+	for (bindex = 0; bindex <= btail; bindex++) {
+		br = au_sbr(sb, bindex);
+		if (au_br_rdonly(br))
+			continue;
+		if (br->br_wbr->wbr_bytes > watermark) {
+			bfound = bindex;
+			break;
+		}
+	}
+	err = bfound;
+	if (err < 0)
+		err = bmfs;
+
+out:
+	dput(parent);
+	AuDbg("b%d\n", err);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
 /* most free space and then round robin */
 static int au_wbr_create_mfsrr(struct dentry *dentry, unsigned int flags)
 {
@@ -727,6 +782,16 @@ struct au_wbr_create_operations au_wbr_create_ops[] = {
 	[AuWbrCreate_MFSRRV] = {
 		.create	= au_wbr_create_mfsrr,
 		.init	= au_wbr_create_init_mfsrr,
+		.fin	= au_wbr_create_fin_mfs
+	},
+	[AuWbrCreate_TDMFS] = {
+		.create	= au_wbr_create_tdmfs,
+		.init	= au_wbr_create_init_mfs,
+		.fin	= au_wbr_create_fin_mfs
+	},
+	[AuWbrCreate_TDMFSV] = {
+		.create	= au_wbr_create_tdmfs,
+		.init	= au_wbr_create_init_mfs,
 		.fin	= au_wbr_create_fin_mfs
 	},
 	[AuWbrCreate_PMFS] = {
