@@ -19,6 +19,8 @@
  * handling xattr functions
  */
 
+#include <linux/fs.h>
+#include <linux/posix_acl_xattr.h>
 #include <linux/xattr.h>
 #include "aufs.h"
 
@@ -322,7 +324,11 @@ static const struct xattr_handler au_xattr_handler = {
 };
 
 static const struct xattr_handler *au_xattr_handlers[] = {
-	&au_xattr_handler,
+#ifdef CONFIG_FS_POSIX_ACL
+	&posix_acl_access_xattr_handler,
+	&posix_acl_default_xattr_handler,
+#endif
+	&au_xattr_handler, /* must be last */
 	NULL
 };
 
