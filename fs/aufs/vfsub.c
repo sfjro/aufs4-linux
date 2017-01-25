@@ -42,6 +42,19 @@ int vfsub_test_mntns(struct vfsmount *mnt, struct super_block *h_sb)
 }
 #endif
 
+int vfsub_sync_filesystem(struct super_block *h_sb)
+{
+	int err;
+
+	lockdep_off();
+	down_read(&h_sb->s_umount);
+	err = sync_filesystem(h_sb);
+	up_read(&h_sb->s_umount);
+	lockdep_on();
+
+	return err;
+}
+
 /* ---------------------------------------------------------------------- */
 
 int vfsub_update_h_iattr(struct path *h_path, int *did)
