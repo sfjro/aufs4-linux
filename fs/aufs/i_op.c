@@ -1114,7 +1114,8 @@ static void au_refresh_iattr(struct inode *inode, struct kstat *st,
  * returns zero or negative (an error).
  * @dentry will be read-locked in success.
  */
-int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path)
+int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path,
+		      int locked)
 {
 	int err;
 	unsigned int mnt_flags, sigen;
@@ -1130,6 +1131,9 @@ int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path)
 	sb = dentry->d_sb;
 	mnt_flags = au_mntflags(sb);
 	udba_none = !!au_opt_test(mnt_flags, UDBA_NONE);
+
+	if (unlikely(locked))
+		goto body; /* skip locking dinfo */
 
 	/* support fstat(2) */
 	if (!d_unlinked(dentry) && !udba_none) {
@@ -1158,6 +1162,7 @@ int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path)
 	} else
 		di_read_lock_child(dentry, AuLock_IR);
 
+body:
 	inode = d_inode(dentry);
 	bindex = au_ibtop(inode);
 	h_path->mnt = au_sbr_mnt(sb, bindex);
@@ -1196,7 +1201,7 @@ static int aufs_getattr(struct vfsmount *mnt __maybe_unused,
 	err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
 	if (unlikely(err))
 		goto out;
-	err = au_h_path_getattr(dentry, /*force*/0, &h_path);
+	err = au_h_path_getattr(dentry, /*force*/0, &h_path, /*locked*/0);
 	if (unlikely(err))
 		goto out_si;
 	if (unlikely(!h_path.dentry))
