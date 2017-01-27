@@ -491,12 +491,6 @@ static int au_do_cpup_symlink(struct path *h_path, struct dentry *h_src,
 		char *k;
 		char __user *u;
 	} sym;
-	struct inode *h_inode = d_inode(h_src);
-	const struct inode_operations *h_iop = h_inode->i_op;
-
-	err = -ENOSYS;
-	if (unlikely(!h_iop->readlink))
-		goto out;
 
 	err = -ENOMEM;
 	sym.k = (void *)__get_free_page(GFP_NOFS);
@@ -506,7 +500,7 @@ static int au_do_cpup_symlink(struct path *h_path, struct dentry *h_src,
 	/* unnecessary to support mmap_sem since symlink is not mmap-able */
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	symlen = h_iop->readlink(h_src, sym.u, PATH_MAX);
+	symlen = vfs_readlink(h_src, sym.u, PATH_MAX);
 	err = symlen;
 	set_fs(old_fs);
 
