@@ -438,28 +438,6 @@ static match_table_t au_wbr_create_policy = {
 	{-1, NULL}
 };
 
-/*
- * cf. linux/lib/parser.c and cmdline.c
- * gave up calling memparse() since it uses simple_strtoull() instead of
- * kstrto...().
- */
-static int noinline_for_stack
-au_match_ull(substring_t *s, unsigned long long *result)
-{
-	int err;
-	unsigned int len;
-	char a[32];
-
-	err = -ERANGE;
-	len = s->to - s->from;
-	if (len + 1 <= sizeof(a)) {
-		memcpy(a, s->from, len);
-		a[len] = '\0';
-		err = kstrtoull(a, 0, result);
-	}
-	return err;
-}
-
 static int au_wbr_mfs_wmark(substring_t *arg, char *str,
 			    struct au_opt_wbr_create *create)
 {
@@ -467,7 +445,7 @@ static int au_wbr_mfs_wmark(substring_t *arg, char *str,
 	unsigned long long ull;
 
 	err = 0;
-	if (!au_match_ull(arg, &ull))
+	if (!match_u64(arg, &ull))
 		create->mfsrr_watermark = ull;
 	else {
 		pr_err("bad integer in %s\n", str);
