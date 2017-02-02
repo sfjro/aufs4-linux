@@ -447,7 +447,7 @@ static int aufs_sync_fs(struct super_block *sb, int wait)
 			continue;
 
 		h_sb = au_sbr_sb(sb, bindex);
-		e = vfsub_sync_filesystem(h_sb);
+		e = vfsub_sync_filesystem(h_sb, wait);
 		if (unlikely(e && !err))
 			err = e;
 		/* go on even if an error happens */
