@@ -17,7 +17,7 @@ struct file_operations;
 struct vfsmount;
 struct dentry;
 struct path;
-extern struct file *alloc_file(struct path *, fmode_t mode,
+extern struct file *alloc_file(const struct path *, fmode_t mode,
 	const struct file_operations *fop);
 extern struct file *get_empty_filp(void);
 
