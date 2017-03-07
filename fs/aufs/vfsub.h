@@ -289,6 +289,11 @@ int vfsub_notify_change(struct path *path, struct iattr *ia,
 int vfsub_unlink(struct inode *dir, struct path *path,
 		 struct inode **delegated_inode, int force);
 
+static inline int vfsub_getattr(const struct path *path, struct kstat *st)
+{
+	return vfs_getattr(path, st, STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
+}
+
 /* ---------------------------------------------------------------------- */
 
 static inline int vfsub_setxattr(struct dentry *dentry, const char *name,

@@ -62,15 +62,15 @@ static int dbgaufs_xi_open(struct file *xf, struct file *file, int do_fcnt)
 	if (!xf)
 		goto out;
 
-	err = vfs_getattr(&xf->f_path, &st);
+	err = vfsub_getattr(&xf->f_path, &st);
 	if (!err) {
 		if (do_fcnt)
 			p->n = snprintf
-				(p->a, sizeof(p->a), "%ld, %llux%lu %lld\n",
+				(p->a, sizeof(p->a), "%ld, %llux%u %lld\n",
 				 (long)file_count(xf), st.blocks, st.blksize,
 				 (long long)st.size);
 		else
-			p->n = snprintf(p->a, sizeof(p->a), "%llux%lu %lld\n",
+			p->n = snprintf(p->a, sizeof(p->a), "%llux%u %lld\n",
 					st.blocks, st.blksize,
 					(long long)st.size);
 		AuDebugOn(p->n >= sizeof(p->a));
