@@ -393,7 +393,8 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 			.label = &&out_src
 		}
 	};
-	struct super_block *sb;
+	struct super_block *sb, *h_src_sb;
+	struct inode *h_src_inode;
 	struct task_struct *tsk = current;
 
 	/* bsrc branch can be ro/rw. */
@@ -409,8 +410,24 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 	}
 
 	/* try stopping to update while we copyup */
-	IMustLock(d_inode(file[SRC].dentry));
-	err = au_copy_file(file[DST].file, file[SRC].file, cpg->len);
+	h_src_inode = d_inode(file[SRC].dentry);
+	IMustLock(h_src_inode);
+	h_src_sb = h_src_inode->i_sb;
+
+	if (h_src_sb != file_inode(file[DST].file)->i_sb
+	    || !file[DST].file->f_op->clone_file_range)
+		err = au_copy_file(file[DST].file, file[SRC].file, cpg->len);
+	else {
+		inode_unlock(h_src_inode);
+		err = vfsub_clone_file_range(file[SRC].file, file[DST].file,
+					     cpg->len);
+		inode_lock(h_src_inode);
+		if (unlikely(err == -EOPNOTSUPP && au_test_nfs(h_src_sb)))
+			/* the backend fs on NFS may not support cloning */
+			err = au_copy_file(file[DST].file, file[SRC].file,
+					   cpg->len);
+		AuTraceErr(err);
+	}
 
 	/* i wonder if we had O_NO_DELAY_FPUT flag */
 	if (tsk->flags & PF_KTHREAD)
