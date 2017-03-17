@@ -498,6 +498,88 @@ out:
 	return err;
 }
 
+static ssize_t aufs_copy_file_range(struct file *src, loff_t src_pos,
+				    struct file *dst, loff_t dst_pos,
+				    size_t len, unsigned int flags)
+{
+	ssize_t err;
+	struct au_write_pre wpre;
+	enum { SRC, DST };
+	struct {
+		struct inode *inode;
+		struct file *h_file;
+		struct super_block *h_sb;
+	} a[2];
+#define a_src	a[SRC]
+#define a_dst	a[DST]
+
+	err = -EINVAL;
+	a_src.inode = file_inode(src);
+	if (unlikely(!S_ISREG(a_src.inode->i_mode)))
+		goto out;
+	a_dst.inode = file_inode(dst);
+	if (unlikely(!S_ISREG(a_dst.inode->i_mode)))
+		goto out;
+
+	au_mtx_and_read_lock(a_dst.inode);
+	/*
+	 * in order to match the order in di_write_lock2_{child,parent}(),
+	 * use f_path.dentry for this comparision.
+	 */
+	if (src->f_path.dentry < dst->f_path.dentry) {
+		a_src.h_file = au_read_pre(src, /*keep_fi*/1, AuLsc_FI_1);
+		err = PTR_ERR(a_src.h_file);
+		if (IS_ERR(a_src.h_file))
+			goto out_si;
+
+		wpre.lsc = AuLsc_FI_2;
+		a_dst.h_file = au_write_pre(dst, /*do_ready*/1, &wpre);
+		err = PTR_ERR(a_dst.h_file);
+		if (IS_ERR(a_dst.h_file)) {
+			au_read_post(a_src.inode, a_src.h_file);
+			goto out_si;
+		}
+	} else {
+		wpre.lsc = AuLsc_FI_1;
+		a_dst.h_file = au_write_pre(dst, /*do_ready*/1, &wpre);
+		err = PTR_ERR(a_dst.h_file);
+		if (IS_ERR(a_dst.h_file))
+			goto out_si;
+
+		a_src.h_file = au_read_pre(src, /*keep_fi*/1, AuLsc_FI_2);
+		err = PTR_ERR(a_src.h_file);
+		if (IS_ERR(a_src.h_file)) {
+			au_write_post(a_dst.inode, a_dst.h_file, &wpre,
+				      /*written*/0);
+			goto out_si;
+		}
+	}
+
+	err = -EXDEV;
+	a_src.h_sb = file_inode(a_src.h_file)->i_sb;
+	a_dst.h_sb = file_inode(a_dst.h_file)->i_sb;
+	if (unlikely(a_src.h_sb != a_dst.h_sb)) {
+		AuDbgFile(src);
+		AuDbgFile(dst);
+		goto out_file;
+	}
+
+	err = vfsub_copy_file_range(a_src.h_file, src_pos, a_dst.h_file,
+				    dst_pos, len, flags);
+
+out_file:
+	au_write_post(a_dst.inode, a_dst.h_file, &wpre, err);
+	fi_read_unlock(src);
+	au_read_post(a_src.inode, a_src.h_file);
+out_si:
+	si_read_unlock(a_dst.inode->i_sb);
+	inode_unlock(a_dst.inode);
+out:
+	return err;
+#undef a_src
+#undef a_dst
+}
+
 /* ---------------------------------------------------------------------- */
 
 /*
@@ -782,5 +864,6 @@ const struct file_operations aufs_file_fop = {
 	.aio_splice_write = aufs_aio_splice_write,
 	.aio_splice_read  = aufs_aio_splice_read,
 #endif
-	.fallocate	= aufs_fallocate
+	.fallocate	= aufs_fallocate,
+	.copy_file_range = aufs_copy_file_range
 };

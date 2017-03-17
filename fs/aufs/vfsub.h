@@ -282,6 +282,20 @@ static inline int vfsub_clone_file_range(struct file *src, struct file *dst,
 	return err;
 }
 
+/* copy_file_range(2) is a systemcall */
+static inline ssize_t vfsub_copy_file_range(struct file *src, loff_t src_pos,
+					    struct file *dst, loff_t dst_pos,
+					    size_t len, unsigned int flags)
+{
+	ssize_t ssz;
+
+	lockdep_off();
+	ssz = vfs_copy_file_range(src, src_pos, dst, dst_pos, len, flags);
+	lockdep_on();
+
+	return ssz;
+}
+
 /* ---------------------------------------------------------------------- */
 
 static inline loff_t vfsub_llseek(struct file *file, loff_t offset, int origin)
