@@ -333,7 +333,7 @@ void au_dpri_sb(struct super_block *sb)
 		return;
 	dpri("nw %d, gen %u, kobj %d\n",
 	     atomic_read(&sbinfo->si_nowait.nw_len), sbinfo->si_generation,
-	     atomic_read(&sbinfo->si_kobj.kref.refcount));
+	     kref_read(&sbinfo->si_kobj.kref));
 	for (bindex = 0; bindex <= sbinfo->si_bbot; bindex++)
 		do_pri_br(bindex, sbinfo->si_branch[0 + bindex]);
 }

@@ -442,18 +442,11 @@ int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out_parent;
 
 	h_parent = au_h_dptr(parent, bindex);
-	err = inode_permission(d_inode(h_parent), MAY_WRITE | MAY_EXEC);
-	if (unlikely(err))
+	h_dentry = vfs_tmpfile(h_parent, mode, /*open_flag*/0);
+	if (IS_ERR(h_dentry)) {
+		err = PTR_ERR(h_dentry);
 		goto out_mnt;
-
-	err = -ENOMEM;
-	h_dentry = d_alloc(h_parent, &dentry->d_name);
-	if (unlikely(!h_dentry))
-		goto out_mnt;
-
-	err = h_dir->i_op->tmpfile(h_dir, h_dentry, mode);
-	if (unlikely(err))
-		goto out_dentry;
+	}
 
 	au_set_dbtop(dentry, bindex);
 	au_set_dbbot(dentry, bindex);
@@ -474,9 +467,8 @@ int aufs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 		if (au_ibtop(dir) == au_dbtop(dentry))
 			au_cpup_attr_timesizes(dir);
 	}
-
-out_dentry:
 	dput(h_dentry);
+
 out_mnt:
 	vfsub_mnt_drop_write(h_mnt);
 out_parent:

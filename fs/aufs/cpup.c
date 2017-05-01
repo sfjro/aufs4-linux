@@ -467,10 +467,10 @@ static int au_do_cpup_regular(struct au_cp_generic *cpg,
 		h_path.mnt = au_sbr_mnt(cpg->dentry->d_sb, cpg->bsrc);
 		h_src_attr->iflags = h_src_inode->i_flags;
 		if (!au_test_nfs(h_src_inode->i_sb))
-			err = vfs_getattr(&h_path, &h_src_attr->st);
+			err = vfsub_getattr(&h_path, &h_src_attr->st);
 		else {
 			inode_unlock(h_src_inode);
-			err = vfs_getattr(&h_path, &h_src_attr->st);
+			err = vfsub_getattr(&h_path, &h_src_attr->st);
 			inode_lock_nested(h_src_inode, AuLsc_I_CHILD);
 		}
 		if (unlikely(err)) {

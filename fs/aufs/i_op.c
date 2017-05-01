@@ -1193,15 +1193,17 @@ out:
 	return err;
 }
 
-static int aufs_getattr(struct vfsmount *mnt __maybe_unused,
-			struct dentry *dentry, struct kstat *st)
+static int aufs_getattr(const struct path *path, struct kstat *st,
+			u32 request, unsigned int query)
 {
 	int err;
 	unsigned char positive;
 	struct path h_path;
+	struct dentry *dentry;
 	struct inode *inode;
 	struct super_block *sb;
 
+	dentry = path->dentry;
 	inode = d_inode(dentry);
 	sb = dentry->d_sb;
 	err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
@@ -1216,7 +1218,8 @@ static int aufs_getattr(struct vfsmount *mnt __maybe_unused,
 
 	positive = d_is_positive(h_path.dentry);
 	if (positive)
-		err = vfs_getattr(&h_path, st);
+		/* no vfsub version */
+		err = vfs_getattr(&h_path, st, request, query);
 	if (!err) {
 		if (positive)
 			au_refresh_iattr(inode, st,
