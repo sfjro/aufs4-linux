@@ -225,12 +225,11 @@ static void au_write_post(struct inode *inode, struct file *h_file,
 	h_inode = file_inode(h_file);
 	inode->i_mode = h_inode->i_mode;
 	ii_write_unlock(inode);
-	fput(h_file);
-
 	/* AuDbg("blks %llu, %llu\n", (u64)blks, (u64)h_inode->i_blocks); */
 	if (written > 0)
 		au_fhsm_wrote(inode->i_sb, wpre->btop,
 			      /*force*/h_inode->i_blocks > wpre->blks);
+	fput(h_file);
 }
 
 static ssize_t aufs_read(struct file *file, char __user *buf, size_t count,
