@@ -165,9 +165,9 @@ int au_seq_path(struct seq_file *seq, struct path *path)
 	int err;
 
 	err = seq_path(seq, path, au_esc_chars);
-	if (err > 0)
+	if (err >= 0)
 		err = 0;
-	else if (err < 0)
+	else
 		err = -ENOMEM;
 
 	return err;
