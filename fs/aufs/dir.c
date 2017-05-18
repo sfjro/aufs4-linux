@@ -325,7 +325,6 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 	struct au_fidir *fidir;
 	struct au_hfile *hf;
 	aufs_bindex_t bindex, bbot;
-	int execed;
 
 	finfo = au_fi(file);
 	fidir = finfo->fi_hdir;
@@ -338,7 +337,6 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 
 		bindex = finfo->fi_btop;
 		if (bindex >= 0) {
-			execed = vfsub_file_execed(file);
 			hf = fidir->fd_hfile + bindex;
 			/*
 			 * calls fput() instead of filp_close(),
@@ -347,7 +345,7 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 			bbot = fidir->fd_bbot;
 			for (; bindex <= bbot; bindex++, hf++)
 				if (hf->hf_file)
-					au_hfput(hf, execed);
+					au_hfput(hf, /*execed*/0);
 		}
 		kfree(fidir);
 		finfo->fi_hdir = NULL;
