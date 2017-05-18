@@ -273,7 +273,7 @@ int au_do_open(struct file *file, struct au_do_open_args *args)
 	}
 	if (unlikely(err)) {
 		finfo->fi_hdir = NULL;
-		au_finfo_fin(file, /*atonce*/0);
+		au_finfo_fin(file);
 	}
 
 out:
