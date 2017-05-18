@@ -381,7 +381,7 @@ out_parent:
 out_unlock:
 	aufs_read_unlock(dentry, AuLock_DW);
 out_free:
-	au_delayed_kfree(a);
+	kfree(a);
 out:
 	return err;
 }
@@ -491,7 +491,7 @@ out_parent:
 out_unlock:
 	aufs_read_unlock(dentry, AuLock_DW);
 out_free:
-	au_delayed_kfree(a);
+	kfree(a);
 out:
 	AuTraceErr(err);
 	return err;
