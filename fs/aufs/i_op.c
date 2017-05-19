@@ -984,7 +984,7 @@ out_dentry:
 out_si:
 	si_read_unlock(sb);
 out_kfree:
-	au_delayed_kfree(a);
+	kfree(a);
 out:
 	AuTraceErr(err);
 	return err;
@@ -1077,7 +1077,7 @@ out_di:
 	di_write_unlock(dentry);
 	si_read_unlock(sb);
 out_kfree:
-	au_delayed_kfree(a);
+	kfree(a);
 out:
 	AuTraceErr(err);
 	return err;
