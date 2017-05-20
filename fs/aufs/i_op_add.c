@@ -345,7 +345,7 @@ out_unlock:
 	if (!try_aopen)
 		aufs_read_unlock(dentry, AuLock_DW);
 out_free:
-	au_delayed_kfree(a);
+	kfree(a);
 out:
 	return err;
 }
@@ -805,7 +805,7 @@ out_unlock:
 	}
 	aufs_read_and_write_unlock2(dentry, src_dentry);
 out_kfree:
-	au_delayed_kfree(a);
+	kfree(a);
 out:
 	AuTraceErr(err);
 	return err;
@@ -914,7 +914,7 @@ out_unlock:
 	}
 	aufs_read_unlock(dentry, AuLock_DW);
 out_free:
-	au_delayed_kfree(a);
+	kfree(a);
 out:
 	return err;
 }

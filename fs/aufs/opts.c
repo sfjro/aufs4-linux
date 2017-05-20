@@ -1242,7 +1242,7 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 		}
 	}
 
-	au_delayed_kfree(a);
+	kfree(a);
 	dump_opts(opts);
 	if (unlikely(err))
 		au_opts_free(opts);
@@ -1667,7 +1667,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 
 		if (!err && do_free) {
 			if (wbr)
-				au_delayed_kfree(wbr);
+				kfree(wbr);
 			br->br_wbr = NULL;
 		}
 	}
