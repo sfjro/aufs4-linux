@@ -1514,7 +1514,6 @@ static int au_opt_br(struct super_block *sb, struct au_opt *opt,
 		}
 		break;
 	}
-
 	return err;
 }
 
@@ -1675,8 +1674,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		au_hn_imtx_unlock(hdir);
 
 		if (!err && do_free) {
-			if (wbr)
-				kfree(wbr);
+			kfree(wbr);
 			br->br_wbr = NULL;
 		}
 	}
