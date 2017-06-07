@@ -14,7 +14,6 @@
 #include <linux/path.h>
 
 struct file;
-struct super_block;
 
 /* ---------------------------------------------------------------------- */
 
