@@ -105,6 +105,9 @@ int au_dr_lkup_name(struct au_do_lookup_args *lkup, aufs_bindex_t btgt);
 int au_dr_lkup_h_ino(struct au_do_lookup_args *lkup, aufs_bindex_t bindex,
 		     ino_t h_ino);
 void au_dr_lkup_fin(struct au_do_lookup_args *lkup);
+int au_dr_opt_set(struct super_block *sb);
+int au_dr_opt_flush(struct super_block *sb);
+int au_dr_opt_clr(struct super_block *sb, int no_flush);
 #else
 AuStubInt0(au_dr_hino_test_add, struct au_dr_br *dr, ino_t h_ino,
 	   struct au_dr_hino *add_ent);
@@ -123,6 +126,9 @@ AuStubInt0(au_dr_lkup_name, struct au_do_lookup_args *lkup, aufs_bindex_t btgt);
 AuStubInt0(au_dr_lkup_h_ino, struct au_do_lookup_args *lkup, aufs_bindex_t bindex,
 	   ino_t h_ino);
 AuStubVoid(au_dr_lkup_fin, struct au_do_lookup_args *lkup);
+AuStubInt0(au_dr_opt_set, struct super_block *sb);
+AuStubInt0(au_dr_opt_flush, struct super_block *sb);
+AuStubInt0(au_dr_opt_clr, struct super_block *sb, int no_flush);
 #endif
 
 /* ---------------------------------------------------------------------- */

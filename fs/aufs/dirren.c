@@ -1252,3 +1252,61 @@ int au_dr_lkup_h_ino(struct au_do_lookup_args *lkup, aufs_bindex_t bindex,
 out:
 	return match;
 }
+
+/* ---------------------------------------------------------------------- */
+
+int au_dr_opt_set(struct super_block *sb)
+{
+	int err;
+	aufs_bindex_t bindex, bbot;
+	struct au_branch *br;
+
+	err = 0;
+	bbot = au_sbbot(sb);
+	for (bindex = 0; !err && bindex <= bbot; bindex++) {
+		br = au_sbr(sb, bindex);
+		err = au_dr_hino(sb, bindex, /*br*/NULL, &br->br_path);
+	}
+
+	return err;
+}
+
+int au_dr_opt_flush(struct super_block *sb)
+{
+	int err;
+	aufs_bindex_t bindex, bbot;
+	struct au_branch *br;
+
+	err = 0;
+	bbot = au_sbbot(sb);
+	for (bindex = 0; !err && bindex <= bbot; bindex++) {
+		br = au_sbr(sb, bindex);
+		if (au_br_writable(br->br_perm))
+			err = au_dr_hino(sb, bindex, /*br*/NULL, /*path*/NULL);
+	}
+
+	return err;
+}
+
+int au_dr_opt_clr(struct super_block *sb, int no_flush)
+{
+	int err;
+	aufs_bindex_t bindex, bbot;
+	struct au_branch *br;
+
+	err = 0;
+	if (!no_flush) {
+		err = au_dr_opt_flush(sb);
+		if (unlikely(err))
+			goto out;
+	}
+
+	bbot = au_sbbot(sb);
+	for (bindex = 0; bindex <= bbot; bindex++) {
+		br = au_sbr(sb, bindex);
+		au_dr_hino_free(&br->br_dirren);
+	}
+
+out:
+	return err;
+}
