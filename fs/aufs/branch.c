@@ -33,6 +33,7 @@ static void au_br_do_free(struct au_branch *br)
 	struct au_dykey **key;
 
 	au_hnotify_fin_br(br);
+	au_dr_hino_free(&br->br_dirren); /* always, regardless the mount option */
 
 	if (br->br_xino.xi_file)
 		fput(br->br_xino.xi_file);
@@ -400,6 +401,11 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	atomic_set(&br->br_xino_running, 0);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
+
+	/* always, regardless the given option */
+	err = au_dr_br_init(sb, br, &add->path);
+	if (unlikely(err))
+		goto out_err;
 
 	if (au_br_writable(add->perm)) {
 		err = au_wbr_init(br, sb, add->perm);
@@ -987,6 +993,9 @@ static void au_br_do_del(struct super_block *sb, aufs_bindex_t bindex,
 	au_br_do_del_hdp(au_di(root), bindex, bbot);
 	au_br_do_del_hip(au_ii(inode), bindex, bbot);
 	au_sbilist_unlock();
+
+	/* ignore an error */
+	au_dr_br_fin(sb, br); /* always, regardless the mount option */
 
 	dput(h_root);
 	iput(h_inode);

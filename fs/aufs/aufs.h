@@ -40,6 +40,7 @@
 #include "dbgaufs.h"
 #include "dentry.h"
 #include "dir.h"
+#include "dirren.h"
 #include "dynop.h"
 #include "file.h"
 #include "fstype.h"
