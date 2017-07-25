@@ -75,6 +75,7 @@ struct au_dr_br { };
 
 /* ---------------------------------------------------------------------- */
 
+struct qstr;
 struct au_branch;
 struct au_hinode;
 #ifdef CONFIG_AUFS_DIRREN
@@ -84,6 +85,10 @@ void au_dr_hino_free(struct au_dr_br *dr);
 int au_dr_br_init(struct super_block *sb, struct au_branch *br,
 		  const struct path *path);
 int au_dr_br_fin(struct super_block *sb, struct au_branch *br);
+int au_dr_rename(struct dentry *src, aufs_bindex_t bindex,
+		 struct qstr *dst_name, void *_rev);
+void au_dr_rename_fin(struct dentry *src, aufs_bindex_t btgt, void *rev);
+void au_dr_rename_rev(struct dentry *src, aufs_bindex_t bindex, void *rev);
 #else
 AuStubInt0(au_dr_hino_test_add, struct au_dr_br *dr, ino_t h_ino,
 	   struct au_dr_hino *add_ent);
@@ -91,6 +96,11 @@ AuStubVoid(au_dr_hino_free, struct au_dr_br *dr);
 AuStubInt0(au_dr_br_init, struct super_block *sb, struct au_branch *br,
 	   const struct path *path);
 AuStubInt0(au_dr_br_fin, struct super_block *sb, struct au_branch *br);
+AuStubInt0(au_dr_rename, struct dentry *src, aufs_bindex_t bindex,
+	   struct qstr *dst_name, void *_rev);
+AuStubVoid(au_dr_rename_fin, struct dentry *src, aufs_bindex_t btgt, void *rev);
+AuStubVoid(au_dr_rename_rev, struct dentry *src, aufs_bindex_t bindex,
+	   void *rev);
 #endif
 
 /* ---------------------------------------------------------------------- */

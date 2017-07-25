@@ -876,3 +876,107 @@ out_args:
 out:
 	return err;
 }
+
+/* ---------------------------------------------------------------------- */
+
+int au_dr_rename(struct dentry *src, aufs_bindex_t bindex,
+		 struct qstr *dst_name, void *_rev)
+{
+	int err, already;
+	ino_t ino;
+	struct super_block *sb;
+	struct au_branch *br;
+	struct au_dr_br *dr;
+	struct dentry *h_dentry;
+	struct inode *h_inode;
+	struct au_dr_hino *ent;
+	struct au_drinfo_rev *rev, **p;
+
+	AuDbg("bindex %d\n", bindex);
+
+	err = -ENOMEM;
+	ent = kmalloc(sizeof(*ent), GFP_NOFS);
+	if (unlikely(!ent))
+		goto out;
+
+	sb = src->d_sb;
+	br = au_sbr(sb, bindex);
+	dr = &br->br_dirren;
+	h_dentry = au_h_dptr(src, bindex);
+	h_inode = d_inode(h_dentry);
+	ino = h_inode->i_ino;
+	ent->dr_h_ino = ino;
+	already = au_dr_hino_test_add(dr, ino, ent);
+	AuDbg("b%d, hi%llu, already %d\n",
+	      bindex, (unsigned long long)ino, already);
+
+	err = au_drinfo_store(src, bindex, dst_name, _rev);
+	AuTraceErr(err);
+	if (!err) {
+		p = _rev;
+		rev = *p;
+		rev->already = already;
+		goto out; /* success */
+	}
+
+	/* revert */
+	if (!already)
+		au_dr_hino_del(dr, ent);
+	kfree(ent);
+
+out:
+	AuTraceErr(err);
+	return err;
+}
+
+void au_dr_rename_fin(struct dentry *src, aufs_bindex_t btgt, void *_rev)
+{
+	struct au_drinfo_rev *rev;
+	struct au_drinfo_rev_elm *elm;
+	int nelm;
+
+	rev = _rev;
+	elm = rev->elm;
+	for (nelm = rev->nelm; nelm > 0; nelm--, elm++) {
+		dput(elm->info_dentry);
+		kfree(elm->info_last);
+	}
+	kfree(rev);
+}
+
+void au_dr_rename_rev(struct dentry *src, aufs_bindex_t btgt, void *_rev)
+{
+	int err;
+	struct au_drinfo_store work;
+	struct au_drinfo_rev *rev = _rev;
+	struct super_block *sb;
+	struct au_branch *br;
+	struct inode *h_inode;
+	struct au_dr_br *dr;
+	struct au_dr_hino *ent;
+
+	err = au_drinfo_store_work_init(&work, btgt);
+	if (unlikely(err))
+		goto out;
+
+	sb = src->d_sb;
+	br = au_sbr(sb, btgt);
+	work.h_ppath.dentry = au_h_dptr(src, btgt);
+	work.h_ppath.mnt = au_br_mnt(br);
+	au_drinfo_store_rev(rev, &work);
+	au_drinfo_store_work_fin(&work);
+	if (rev->already)
+		goto out;
+
+	dr = &br->br_dirren;
+	h_inode = d_inode(work.h_ppath.dentry);
+	ent = au_dr_hino_find(dr, h_inode->i_ino);
+	BUG_ON(!ent);
+	au_dr_hino_del(dr, ent);
+	kfree(ent);
+
+out:
+	kfree(rev);
+	if (unlikely(err))
+		pr_err("failed to remove dirren info\n");
+}
