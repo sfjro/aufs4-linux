@@ -980,3 +980,275 @@ out:
 	if (unlikely(err))
 		pr_err("failed to remove dirren info\n");
 }
+
+/* ---------------------------------------------------------------------- */
+
+static struct au_drinfo *au_drinfo_do_load(struct path *h_ppath,
+					   char *whname, int whnamelen,
+					   struct dentry **info_dentry)
+{
+	struct au_drinfo *drinfo;
+	struct file *f;
+	struct inode *h_dir;
+	struct path infopath;
+	int unlocked;
+
+	AuDbg("%pd/%.*s\n", h_ppath->dentry, whnamelen, whname);
+
+	*info_dentry = NULL;
+	drinfo = NULL;
+	unlocked = 0;
+	h_dir = d_inode(h_ppath->dentry);
+	vfsub_inode_lock_shared_nested(h_dir, AuLsc_I_PARENT);
+	infopath.dentry = vfsub_lookup_one_len(whname, h_ppath->dentry,
+					       whnamelen);
+	if (IS_ERR(infopath.dentry)) {
+		drinfo = (void *)infopath.dentry;
+		goto out;
+	}
+
+	if (d_is_negative(infopath.dentry))
+		goto out_dput; /* success */
+
+	infopath.mnt = h_ppath->mnt;
+	f = vfsub_dentry_open(&infopath, O_RDONLY);
+	inode_unlock_shared(h_dir);
+	unlocked = 1;
+	if (IS_ERR(f)) {
+		drinfo = (void *)f;
+		goto out_dput;
+	}
+
+	drinfo = au_drinfo_read_k(f, /*h_ino*/0);
+	if (IS_ERR_OR_NULL(drinfo))
+		goto out_fput;
+
+	AuDbg("oldname %.*s\n", drinfo->oldnamelen, drinfo->oldname);
+	*info_dentry = dget(infopath.dentry); /* keep it alive */
+
+out_fput:
+	fput(f);
+out_dput:
+	dput(infopath.dentry);
+out:
+	if (!unlocked)
+		inode_unlock_shared(h_dir);
+	AuTraceErrPtr(drinfo);
+	return drinfo;
+}
+
+struct au_drinfo_do_load_args {
+	struct au_drinfo **drinfop;
+	struct path *h_ppath;
+	char *whname;
+	int whnamelen;
+	struct dentry **info_dentry;
+};
+
+static void au_call_drinfo_do_load(void *args)
+{
+	struct au_drinfo_do_load_args *a = args;
+
+	*a->drinfop = au_drinfo_do_load(a->h_ppath, a->whname, a->whnamelen,
+					a->info_dentry);
+}
+
+struct au_drinfo_load {
+	struct path h_ppath;
+	struct qstr *qname;
+	unsigned char no_sio;
+
+	aufs_bindex_t ninfo;
+	struct au_drinfo **drinfo;
+};
+
+static int au_drinfo_load(struct au_drinfo_load *w, aufs_bindex_t bindex,
+			  struct au_branch *br)
+{
+	int err, wkq_err, whnamelen, e;
+	char whname[sizeof(AUFS_WH_DR_INFO_PFX) + AUFS_DIRREN_ENV_VAL_SZ]
+		= AUFS_WH_DR_INFO_PFX;
+	struct au_drinfo *drinfo;
+	struct qstr oldname;
+	struct inode *h_dir, *delegated;
+	struct dentry *info_dentry;
+	struct path infopath;
+
+	whnamelen = sizeof(AUFS_WH_DR_INFO_PFX) - 1;
+	whnamelen += au_drinfo_name(br, whname + whnamelen,
+				    sizeof(whname) - whnamelen);
+	if (w->no_sio)
+		drinfo = au_drinfo_do_load(&w->h_ppath, whname, whnamelen,
+					   &info_dentry);
+	else {
+		struct au_drinfo_do_load_args args = {
+			.drinfop	= &drinfo,
+			.h_ppath	= &w->h_ppath,
+			.whname		= whname,
+			.whnamelen	= whnamelen,
+			.info_dentry	= &info_dentry
+		};
+		wkq_err = au_wkq_wait(au_call_drinfo_do_load, &args);
+		if (unlikely(wkq_err))
+			drinfo = ERR_PTR(wkq_err);
+	}
+	err = PTR_ERR(drinfo);
+	if (IS_ERR_OR_NULL(drinfo))
+		goto out;
+
+	err = 0;
+	oldname.len = drinfo->oldnamelen;
+	oldname.name = drinfo->oldname;
+	if (au_qstreq(w->qname, &oldname)) {
+		/* the name is renamed back */
+		kfree(drinfo);
+		drinfo = NULL;
+
+		infopath.dentry = info_dentry;
+		infopath.mnt = w->h_ppath.mnt;
+		h_dir = d_inode(w->h_ppath.dentry);
+		delegated = NULL;
+		inode_lock_nested(h_dir, AuLsc_I_PARENT);
+		e = vfsub_unlink(h_dir, &infopath, &delegated, !w->no_sio);
+		inode_unlock(h_dir);
+		if (unlikely(e))
+			AuIOErr("ignored %d, %pd2\n", e, &infopath.dentry);
+		if (unlikely(e == -EWOULDBLOCK))
+			iput(delegated);
+	}
+	kfree(w->drinfo[bindex]);
+	w->drinfo[bindex] = drinfo;
+	dput(info_dentry);
+
+out:
+	AuTraceErr(err);
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+static void au_dr_lkup_free(struct au_drinfo **drinfo, int n)
+{
+	struct au_drinfo **p = drinfo;
+
+	while (n-- > 0)
+		kfree(*drinfo++);
+	kfree(p);
+}
+
+int au_dr_lkup(struct au_do_lookup_args *lkup, struct dentry *dentry,
+	       aufs_bindex_t btgt)
+{
+	int err, ninfo;
+	struct au_drinfo_load w;
+	aufs_bindex_t bindex, bbot;
+	struct au_branch *br;
+	struct inode *h_dir;
+	struct au_dr_hino *ent;
+	struct super_block *sb;
+
+	AuDbg("%.*s, name %.*s, whname %.*s, b%d\n",
+	      AuLNPair(&dentry->d_name), AuLNPair(&lkup->dirren.dr_name),
+	      AuLNPair(&lkup->whname), btgt);
+
+	sb = dentry->d_sb;
+	bbot = au_sbbot(sb);
+	w.ninfo = bbot + 1;
+	if (!lkup->dirren.drinfo) {
+		lkup->dirren.drinfo = kcalloc(sizeof(*lkup->dirren.drinfo),
+					      w.ninfo, GFP_NOFS);
+		if (unlikely(!lkup->dirren.drinfo)) {
+			err = -ENOMEM;
+			goto out;
+		}
+		lkup->dirren.ninfo = w.ninfo;
+	}
+	w.drinfo = lkup->dirren.drinfo;
+	w.no_sio = !!uid_eq(current_fsuid(), GLOBAL_ROOT_UID);
+	w.h_ppath.dentry = au_h_dptr(dentry, btgt);
+	AuDebugOn(!w.h_ppath.dentry);
+	w.h_ppath.mnt = au_sbr_mnt(sb, btgt);
+	w.qname = &dentry->d_name;
+
+	ninfo = 0;
+	for (bindex = btgt + 1; bindex <= bbot; bindex++) {
+		br = au_sbr(sb, bindex);
+		err = au_drinfo_load(&w, bindex, br);
+		if (unlikely(err))
+			goto out_free;
+		if (w.drinfo[bindex])
+			ninfo++;
+	}
+	if (!ninfo) {
+		br = au_sbr(sb, btgt);
+		h_dir = d_inode(w.h_ppath.dentry);
+		ent = au_dr_hino_find(&br->br_dirren, h_dir->i_ino);
+		AuDebugOn(!ent);
+		au_dr_hino_del(&br->br_dirren, ent);
+		kfree(ent);
+	}
+	goto out; /* success */
+
+out_free:
+	au_dr_lkup_free(lkup->dirren.drinfo, lkup->dirren.ninfo);
+	lkup->dirren.ninfo = 0;
+	lkup->dirren.drinfo = NULL;
+out:
+	AuTraceErr(err);
+	return err;
+}
+
+void au_dr_lkup_fin(struct au_do_lookup_args *lkup)
+{
+	au_dr_lkup_free(lkup->dirren.drinfo, lkup->dirren.ninfo);
+}
+
+int au_dr_lkup_name(struct au_do_lookup_args *lkup, aufs_bindex_t btgt)
+{
+	int err;
+	struct au_drinfo *drinfo;
+
+	err = 0;
+	if (!lkup->dirren.drinfo)
+		goto out;
+	AuDebugOn(lkup->dirren.ninfo < btgt + 1);
+	drinfo = lkup->dirren.drinfo[btgt + 1];
+	if (!drinfo)
+		goto out;
+
+	kfree(lkup->whname.name);
+	lkup->whname.name = NULL;
+	lkup->dirren.dr_name.len = drinfo->oldnamelen;
+	lkup->dirren.dr_name.name = drinfo->oldname;
+	lkup->name = &lkup->dirren.dr_name;
+	err = au_wh_name_alloc(&lkup->whname, lkup->name);
+	if (!err)
+		AuDbg("name %.*s, whname %.*s, b%d\n",
+		      AuLNPair(lkup->name), AuLNPair(&lkup->whname),
+		      btgt);
+
+out:
+	AuTraceErr(err);
+	return err;
+}
+
+int au_dr_lkup_h_ino(struct au_do_lookup_args *lkup, aufs_bindex_t bindex,
+		     ino_t h_ino)
+{
+	int match;
+	struct au_drinfo *drinfo;
+
+	match = 1;
+	if (!lkup->dirren.drinfo)
+		goto out;
+	AuDebugOn(lkup->dirren.ninfo < bindex + 1);
+	drinfo = lkup->dirren.drinfo[bindex + 1];
+	if (!drinfo)
+		goto out;
+
+	match = (drinfo->ino == h_ino);
+	AuDbg("match %d\n", match);
+
+out:
+	return match;
+}
