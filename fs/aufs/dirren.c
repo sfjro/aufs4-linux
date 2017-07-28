@@ -441,3 +441,438 @@ static int au_brid_str(struct au_dr_brid *brid, struct inode *h_inode,
 
 	return p - buf;
 }
+
+static int au_drinfo_name(struct au_branch *br, char *name, int len)
+{
+	int rlen;
+	struct dentry *br_dentry;
+	struct inode *br_inode;
+
+	br_dentry = au_br_dentry(br);
+	br_inode = d_inode(br_dentry);
+	rlen = au_brid_str(&br->br_dirren.dr_brid, br_inode, name, len);
+	AuDebugOn(rlen >= AUFS_DIRREN_ENV_VAL_SZ);
+	AuDebugOn(rlen > len);
+
+	return rlen;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/*
+ * from the given @h_dentry, construct drinfo at @*fdata.
+ * when the size of @*fdata is not enough, reallocate and return new @fdata and
+ * @allocated.
+ */
+static int au_drinfo_construct(struct au_drinfo_fdata **fdata,
+			       struct dentry *h_dentry,
+			       unsigned char *allocated)
+{
+	int err, v;
+	struct au_drinfo_fdata *f, *p;
+	struct au_drinfo *drinfo;
+	struct inode *h_inode;
+	struct qstr *qname;
+
+	err = 0;
+	f = *fdata;
+	h_inode = d_inode(h_dentry);
+	qname = &h_dentry->d_name;
+	drinfo = &f->drinfo;
+	drinfo->ino = cpu_to_be64(h_inode->i_ino);
+	drinfo->oldnamelen = qname->len;
+	if (*allocated < sizeof(*f) + qname->len) {
+		v = roundup_pow_of_two(*allocated + qname->len);
+		p = au_krealloc(f, v, GFP_NOFS, /*may_shrink*/0);
+		if (unlikely(!p)) {
+			err = -ENOMEM;
+			AuTraceErr(err);
+			goto out;
+		}
+		f = p;
+		*fdata = f;
+		*allocated = v;
+		drinfo = &f->drinfo;
+	}
+	memcpy(drinfo->oldname, qname->name, qname->len);
+	AuDbg("i%llu, %.*s\n",
+	      be64_to_cpu(drinfo->ino), drinfo->oldnamelen, drinfo->oldname);
+
+out:
+	AuTraceErr(err);
+	return err;
+}
+
+/* callers have to free the return value */
+static struct au_drinfo *au_drinfo_read_k(struct file *file, ino_t h_ino)
+{
+	struct au_drinfo *ret, *drinfo;
+	struct au_drinfo_fdata fdata;
+	int len;
+	loff_t pos;
+	ssize_t ssz;
+
+	ret = ERR_PTR(-EIO);
+	pos = 0;
+	ssz = vfsub_read_k(file, &fdata, sizeof(fdata), &pos);
+	if (unlikely(ssz != sizeof(fdata))) {
+		AuIOErr("ssz %zd, %u, %pD2\n",
+			ssz, (unsigned int)sizeof(fdata), file);
+		goto out;
+	}
+
+	fdata.magic = ntohl(fdata.magic);
+	switch (fdata.magic) {
+	case AUFS_DRINFO_MAGIC_V1:
+		break;
+	default:
+		AuIOErr("magic-num 0x%x, 0x%x, %pD2\n",
+			fdata.magic, AUFS_DRINFO_MAGIC_V1, file);
+		goto out;
+	}
+
+	drinfo = &fdata.drinfo;
+	len = drinfo->oldnamelen;
+	if (!len) {
+		AuIOErr("broken drinfo %pD2\n", file);
+		goto out;
+	}
+
+	ret = NULL;
+	drinfo->ino = be64_to_cpu(drinfo->ino);
+	if (unlikely(h_ino && drinfo->ino != h_ino)) {
+		AuDbg("ignored i%llu, i%llu, %pD2\n",
+		      (unsigned long long)drinfo->ino,
+		      (unsigned long long)h_ino, file);
+		goto out; /* success */
+	}
+
+	ret = kmalloc(sizeof(*ret) + len, GFP_NOFS);
+	if (unlikely(!ret)) {
+		ret = ERR_PTR(-ENOMEM);
+		AuTraceErrPtr(ret);
+		goto out;
+	}
+
+	*ret = *drinfo;
+	ssz = vfsub_read_k(file, (void *)ret->oldname, len, &pos);
+	if (unlikely(ssz != len)) {
+		kfree(ret);
+		ret = ERR_PTR(-EIO);
+		AuIOErr("ssz %zd, %u, %pD2\n", ssz, len, file);
+		goto out;
+	}
+
+	AuDbg("oldname %.*s\n", ret->oldnamelen, ret->oldname);
+
+out:
+	return ret;
+}
+
+/* ---------------------------------------------------------------------- */
+
+/* in order to be revertible */
+struct au_drinfo_rev_elm {
+	int			created;
+	struct dentry		*info_dentry;
+	struct au_drinfo	*info_last;
+};
+
+struct au_drinfo_rev {
+	unsigned char			already;
+	aufs_bindex_t			nelm;
+	struct au_drinfo_rev_elm	elm[0];
+};
+
+/* todo: isn't it too large? */
+struct au_drinfo_store {
+	struct path h_ppath;
+	struct dentry *h_dentry;
+	struct au_drinfo_fdata *fdata;
+	char *infoname;			/* inside of whname, just after PFX */
+	char whname[sizeof(AUFS_WH_DR_INFO_PFX) + AUFS_DIRREN_ENV_VAL_SZ];
+	aufs_bindex_t btgt, btail;
+	unsigned char no_sio,
+		allocated,		/* current size of *fdata */
+		infonamelen,		/* room size for p */
+		whnamelen,		/* length of the genarated name */
+		renameback;		/* renamed back */
+};
+
+/* on rename(2) error, the caller should revert it using @elm */
+static int au_drinfo_do_store(struct au_drinfo_store *w,
+			      struct au_drinfo_rev_elm *elm)
+{
+	int err, len;
+	ssize_t ssz;
+	loff_t pos;
+	struct path infopath = {
+		.mnt = w->h_ppath.mnt
+	};
+	struct inode *h_dir, *h_inode, *delegated;
+	struct file *infofile;
+	struct qstr *qname;
+
+	AuDebugOn(elm
+		  && memcmp(elm, page_address(ZERO_PAGE(0)), sizeof(*elm)));
+
+	infopath.dentry = vfsub_lookup_one_len(w->whname, w->h_ppath.dentry,
+					       w->whnamelen);
+	AuTraceErrPtr(infopath.dentry);
+	if (IS_ERR(infopath.dentry)) {
+		err = PTR_ERR(infopath.dentry);
+		goto out;
+	}
+
+	err = 0;
+	h_dir = d_inode(w->h_ppath.dentry);
+	if (elm && d_is_negative(infopath.dentry)) {
+		err = vfsub_create(h_dir, &infopath, 0600, /*want_excl*/true);
+		AuTraceErr(err);
+		if (unlikely(err))
+			goto out_dput;
+		elm->created = 1;
+		elm->info_dentry = dget(infopath.dentry);
+	}
+
+	infofile = vfsub_dentry_open(&infopath, O_RDWR);
+	AuTraceErrPtr(infofile);
+	if (IS_ERR(infofile)) {
+		err = PTR_ERR(infofile);
+		goto out_dput;
+	}
+
+	h_inode = d_inode(infopath.dentry);
+	if (elm && i_size_read(h_inode)) {
+		h_inode = d_inode(w->h_dentry);
+		elm->info_last = au_drinfo_read_k(infofile, h_inode->i_ino);
+		AuTraceErrPtr(elm->info_last);
+		if (IS_ERR(elm->info_last)) {
+			err = PTR_ERR(elm->info_last);
+			elm->info_last = NULL;
+			AuDebugOn(elm->info_dentry);
+			goto out_fput;
+		}
+	}
+
+	if (elm && w->renameback) {
+		delegated = NULL;
+		err = vfsub_unlink(h_dir, &infopath, &delegated, /*force*/0);
+		AuTraceErr(err);
+		if (unlikely(err == -EWOULDBLOCK))
+			iput(delegated);
+		goto out_fput;
+	}
+
+	pos = 0;
+	qname = &w->h_dentry->d_name;
+	len = sizeof(*w->fdata) + qname->len;
+	if (!elm)
+		len = sizeof(*w->fdata) + w->fdata->drinfo.oldnamelen;
+	ssz = vfsub_write_k(infofile, w->fdata, len, &pos);
+	if (ssz == len) {
+		AuDbg("hi%llu, %.*s\n", w->fdata->drinfo.ino,
+		      w->fdata->drinfo.oldnamelen, w->fdata->drinfo.oldname);
+		goto out_fput; /* success */
+	} else {
+		err = -EIO;
+		if (ssz < 0)
+			err = ssz;
+		/* the caller should revert it using @elm */
+	}
+
+out_fput:
+	fput(infofile);
+out_dput:
+	dput(infopath.dentry);
+out:
+	AuTraceErr(err);
+	return err;
+}
+
+struct au_call_drinfo_do_store_args {
+	int *errp;
+	struct au_drinfo_store *w;
+	struct au_drinfo_rev_elm *elm;
+};
+
+static void au_call_drinfo_do_store(void *args)
+{
+	struct au_call_drinfo_do_store_args *a = args;
+
+	*a->errp = au_drinfo_do_store(a->w, a->elm);
+}
+
+static int au_drinfo_store_sio(struct au_drinfo_store *w,
+			       struct au_drinfo_rev_elm *elm)
+{
+	int err, wkq_err;
+
+	if (w->no_sio)
+		err = au_drinfo_do_store(w, elm);
+	else {
+		struct au_call_drinfo_do_store_args a = {
+			.errp	= &err,
+			.w	= w,
+			.elm	= elm
+		};
+		wkq_err = au_wkq_wait(au_call_drinfo_do_store, &a);
+		if (unlikely(wkq_err))
+			err = wkq_err;
+	}
+	AuTraceErr(err);
+
+	return err;
+}
+
+static int au_drinfo_store_work_init(struct au_drinfo_store *w,
+				     aufs_bindex_t btgt)
+{
+	int err;
+
+	memset(w, 0, sizeof(*w));
+	w->allocated = roundup_pow_of_two(sizeof(*w->fdata) + 40);
+	strcpy(w->whname, AUFS_WH_DR_INFO_PFX);
+	w->infoname = w->whname + sizeof(AUFS_WH_DR_INFO_PFX) - 1;
+	w->infonamelen = sizeof(w->whname) - sizeof(AUFS_WH_DR_INFO_PFX);
+	w->btgt = btgt;
+	w->no_sio = !!uid_eq(current_fsuid(), GLOBAL_ROOT_UID);
+
+	err = -ENOMEM;
+	w->fdata = kcalloc(w->allocated, 1, GFP_NOFS);
+	if (unlikely(!w->fdata)) {
+		AuTraceErr(err);
+		goto out;
+	}
+	w->fdata->magic = htonl(AUFS_DRINFO_MAGIC_V1);
+	err = 0;
+
+out:
+	return err;
+}
+
+static void au_drinfo_store_work_fin(struct au_drinfo_store *w)
+{
+	kfree(w->fdata);
+}
+
+static void au_drinfo_store_rev(struct au_drinfo_rev *rev,
+				struct au_drinfo_store *w)
+{
+	struct au_drinfo_rev_elm *elm;
+	struct inode *h_dir, *delegated;
+	int err, nelm;
+	struct path infopath = {
+		.mnt = w->h_ppath.mnt
+	};
+
+	h_dir = d_inode(w->h_ppath.dentry);
+	IMustLock(h_dir);
+
+	err = 0;
+	elm = rev->elm;
+	for (nelm = rev->nelm; nelm > 0; nelm--, elm++) {
+		AuDebugOn(elm->created && elm->info_last);
+		if (elm->created) {
+			AuDbg("here\n");
+			delegated = NULL;
+			infopath.dentry = elm->info_dentry;
+			err = vfsub_unlink(h_dir, &infopath, &delegated,
+					   !w->no_sio);
+			AuTraceErr(err);
+			if (unlikely(err == -EWOULDBLOCK))
+				iput(delegated);
+			dput(elm->info_dentry);
+		} else if (elm->info_last) {
+			AuDbg("here\n");
+			w->fdata->drinfo = *elm->info_last;
+			memcpy(w->fdata->drinfo.oldname,
+			       elm->info_last->oldname,
+			       elm->info_last->oldnamelen);
+			err = au_drinfo_store_sio(w, /*elm*/NULL);
+			kfree(elm->info_last);
+		}
+		if (unlikely(err))
+			AuIOErr("%d, %s\n", err, w->whname);
+		/* go on even if err */
+	}
+}
+
+/* caller has to call au_dr_rename_fin() later */
+static int au_drinfo_store(struct dentry *dentry, aufs_bindex_t btgt,
+			   struct qstr *dst_name, void *_rev)
+{
+	int err, sz, nelm;
+	aufs_bindex_t bindex, btail;
+	struct au_drinfo_store work;
+	struct au_drinfo_rev *rev, **p;
+	struct au_drinfo_rev_elm *elm;
+	struct super_block *sb;
+	struct au_branch *br;
+	struct au_hinode *hdir;
+
+	err = au_drinfo_store_work_init(&work, btgt);
+	AuTraceErr(err);
+	if (unlikely(err))
+		goto out;
+
+	err = -ENOMEM;
+	btail = au_dbtaildir(dentry);
+	nelm = btail - btgt;
+	sz = sizeof(*rev) + sizeof(*elm) * nelm;
+	rev = kcalloc(sz, 1, GFP_NOFS);
+	if (unlikely(!rev)) {
+		AuTraceErr(err);
+		goto out_args;
+	}
+	rev->nelm = nelm;
+	elm = rev->elm;
+	p = _rev;
+	*p = rev;
+
+	err = 0;
+	sb = dentry->d_sb;
+	work.h_ppath.dentry = au_h_dptr(dentry, btgt);
+	work.h_ppath.mnt = au_sbr_mnt(sb, btgt);
+	hdir = au_hi(d_inode(dentry), btgt);
+	au_hn_inode_lock_nested(hdir, AuLsc_I_CHILD);
+	for (bindex = btgt + 1; bindex <= btail; bindex++, elm++) {
+		work.h_dentry = au_h_dptr(dentry, bindex);
+		if (!work.h_dentry)
+			continue;
+
+		err = au_drinfo_construct(&work.fdata, work.h_dentry,
+					  &work.allocated);
+		AuTraceErr(err);
+		if (unlikely(err))
+			break;
+
+		work.renameback = au_qstreq(&work.h_dentry->d_name, dst_name);
+		br = au_sbr(sb, bindex);
+		work.whnamelen = sizeof(AUFS_WH_DR_INFO_PFX) - 1;
+		work.whnamelen += au_drinfo_name(br, work.infoname,
+						 work.infonamelen);
+		AuDbg("whname %.*s, i%llu, %.*s\n",
+		      work.whnamelen, work.whname,
+		      be64_to_cpu(work.fdata->drinfo.ino),
+		      work.fdata->drinfo.oldnamelen,
+		      work.fdata->drinfo.oldname);
+
+		err = au_drinfo_store_sio(&work, elm);
+		AuTraceErr(err);
+		if (unlikely(err))
+			break;
+	}
+	if (unlikely(err)) {
+		/* revert all drinfo */
+		au_drinfo_store_rev(rev, &work);
+		kfree(rev);
+		*p = NULL;
+	}
+	au_hn_inode_unlock(hdir);
+
+out_args:
+	au_drinfo_store_work_fin(&work);
+out:
+	return err;
+}
