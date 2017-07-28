@@ -327,6 +327,40 @@ out:
 	return err;
 }
 
+/* ---------------------------------------------------------------------- */
+
+static int au_dr_brid_init(struct au_dr_brid *brid, const struct path *path)
+{
+	int err;
+	struct kstatfs kstfs;
+	dev_t dev;
+	struct dentry *dentry;
+	struct super_block *sb;
+
+	err = vfs_statfs((void *)path, &kstfs);
+	AuTraceErr(err);
+	if (unlikely(err))
+		goto out;
+
+	/* todo: support for UUID */
+
+	if (kstfs.f_fsid.val[0] || kstfs.f_fsid.val[1]) {
+		brid->type = AuBrid_FSID;
+		brid->fsid = kstfs.f_fsid;
+	} else {
+		dentry = path->dentry;
+		sb = dentry->d_sb;
+		dev = sb->s_dev;
+		if (dev) {
+			brid->type = AuBrid_DEV;
+			brid->dev = dev;
+		}
+	}
+
+out:
+	return err;
+}
+
 int au_dr_br_init(struct super_block *sb, struct au_branch *br,
 		  const struct path *path)
 {
@@ -339,10 +373,14 @@ int au_dr_br_init(struct super_block *sb, struct au_branch *br,
 	for (i = 0; i < AuDirren_NHASH; i++, hbl++)
 		INIT_HLIST_BL_HEAD(hbl);
 
-	err = 0;
+	err = au_dr_brid_init(&dr->dr_brid, path);
+	if (unlikely(err))
+		goto out;
+
 	if (au_opt_test(au_mntflags(sb), DIRREN))
 		err = au_dr_hino(sb, /*bindex*/-1, br, path);
 
+out:
 	AuTraceErr(err);
 	return err;
 }
@@ -358,4 +396,48 @@ int au_dr_br_fin(struct super_block *sb, struct au_branch *br)
 		au_dr_hino_free(&br->br_dirren);
 
 	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+static int au_brid_str(struct au_dr_brid *brid, struct inode *h_inode,
+		       char *buf, size_t sz)
+{
+	int err;
+	unsigned int major, minor;
+	char *p;
+
+	p = buf;
+	err = snprintf(p, sz, "%d_", brid->type);
+	AuDebugOn(err > sz);
+	p += err;
+	sz -= err;
+	switch (brid->type) {
+	case AuBrid_Unset:
+		return -EINVAL;
+	case AuBrid_UUID:
+		err = snprintf(p, sz, "%pU", brid->uuid.__u_bits);
+		break;
+	case AuBrid_FSID:
+		err = snprintf(p, sz, "%08x-%08x",
+			       brid->fsid.val[0], brid->fsid.val[1]);
+		break;
+	case AuBrid_DEV:
+		major = MAJOR(brid->dev);
+		minor = MINOR(brid->dev);
+		if (major <= 0xff && minor <= 0xff)
+			err = snprintf(p, sz, "%02x%02x", major, minor);
+		else
+			err = snprintf(p, sz, "%03x:%05x",major, minor);
+		break;
+	}
+	AuDebugOn(err > sz);
+	p += err;
+	sz -= err;
+	err = snprintf(p, sz, "_%llu", (unsigned long long)h_inode->i_ino);
+	AuDebugOn(err > sz);
+	p += err;
+	sz -= err;
+
+	return p - buf;
 }

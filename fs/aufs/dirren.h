@@ -24,11 +24,40 @@
 
 #ifdef __KERNEL__
 
+#include <linux/statfs.h>
 #include "hbl.h"
 
 #define AuDirren_NHASH 100
 
 #ifdef CONFIG_AUFS_DIRREN
+/* copied from linux/fs/xfs/uuid.h */
+typedef struct {
+	unsigned char	__u_bits[16];
+} uuid_t;
+
+#define __UUID_TMPLT		"01234567-0123-4567-0123-456701234567"
+
+enum au_brid_type {
+	AuBrid_Unset,
+	AuBrid_UUID,
+	AuBrid_FSID,
+	AuBrid_DEV
+};
+
+struct au_dr_brid {
+	enum au_brid_type	type;
+	union {
+		uuid_t	uuid;	/* unimplemented yet */
+		fsid_t	fsid;
+		dev_t	dev;
+	};
+};
+
+/* 20 is the max digits length of ulong 64 */
+/* brid-type "_" uuid "_" inum */
+#define AUFS_DIRREN_FNAME_SZ	(1 + 1 + sizeof(__UUID_TMPLT) + 20)
+#define AUFS_DIRREN_ENV_VAL_SZ	(AUFS_DIRREN_FNAME_SZ + 1 + 20)
+
 struct au_dr_hino {
 	struct hlist_bl_node	dr_hnode;
 	ino_t			dr_h_ino;
@@ -36,6 +65,7 @@ struct au_dr_hino {
 
 struct au_dr_br {
 	struct hlist_bl_head	dr_h_ino[AuDirren_NHASH];
+	struct au_dr_brid	dr_brid;
 };
 #else
 struct au_dr_hino;
