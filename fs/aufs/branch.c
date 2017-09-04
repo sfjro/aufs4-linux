@@ -1395,8 +1395,7 @@ int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
 	goto out; /* success */
 
 out_bf:
-	if (bf)
-		kfree(bf);
+	kfree(bf);
 out:
 	AuTraceErr(err);
 	return err;
