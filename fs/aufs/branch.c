@@ -137,7 +137,7 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 		goto out;
 	add_branch->br_xino.xi_nondir.total = 8; /* initial size */
 	add_branch->br_xino.xi_nondir.array
-		= kzalloc(sizeof(ino_t) * add_branch->br_xino.xi_nondir.total,
+		= kcalloc(sizeof(ino_t), add_branch->br_xino.xi_nondir.total,
 			  GFP_NOFS);
 	if (unlikely(!add_branch->br_xino.xi_nondir.array))
 		goto out_br;
