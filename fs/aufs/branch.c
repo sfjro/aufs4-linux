@@ -567,14 +567,15 @@ static unsigned long long au_farray_cb(struct super_block *sb, void *a,
 {
 	unsigned long long n;
 	struct file **p, *f;
-	struct au_sphlhead *files;
+	struct hlist_bl_head *files;
+	struct hlist_bl_node *pos;
 	struct au_finfo *finfo;
 
 	n = 0;
 	p = a;
 	files = &au_sbi(sb)->si_files;
-	spin_lock(&files->spin);
-	hlist_for_each_entry(finfo, &files->head, fi_hlist) {
+	hlist_bl_lock(files);
+	hlist_bl_for_each_entry(finfo, pos, files, fi_hlist) {
 		f = finfo->fi_file;
 		if (file_count(f)
 		    && !special_file(file_inode(f)->i_mode)) {
@@ -584,7 +585,7 @@ static unsigned long long au_farray_cb(struct super_block *sb, void *a,
 			AuDebugOn(n > max);
 		}
 	}
-	spin_unlock(&files->spin);
+	hlist_bl_unlock(files);
 
 	return n;
 }
