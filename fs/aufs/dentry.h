@@ -39,6 +39,12 @@ struct au_dinfo {
 #define au_fclr_lkup(flags, name) \
 	do { (flags) &= ~AuLkup_##name; } while (0)
 
+struct au_do_lookup_args {
+	unsigned int		flags;
+	mode_t			type;
+	struct qstr		whname, *name;
+};
+
 /* ---------------------------------------------------------------------- */
 
 /* dentry.c */

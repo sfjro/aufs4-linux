@@ -91,7 +91,7 @@ static match_table_t options = {
 #ifdef CONFIG_AUFS_FHSM
 	{Opt_fhsm_sec, "fhsm_sec=%d"},
 #else
-	{Opt_ignore_silent, "fhsm_sec=%d"},
+	{Opt_ignore, "fhsm_sec=%d"},
 #endif
 
 	{Opt_diropq_a, "diropq=always"},
@@ -104,7 +104,7 @@ static match_table_t options = {
 
 	/* keep them temporary */
 	{Opt_ignore_silent, "nodlgt"},
-	{Opt_ignore_silent, "clean_plink"},
+	{Opt_ignore, "clean_plink"},
 
 #ifdef CONFIG_AUFS_SHWH
 	{Opt_shwh, "shwh"},
@@ -142,7 +142,7 @@ static match_table_t options = {
 	{Opt_acl, "acl"},
 	{Opt_noacl, "noacl"},
 #else
-	{Opt_ignore_silent, "acl"},
+	{Opt_ignore, "acl"},
 	{Opt_ignore_silent, "noacl"},
 #endif
 

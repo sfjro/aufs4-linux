@@ -9,19 +9,13 @@
 #include <linux/namei.h>
 #include "aufs.h"
 
-struct au_do_lookup_args {
-	unsigned int		flags;
-	mode_t			type;
-};
-
 /*
  * returns positive/negative dentry, NULL or an error.
  * NULL means whiteout-ed or not-found.
  */
 static struct dentry*
 au_do_lookup(struct dentry *h_parent, struct dentry *dentry,
-	     aufs_bindex_t bindex, struct qstr *wh_name,
-	     struct au_do_lookup_args *args)
+	     aufs_bindex_t bindex, struct au_do_lookup_args *args)
 {
 	struct dentry *h_dentry;
 	struct inode *h_inode;
@@ -36,7 +30,7 @@ au_do_lookup(struct dentry *h_parent, struct dentry *dentry,
 	br = au_sbr(dentry->d_sb, bindex);
 	wh_able = !!au_br_whable(br->br_perm);
 	if (wh_able)
-		wh_found = au_wh_test(h_parent, wh_name, ignore_perm);
+		wh_found = au_wh_test(h_parent, &args->whname, ignore_perm);
 	h_dentry = ERR_PTR(wh_found);
 	if (!wh_found)
 		goto real_lookup;
@@ -51,9 +45,9 @@ au_do_lookup(struct dentry *h_parent, struct dentry *dentry,
 
 real_lookup:
 	if (!ignore_perm)
-		h_dentry = vfsub_lkup_one(&dentry->d_name, h_parent);
+		h_dentry = vfsub_lkup_one(args->name, h_parent);
 	else
-		h_dentry = au_sio_lkup_one(&dentry->d_name, h_parent);
+		h_dentry = au_sio_lkup_one(args->name, h_parent);
 	if (IS_ERR(h_dentry)) {
 		if (PTR_ERR(h_dentry) == -ENAMETOOLONG
 		    && !allow_neg)
@@ -117,20 +111,19 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t btop,
 	int npositive, err;
 	aufs_bindex_t bindex, btail, bdiropq;
 	unsigned char isdir, dirperm1;
-	struct qstr whname;
 	struct au_do_lookup_args args = {
-		.flags		= flags
+		.flags		= flags,
+		.name		= &dentry->d_name
 	};
-	const struct qstr *name = &dentry->d_name;
 	struct dentry *parent;
 	struct super_block *sb;
 
 	sb = dentry->d_sb;
-	err = au_test_shwh(sb, name);
+	err = au_test_shwh(sb, args.name);
 	if (unlikely(err))
 		goto out;
 
-	err = au_wh_name_alloc(&whname, name);
+	err = au_wh_name_alloc(&args.whname, args.name);
 	if (unlikely(err))
 		goto out;
 
@@ -156,8 +149,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t btop,
 
 		h_dir = d_inode(h_parent);
 		vfsub_inode_lock_shared_nested(h_dir, AuLsc_I_PARENT);
-		h_dentry = au_do_lookup(h_parent, dentry, bindex, &whname,
-					&args);
+		h_dentry = au_do_lookup(h_parent, dentry, bindex, &args);
 		inode_unlock_shared(h_dir);
 		err = PTR_ERR(h_dentry);
 		if (IS_ERR(h_dentry))
@@ -201,7 +193,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t btop,
 
 out_parent:
 	dput(parent);
-	kfree(whname.name);
+	kfree(args.whname.name);
 out:
 	return err;
 }
