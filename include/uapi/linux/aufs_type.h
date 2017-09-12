@@ -88,6 +88,10 @@ typedef int16_t aufs_bindex_t;
 #define AUFS_PLINK_MAINT_DIR	"fs/" AUFS_NAME
 #define AUFS_PLINK_MAINT_PATH	AUFS_PLINK_MAINT_DIR "/" AUFS_PLINK_MAINT_NAME
 
+/* whiteouted doubly */
+#define AUFS_DR_BRHINO_NAME	AUFS_WH_PFX "hino"
+#define AUFS_WH_DR_BRHINO	AUFS_WH_PFX AUFS_DR_BRHINO_NAME
+
 #define AUFS_DIROPQ_NAME	AUFS_WH_PFX ".opq" /* whiteouted doubly */
 #define AUFS_WH_DIROPQ		AUFS_WH_PFX AUFS_DIROPQ_NAME
 
