@@ -34,6 +34,7 @@ enum {
 	Opt_verbose, Opt_noverbose,
 	Opt_sum, Opt_nosum, Opt_wsum,
 	Opt_dirperm1, Opt_nodirperm1,
+	Opt_dirren, Opt_nodirren,
 	Opt_acl, Opt_noacl,
 	Opt_tail, Opt_ignore, Opt_ignore_silent, Opt_err
 };
@@ -87,6 +88,14 @@ static match_table_t options = {
 
 	{Opt_dio, "dio"},
 	{Opt_nodio, "nodio"},
+
+#ifdef CONFIG_AUFS_DIRREN
+	{Opt_dirren, "dirren"},
+	{Opt_nodirren, "nodirren"},
+#else
+	{Opt_ignore, "dirren"},
+	{Opt_ignore_silent, "nodirren"},
+#endif
 
 #ifdef CONFIG_AUFS_FHSM
 	{Opt_fhsm_sec, "fhsm_sec=%d"},
@@ -730,6 +739,12 @@ static void dump_opts(struct au_opts *opts)
 		case Opt_fhsm_sec:
 			AuDbg("fhsm_sec %u\n", opt->fhsm_second);
 			break;
+		case Opt_dirren:
+			AuLabel(dirren);
+			break;
+		case Opt_nodirren:
+			AuLabel(nodirren);
+			break;
 		case Opt_acl:
 			AuLabel(acl);
 			break;
@@ -1180,6 +1195,8 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 		case Opt_wsum:
 		case Opt_rdblk_def:
 		case Opt_rdhash_def:
+		case Opt_dirren:
+		case Opt_nodirren:
 		case Opt_acl:
 		case Opt_noacl:
 			err = 0;
@@ -1444,6 +1461,28 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 		break;
 	case Opt_notrunc_xib:
 		au_fclr_opts(opts->flags, TRUNC_XIB);
+		break;
+
+	case Opt_dirren:
+		err = 1;
+		if (!au_opt_test(sbinfo->si_mntflags, DIRREN)) {
+			err = au_dr_opt_set(sb);
+			if (!err)
+				err = 1;
+		}
+		if (err == 1)
+			au_opt_set(sbinfo->si_mntflags, DIRREN);
+		break;
+	case Opt_nodirren:
+		err = 1;
+		if (au_opt_test(sbinfo->si_mntflags, DIRREN)) {
+			err = au_dr_opt_clr(sb, au_ftest_opts(opts->flags,
+							      DR_FLUSHED));
+			if (!err)
+				err = 1;
+		}
+		if (err == 1)
+			au_opt_clr(sbinfo->si_mntflags, DIRREN);
 		break;
 
 	case Opt_acl:
@@ -1803,7 +1842,11 @@ int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 
 	SiMustWriteLock(sb);
 
-	err = 0;
+	err = au_dr_opt_flush(sb);
+	if (unlikely(err))
+		goto out;
+	au_fset_opts(opts->flags, DR_FLUSHED);
+
 	dir = d_inode(sb->s_root);
 	sbinfo = au_sbi(sb);
 	opt_xino = NULL;
@@ -1844,6 +1887,8 @@ int au_opts_remount(struct super_block *sb, struct au_opts *opts)
 		au_fset_opts(opts->flags, REFRESH);
 
 	AuDbg("status 0x%x\n", opts->flags);
+
+out:
 	return err;
 }
 
