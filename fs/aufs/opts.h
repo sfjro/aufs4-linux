@@ -168,11 +168,17 @@ struct au_opt {
 #define AuOpts_TRUNC_XIB	(1 << 2)
 #define AuOpts_REFRESH_DYAOP	(1 << 3)
 #define AuOpts_REFRESH_IDOP	(1 << 4)
+#define AuOpts_DR_FLUSHED	(1 << 5)
 #define au_ftest_opts(flags, name)	((flags) & AuOpts_##name)
 #define au_fset_opts(flags, name) \
 	do { (flags) |= AuOpts_##name; } while (0)
 #define au_fclr_opts(flags, name) \
 	do { (flags) &= ~AuOpts_##name; } while (0)
+
+#ifndef CONFIG_AUFS_DIRREN
+#undef AuOpts_DR_FLUSHED
+#define AuOpts_DR_FLUSHED	0
+#endif
 
 struct au_opts {
 	struct au_opt	*opt;
