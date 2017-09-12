@@ -128,7 +128,7 @@ static int au_dr_hino_store(struct super_block *sb, struct au_branch *br,
 	int err, i;
 	ssize_t ssz;
 	loff_t pos, oldsize;
-	uint64_t u64;
+	__be64 u64;
 	struct inode *hinoinode;
 	struct hlist_bl_head *hbl;
 	struct hlist_bl_node *n1, *n2;
@@ -205,7 +205,7 @@ static int au_dr_hino_load(struct au_dr_br *dr, struct file *hinofile)
 			AuTraceErr(err);
 			goto out_free;
 		}
-		ent->dr_h_ino = be64_to_cpu(u64);
+		ent->dr_h_ino = be64_to_cpu((__force __be64)u64);
 		AuDbg("hi%llu, %pD2\n",
 		      (unsigned long long)ent->dr_h_ino, hinofile);
 		hidx = au_dr_ihash(ent->dr_h_ino);
@@ -479,7 +479,7 @@ static int au_drinfo_construct(struct au_drinfo_fdata **fdata,
 	h_inode = d_inode(h_dentry);
 	qname = &h_dentry->d_name;
 	drinfo = &f->drinfo;
-	drinfo->ino = cpu_to_be64(h_inode->i_ino);
+	drinfo->ino = (__force uint64_t)cpu_to_be64(h_inode->i_ino);
 	drinfo->oldnamelen = qname->len;
 	if (*allocated < sizeof(*f) + qname->len) {
 		v = roundup_pow_of_two(*allocated + qname->len);
@@ -496,7 +496,8 @@ static int au_drinfo_construct(struct au_drinfo_fdata **fdata,
 	}
 	memcpy(drinfo->oldname, qname->name, qname->len);
 	AuDbg("i%llu, %.*s\n",
-	      be64_to_cpu(drinfo->ino), drinfo->oldnamelen, drinfo->oldname);
+	      be64_to_cpu((__force __be64)drinfo->ino), drinfo->oldnamelen,
+	      drinfo->oldname);
 
 out:
 	AuTraceErr(err);
@@ -521,7 +522,7 @@ static struct au_drinfo *au_drinfo_read_k(struct file *file, ino_t h_ino)
 		goto out;
 	}
 
-	fdata.magic = ntohl(fdata.magic);
+	fdata.magic = ntohl((__force __be32)fdata.magic);
 	switch (fdata.magic) {
 	case AUFS_DRINFO_MAGIC_V1:
 		break;
@@ -539,7 +540,7 @@ static struct au_drinfo *au_drinfo_read_k(struct file *file, ino_t h_ino)
 	}
 
 	ret = NULL;
-	drinfo->ino = be64_to_cpu(drinfo->ino);
+	drinfo->ino = be64_to_cpu((__force __be64)drinfo->ino);
 	if (unlikely(h_ino && drinfo->ino != h_ino)) {
 		AuDbg("ignored i%llu, i%llu, %pD2\n",
 		      (unsigned long long)drinfo->ino,
@@ -744,7 +745,7 @@ static int au_drinfo_store_work_init(struct au_drinfo_store *w,
 		AuTraceErr(err);
 		goto out;
 	}
-	w->fdata->magic = htonl(AUFS_DRINFO_MAGIC_V1);
+	w->fdata->magic = (__force uint32_t)htonl(AUFS_DRINFO_MAGIC_V1);
 	err = 0;
 
 out:
@@ -854,7 +855,7 @@ static int au_drinfo_store(struct dentry *dentry, aufs_bindex_t btgt,
 						 work.infonamelen);
 		AuDbg("whname %.*s, i%llu, %.*s\n",
 		      work.whnamelen, work.whname,
-		      be64_to_cpu(work.fdata->drinfo.ino),
+		      be64_to_cpu((__force __be64)work.fdata->drinfo.ino),
 		      work.fdata->drinfo.oldnamelen,
 		      work.fdata->drinfo.oldname);
 
