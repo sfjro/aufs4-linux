@@ -12,6 +12,7 @@
 #ifdef __KERNEL__
 
 #include <linux/mount.h>
+#include "dirren.h"
 #include "dynop.h"
 #include "rwsem.h"
 #include "super.h"
@@ -109,6 +110,8 @@ struct au_branch {
 	/* entries under sysfs per mount-point */
 	struct au_brsysfs	br_sysfs[AuBrSysfs_Last];
 #endif
+
+	struct au_dr_br		br_dirren;
 };
 
 /* ---------------------------------------------------------------------- */
