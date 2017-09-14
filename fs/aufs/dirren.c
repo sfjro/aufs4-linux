@@ -403,7 +403,7 @@ static int au_brid_str(struct au_dr_brid *brid, struct inode *h_inode,
 	case AuBrid_Unset:
 		return -EINVAL;
 	case AuBrid_UUID:
-		err = snprintf(p, sz, "%pU", brid->uuid.__u_bits);
+		err = snprintf(p, sz, "%pU", brid->uuid.b);
 		break;
 	case AuBrid_FSID:
 		err = snprintf(p, sz, "%08x-%08x",
