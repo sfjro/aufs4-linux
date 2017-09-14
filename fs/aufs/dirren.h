@@ -13,18 +13,12 @@
 
 #include <linux/dcache.h>
 #include <linux/statfs.h>
+#include <linux/uuid.h>
 #include "hbl.h"
 
 #define AuDirren_NHASH 100
 
 #ifdef CONFIG_AUFS_DIRREN
-/* copied from linux/fs/xfs/uuid.h */
-typedef struct {
-	unsigned char	__u_bits[16];
-} uuid_t;
-
-#define __UUID_TMPLT		"01234567-0123-4567-0123-456701234567"
-
 enum au_brid_type {
 	AuBrid_Unset,
 	AuBrid_UUID,
@@ -43,7 +37,7 @@ struct au_dr_brid {
 
 /* 20 is the max digits length of ulong 64 */
 /* brid-type "_" uuid "_" inum */
-#define AUFS_DIRREN_FNAME_SZ	(1 + 1 + sizeof(__UUID_TMPLT) + 20)
+#define AUFS_DIRREN_FNAME_SZ	(1 + 1 + UUID_STRING_LEN + 20)
 #define AUFS_DIRREN_ENV_VAL_SZ	(AUFS_DIRREN_FNAME_SZ + 1 + 20)
 
 struct au_dr_hino {
