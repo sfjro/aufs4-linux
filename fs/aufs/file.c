@@ -108,7 +108,7 @@ out:
 
 static int au_cmoo(struct dentry *dentry)
 {
-	int err, cmoo;
+	int err, cmoo, matched;
 	unsigned int udba;
 	struct path h_path;
 	struct au_pin pin;
@@ -143,9 +143,12 @@ static int au_cmoo(struct dentry *dentry)
 	sbinfo = au_sbi(sb);
 	fhsm = &sbinfo->si_fhsm;
 	pid = au_fhsm_pid(fhsm);
-	if (pid
-	    && (current->pid == pid
-		|| current->real_parent->pid == pid))
+	rcu_read_lock();
+	matched = (pid
+		   && (current->pid == pid
+		       || rcu_dereference(current->real_parent)->pid == pid));
+	rcu_read_unlock();
+	if (matched)
 		goto out;
 
 	br = au_sbr(sb, cpg.bsrc);
