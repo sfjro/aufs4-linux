@@ -65,7 +65,7 @@ static inline void vfsub_dead_dir(struct inode *inode)
 
 static inline int vfsub_native_ro(struct inode *inode)
 {
-	return (inode->i_sb->s_flags & MS_RDONLY)
+	return sb_rdonly(inode->i_sb)
 		|| IS_RDONLY(inode)
 		/* || IS_APPEND(inode) */
 		|| IS_IMMUTABLE(inode);
