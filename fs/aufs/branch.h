@@ -158,7 +158,7 @@ static inline void au_br_count_fin(struct au_branch *br)
 
 static inline int au_br_rdonly(struct au_branch *br)
 {
-	return ((au_br_sb(br)->s_flags & MS_RDONLY)
+	return (sb_rdonly(au_br_sb(br))
 		|| !au_br_writable(br->br_perm))
 		? -EROFS : 0;
 }

@@ -63,7 +63,7 @@ static int find_lower_writable(struct au_mvd_args *a)
 		for (bindex++; bindex <= bbot; bindex++) {
 			br = au_sbr(sb, bindex);
 			if (au_br_fhsm(br->br_perm)
-			    && (!(au_br_sb(br)->s_flags & MS_RDONLY)))
+			    && !sb_rdonly(au_br_sb(br)))
 				return bindex;
 		}
 	else if (!(a->mvdown.flags & AUFS_MVDOWN_ROLOWER))
@@ -75,7 +75,7 @@ static int find_lower_writable(struct au_mvd_args *a)
 	else
 		for (bindex++; bindex <= bbot; bindex++) {
 			br = au_sbr(sb, bindex);
-			if (!(au_br_sb(br)->s_flags & MS_RDONLY)) {
+			if (!sb_rdonly(au_br_sb(br))) {
 				if (au_br_rdonly(br))
 					a->mvdown.flags
 						|= AUFS_MVDOWN_ROLOWER_R;
