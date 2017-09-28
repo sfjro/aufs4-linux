@@ -537,8 +537,8 @@ out:
 		if (au_ftest_ren(a->auren_flags, DIRREN)) {
 			err = 0;
 		} else {
-			AuWarn1("renaming dir who has child(ren) on multiple branches,"
-				" is not supported\n");
+			AuWarn1("renaming dir who has child(ren) on multiple "
+				"branches, is not supported\n");
 			err = -EXDEV;
 		}
 	}
