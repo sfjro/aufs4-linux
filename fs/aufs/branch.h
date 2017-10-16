@@ -191,7 +191,7 @@ static inline int au_br_test_oflag(int oflag, struct au_branch *br)
 
 	err = 0;
 	exec_flag = oflag & __FMODE_EXEC;
-	if (unlikely(exec_flag && (au_br_mnt(br)->mnt_flags & MNT_NOEXEC)))
+	if (unlikely(exec_flag && path_noexec(&br->br_path)))
 		err = -EACCES;
 
 	return err;
