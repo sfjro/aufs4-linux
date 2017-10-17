@@ -394,10 +394,9 @@ AuRWLockFuncs(new_child, NEW_CHILD);
 #undef AuWriteLockFunc
 #undef AuRWLockFuncs
 
-/*
- * ii_read_unlock, ii_write_unlock, ii_downgrade_lock
- */
-AuSimpleUnlockRwsemFuncs(ii, struct inode *i, &au_ii(i)->ii_rwsem);
+#define ii_read_unlock(i)	au_rw_read_unlock(&au_ii(i)->ii_rwsem)
+#define ii_write_unlock(i)	au_rw_write_unlock(&au_ii(i)->ii_rwsem)
+#define ii_downgrade_lock(i)	au_rw_dgrade_lock(&au_ii(i)->ii_rwsem)
 
 #define IiMustNoWaiters(i)	AuRwMustNoWaiters(&au_ii(i)->ii_rwsem)
 #define IiMustAnyLock(i)	AuRwMustAnyLock(&au_ii(i)->ii_rwsem)
