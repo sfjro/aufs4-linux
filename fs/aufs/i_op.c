@@ -1337,7 +1337,6 @@ static int aufs_update_time(struct inode *inode, struct timespec *ts, int flags)
 	lockdep_off();
 	si_read_lock(sb, AuLock_FLUSH);
 	ii_write_lock_child(inode);
-	lockdep_on();
 
 	err = 0;
 	bindex = au_ibtop(inode);
@@ -1365,7 +1364,6 @@ static int aufs_update_time(struct inode *inode, struct timespec *ts, int flags)
 		AuDebugOn(1);
 	}
 
-	lockdep_off();
 	if (!err)
 		au_cpup_attr_timesizes(inode);
 	ii_write_unlock(inode);
