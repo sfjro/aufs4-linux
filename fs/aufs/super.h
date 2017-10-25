@@ -13,8 +13,8 @@
 
 #include <linux/fs.h>
 #include <linux/kobject.h>
-#include "rwsem.h"
 #include "hbl.h"
+#include "rwsem.h"
 #include "wkq.h"
 
 /* policies to select one among multiple writable branches */
