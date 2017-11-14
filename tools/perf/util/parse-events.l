@@ -5,6 +5,7 @@
 %option stack
 %option bison-locations
 %option yylineno
+%option reject
 
 %{
 #include <errno.h>
@@ -153,6 +154,10 @@ do {							\
 	yylloc->first_column = yycolumn;		\
 	yycolumn += yyleng;				\
 } while (0);
+
+#define USER_REJECT		\
+	yycolumn -= yyleng;	\
+	REJECT
 
 %}
 
@@ -335,8 +340,8 @@ r{num_raw_hex}		{ return raw(yyscanner); }
 {num_hex}		{ return value(yyscanner, 16); }
 
 {modifier_event}	{ return str(yyscanner, PE_MODIFIER_EVENT); }
-{bpf_object}		{ if (!isbpf(yyscanner)) REJECT; return str(yyscanner, PE_BPF_OBJECT); }
-{bpf_source}		{ if (!isbpf(yyscanner)) REJECT; return str(yyscanner, PE_BPF_SOURCE); }
+{bpf_object}		{ if (!isbpf(yyscanner)) { USER_REJECT }; return str(yyscanner, PE_BPF_OBJECT); }
+{bpf_source}		{ if (!isbpf(yyscanner)) { USER_REJECT }; return str(yyscanner, PE_BPF_SOURCE); }
 {name}			{ return pmu_str_check(yyscanner); }
 "/"			{ BEGIN(config); return '/'; }
 -			{ return '-'; }
