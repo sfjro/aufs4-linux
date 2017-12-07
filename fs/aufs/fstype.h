@@ -387,7 +387,7 @@ static inline int au_test_fs_rr(struct super_block *sb)
 
 /*
  * test if the @inode is nfs with 'noacl' option
- * NFS always sets MS_POSIXACL regardless its mount option 'noacl.'
+ * NFS always sets SB_POSIXACL regardless its mount option 'noacl.'
  */
 static inline int au_test_nfs_noacl(struct inode *inode)
 {

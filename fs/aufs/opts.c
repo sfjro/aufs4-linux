@@ -801,7 +801,7 @@ static int opt_add(struct au_opt *opt, char *opt_str, unsigned long sb_flags,
 			add->perm = AuBrPerm_RO;
 			if (au_test_fs_rr(add->path.dentry->d_sb))
 				add->perm = AuBrPerm_RR;
-			else if (!bindex && !(sb_flags & MS_RDONLY))
+			else if (!bindex && !(sb_flags & SB_RDONLY))
 				add->perm = AuBrPerm_RW;
 		}
 		opt->type = Opt_add;
@@ -1477,10 +1477,10 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 		break;
 
 	case Opt_acl:
-		sb->s_flags |= MS_POSIXACL;
+		sb->s_flags |= SB_POSIXACL;
 		break;
 	case Opt_noacl:
-		sb->s_flags &= ~MS_POSIXACL;
+		sb->s_flags &= ~SB_POSIXACL;
 		break;
 
 	default:
@@ -1607,7 +1607,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 	sbinfo = au_sbi(sb);
 	AuDebugOn(!(sbinfo->si_mntflags & AuOptMask_UDBA));
 
-	if (!(sb_flags & MS_RDONLY)) {
+	if (!(sb_flags & SB_RDONLY)) {
 		if (unlikely(!au_br_writable(au_sbr_perm(sb, 0))))
 			pr_warn("first branch should be rw\n");
 		if (unlikely(au_opt_test(sbinfo->si_mntflags, SHWH)))
@@ -1640,7 +1640,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 			br->br_perm &= ~AuBrAttr_ICEX;
 #if 0
 		if ((br->br_perm & AuBrAttr_ICEX_SEC)
-		    && (au_br_sb(br)->s_flags & MS_NOSEC))
+		    && (au_br_sb(br)->s_flags & SB_NOSEC))
 			br->br_perm &= ~AuBrAttr_ICEX_SEC;
 #endif
 

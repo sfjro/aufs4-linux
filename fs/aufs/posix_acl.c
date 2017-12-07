@@ -34,7 +34,7 @@ struct posix_acl *aufs_get_acl(struct inode *inode, int type)
 	sb = inode->i_sb;
 	si_read_lock(sb, AuLock_FLUSH);
 	ii_read_lock_child(inode);
-	if (!(sb->s_flags & MS_POSIXACL))
+	if (!(sb->s_flags & SB_POSIXACL))
 		goto out;
 
 	bindex = au_ibtop(inode);

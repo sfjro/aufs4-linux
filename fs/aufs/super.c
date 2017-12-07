@@ -243,7 +243,7 @@ static int aufs_show_options(struct seq_file *m, struct dentry *dentry)
 } while (0)
 
 	sb = dentry->d_sb;
-	if (sb->s_flags & MS_POSIXACL)
+	if (sb->s_flags & SB_POSIXACL)
 		seq_puts(m, ",acl");
 
 	/* lock free root dinfo */
@@ -923,7 +923,7 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 	sbinfo = au_sbi(sb);
 
 	/* all timestamps always follow the ones on the branch */
-	sb->s_flags |= MS_NOATIME | MS_NODIRATIME;
+	sb->s_flags |= SB_NOATIME | SB_NODIRATIME;
 	sb->s_op = &aufs_sop;
 	sb->s_d_op = &aufs_dop;
 	sb->s_magic = AUFS_SUPER_MAGIC;

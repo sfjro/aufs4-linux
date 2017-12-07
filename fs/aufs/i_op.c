@@ -46,7 +46,7 @@ static int h_permission(struct inode *h_inode, int mask,
 	 * - skip the lower fs test in the case of write to ro branch.
 	 * - nfs dir permission write check is optimized, but a policy for
 	 *   link/rename requires a real check.
-	 * - nfs always sets MS_POSIXACL regardless its mount option 'noacl.'
+	 * - nfs always sets SB_POSIXACL regardless its mount option 'noacl.'
 	 *   in this case, generic_permission() returns -EOPNOTSUPP.
 	 */
 	if ((write_mask && !au_br_writable(brperm))
