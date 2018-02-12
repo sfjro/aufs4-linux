@@ -36,6 +36,7 @@
 #include <linux/kernel.h>
 #include <linux/completion.h>
 #include <linux/pci.h>
+#include <linux/irq.h>
 #include <linux/spinlock_types.h>
 #include <linux/semaphore.h>
 #include <linux/slab.h>
@@ -1165,6 +1166,10 @@ int mlx5_cmd_create_vport_lag(struct mlx5_core_dev *dev);
 int mlx5_cmd_destroy_vport_lag(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_active(struct mlx5_core_dev *dev);
 struct net_device *mlx5_lag_get_roce_netdev(struct mlx5_core_dev *dev);
+int mlx5_lag_query_cong_counters(struct mlx5_core_dev *dev,
+				 u64 *values,
+				 int num_counters,
+				 size_t *offsets);
 struct mlx5_uars_page *mlx5_get_uars_page(struct mlx5_core_dev *mdev);
 void mlx5_put_uars_page(struct mlx5_core_dev *mdev, struct mlx5_uars_page *up);
 
@@ -1227,7 +1232,23 @@ enum {
 static inline const struct cpumask *
 mlx5_get_vector_affinity(struct mlx5_core_dev *dev, int vector)
 {
-	return pci_irq_get_affinity(dev->pdev, MLX5_EQ_VEC_COMP_BASE + vector);
+	const struct cpumask *mask;
+	struct irq_desc *desc;
+	unsigned int irq;
+	int eqn;
+	int err;
+
+	err = mlx5_vector2eqn(dev, vector, &eqn, &irq);
+	if (err)
+		return NULL;
+
+	desc = irq_to_desc(irq);
+#ifdef CONFIG_GENERIC_IRQ_EFFECTIVE_AFF_MASK
+	mask = irq_data_get_effective_affinity_mask(&desc->irq_data);
+#else
+	mask = desc->irq_common_data.affinity;
+#endif
+	return mask;
 }
 
 #endif /* MLX5_DRIVER_H */
