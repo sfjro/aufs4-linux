@@ -258,7 +258,7 @@ static int do_open_dir(struct file *file, int flags, struct file *h_file)
 	err = 0;
 	mnt = file->f_path.mnt;
 	dentry = file->f_path.dentry;
-	file->f_version = d_inode(dentry)->i_version;
+	file->f_version = inode_query_iversion(d_inode(dentry));
 	bindex = au_dbtop(dentry);
 	au_set_fbtop(file, bindex);
 	btail = au_dbtaildir(dentry);

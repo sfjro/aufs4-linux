@@ -348,7 +348,7 @@ static int hn_job(struct hn_job_args *a)
 		if (vdir)
 			vdir->vd_jiffy = 0;
 		/* IMustLock(a->inode); */
-		/* a->inode->i_version++; */
+		/* inode_inc_iversion(a->inode); */
 	}
 
 	/* can do nothing but warn */

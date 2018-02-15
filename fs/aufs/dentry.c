@@ -322,7 +322,7 @@ static void au_iattr_save(struct au_iattr *ia, struct inode *h_inode)
 	/* ia->i_nlink = h_inode->i_nlink; */
 	ia->i_uid = h_inode->i_uid;
 	ia->i_gid = h_inode->i_gid;
-	ia->i_version = h_inode->i_version;
+	ia->i_version = inode_query_iversion(h_inode);
 /*
 	ia->i_size = h_inode->i_size;
 	ia->i_blocks = h_inode->i_blocks;
@@ -336,7 +336,7 @@ static int au_iattr_test(struct au_iattr *ia, struct inode *h_inode)
 		/* || ia->i_nlink != h_inode->i_nlink */
 		|| !uid_eq(ia->i_uid, h_inode->i_uid)
 		|| !gid_eq(ia->i_gid, h_inode->i_gid)
-		|| ia->i_version != h_inode->i_version
+		|| !inode_eq_iversion(h_inode, ia->i_version)
 /*
 		|| ia->i_size != h_inode->i_size
 		|| ia->i_blocks != h_inode->i_blocks
