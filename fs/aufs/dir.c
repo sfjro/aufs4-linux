@@ -637,7 +637,7 @@ static int sio_test_empty(struct dentry *dentry, struct test_empty_arg *arg)
 	h_dentry = au_h_dptr(dentry, arg->bindex);
 	h_inode = d_inode(h_dentry);
 	/* todo: i_mode changes anytime? */
-	vfsub_inode_lock_shared_nested(h_inode, AuLsc_I_CHILD);
+	inode_lock_shared_nested(h_inode, AuLsc_I_CHILD);
 	err = au_test_h_perm_sio(h_inode, MAY_EXEC | MAY_READ);
 	inode_unlock_shared(h_inode);
 	if (!err)
