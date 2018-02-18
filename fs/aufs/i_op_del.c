@@ -257,7 +257,7 @@ static void epilog(struct inode *dir, struct dentry *dentry,
 	inode->i_ctime = dir->i_ctime;
 
 	au_dir_ts(dir, bindex);
-	dir->i_version++;
+	inode_inc_iversion(dir);
 }
 
 /*

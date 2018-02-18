@@ -66,7 +66,7 @@ struct au_vdir {
 		union au_vdir_deblk_p	p;
 	} vd_last;
 
-	unsigned long	vd_version;
+	u64		vd_version;
 	unsigned int	vd_deblk_sz;
 	unsigned long		vd_jiffy;
 } ____cacheline_aligned_in_smp;

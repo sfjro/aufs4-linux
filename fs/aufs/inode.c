@@ -23,7 +23,7 @@ static void au_refresh_hinode_attr(struct inode *inode, int do_version)
 	au_cpup_attr_all(inode, /*force*/0);
 	au_update_iigen(inode, /*half*/1);
 	if (do_version)
-		inode->i_version++;
+		inode_inc_iversion(inode);
 }
 
 static int au_ii_refresh(struct inode *inode, int *update)

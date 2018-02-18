@@ -643,7 +643,7 @@ static int read_vdir(struct file *file, int may_read)
 		err = 0;
 		allocated = vdir;
 	} else if (may_read
-		   && (inode->i_version != vdir->vd_version
+		   && (!inode_eq_iversion(inode, vdir->vd_version)
 		       || time_after(jiffies, vdir->vd_jiffy + expire))) {
 		do_read = 1;
 		err = reinit_vdir(vdir);
@@ -659,7 +659,7 @@ static int read_vdir(struct file *file, int may_read)
 	err = au_do_read_vdir(&arg);
 	if (!err) {
 		/* file->f_pos = 0; */ /* todo: ctx->pos? */
-		vdir->vd_version = inode->i_version;
+		vdir->vd_version = inode_query_iversion(inode);
 		vdir->vd_last.ul = 0;
 		vdir->vd_last.p.deblk = vdir->vd_deblk[0];
 		if (allocated)
@@ -756,7 +756,7 @@ int au_vdir_init(struct file *file)
 	inode = file_inode(file);
 	err = copy_vdir(vdir_cache, au_ivdir(inode));
 	if (!err) {
-		file->f_version = inode->i_version;
+		file->f_version = inode_query_iversion(inode);
 		if (allocated)
 			au_set_fvdir_cache(file, allocated);
 	} else if (allocated)
