@@ -989,7 +989,7 @@ static struct au_drinfo *au_drinfo_do_load(struct path *h_ppath,
 	drinfo = NULL;
 	unlocked = 0;
 	h_dir = d_inode(h_ppath->dentry);
-	vfsub_inode_lock_shared_nested(h_dir, AuLsc_I_PARENT);
+	inode_lock_shared_nested(h_dir, AuLsc_I_PARENT);
 	infopath.dentry = vfsub_lookup_one_len(whname, h_ppath->dentry,
 					       whnamelen);
 	if (IS_ERR(infopath.dentry)) {

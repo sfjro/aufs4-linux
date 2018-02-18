@@ -23,7 +23,7 @@ static struct inode *aufs_alloc_inode(struct super_block *sb __maybe_unused)
 	c = au_cache_alloc_icntnr();
 	if (c) {
 		au_icntnr_init(c);
-		c->vfs_inode.i_version = 1; /* sigen(sb); */
+		inode_set_iversion(&c->vfs_inode, 1); /* sigen(sb); */
 		c->iinfo.ii_hinode = NULL;
 		return &c->vfs_inode;
 	}
@@ -61,7 +61,7 @@ struct inode *au_iget_locked(struct super_block *sb, ino_t ino)
 	if (!err)
 		err = au_iinfo_init(inode);
 	if (!err)
-		inode->i_version++;
+		inode_inc_iversion(inode);
 	else {
 		iget_failed(inode);
 		inode = ERR_PTR(err);
@@ -233,6 +233,10 @@ static int aufs_show_options(struct seq_file *m, struct dentry *dentry)
 	sb = dentry->d_sb;
 	if (sb->s_flags & SB_POSIXACL)
 		seq_puts(m, ",acl");
+#if 0
+	if (sb->s_flags & SB_I_VERSION)
+		seq_puts(m, ",i_version");
+#endif
 
 	/* lock free root dinfo */
 	si_noflush_read_lock(sb);
@@ -912,6 +916,7 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 
 	/* all timestamps always follow the ones on the branch */
 	sb->s_flags |= SB_NOATIME | SB_NODIRATIME;
+	sb->s_flags |= SB_I_VERSION; /* do we really need this? */
 	sb->s_op = &aufs_sop;
 	sb->s_d_op = &aufs_dop;
 	sb->s_magic = AUFS_SUPER_MAGIC;

@@ -310,7 +310,7 @@ static int hn_job(struct hn_job_args *a)
 	if (au_ftest_hnjob(a->flags, TRYXINO0)
 	    && a->inode
 	    && a->h_inode) {
-		vfsub_inode_lock_shared_nested(a->h_inode, AuLsc_I_CHILD);
+		inode_lock_shared_nested(a->h_inode, AuLsc_I_CHILD);
 		if (!a->h_inode->i_nlink
 		    && !(a->h_inode->i_state & I_LINKABLE))
 			hn_xino(a->inode, a->h_inode); /* ignore this error */
@@ -336,7 +336,7 @@ static int hn_job(struct hn_job_args *a)
 		if (vdir)
 			vdir->vd_jiffy = 0;
 		/* IMustLock(a->inode); */
-		/* a->inode->i_version++; */
+		/* inode_inc_iversion(a->inode); */
 	}
 
 	/* can do nothing but warn */

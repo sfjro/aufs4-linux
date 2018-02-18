@@ -420,7 +420,7 @@ static int au_wr_dir_cpup(struct dentry *dentry, struct dentry *parent,
 	if (!err && add_entry && !au_ftest_wrdir(add_entry, TMPFILE)) {
 		h_parent = au_h_dptr(parent, bcpup);
 		h_dir = d_inode(h_parent);
-		vfsub_inode_lock_shared_nested(h_dir, AuLsc_I_PARENT);
+		inode_lock_shared_nested(h_dir, AuLsc_I_PARENT);
 		err = au_lkup_neg(dentry, bcpup, /*wh*/0);
 		/* todo: no unlock here */
 		inode_unlock_shared(h_dir);
@@ -807,7 +807,7 @@ int au_pin_and_icpup(struct dentry *dentry, struct iattr *ia,
 	a->h_path.dentry = au_h_dptr(dentry, btop);
 	a->h_inode = d_inode(a->h_path.dentry);
 	if (ia && (ia->ia_valid & ATTR_SIZE)) {
-		vfsub_inode_lock_shared_nested(a->h_inode, AuLsc_I_CHILD);
+		inode_lock_shared_nested(a->h_inode, AuLsc_I_CHILD);
 		if (ia->ia_size < i_size_read(a->h_inode))
 			sz = ia->ia_size;
 		inode_unlock_shared(a->h_inode);

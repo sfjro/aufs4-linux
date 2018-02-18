@@ -148,7 +148,7 @@ unsigned int au_sigen_inc(struct super_block *sb)
 	au_update_digen(sb->s_root);
 	inode = d_inode(sb->s_root);
 	au_update_iigen(inode, /*half*/0);
-	inode->i_version++;
+	inode_inc_iversion(inode);
 	return gen;
 }
 
