@@ -47,6 +47,6 @@ __poll_t aufs_poll(struct file *file, poll_table *wait)
 
 out:
 	si_read_unlock(sb);
-	AuTraceErr((int)mask);
+	AuDbg("mask 0x%x\n", mask);
 	return mask;
 }
