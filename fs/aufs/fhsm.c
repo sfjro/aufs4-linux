@@ -182,7 +182,8 @@ static __poll_t au_fhsm_poll(struct file *file, struct poll_table_struct *wait)
 	if (atomic_read(&fhsm->fhsm_readable))
 		mask = EPOLLIN /* | EPOLLRDNORM */;
 
-	AuDbg("mask 0x%x\n", mask);
+	if (!mask)
+		AuDbg("mask 0x%x\n", mask);
 	return mask;
 }
 
