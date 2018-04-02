@@ -739,7 +739,7 @@ static void au_ren_refresh_dir(struct au_ren_args *a)
 	struct inode *dir;
 
 	dir = a->dst_dir;
-	dir->i_version++;
+	inode_inc_iversion(dir);
 	if (au_ftest_ren(a->auren_flags, ISDIR_SRC)) {
 		/* is this updating defined in POSIX? */
 		au_cpup_attr_timesizes(a->src_inode);
@@ -749,7 +749,7 @@ static void au_ren_refresh_dir(struct au_ren_args *a)
 
 	if (a->exchange) {
 		dir = a->src_dir;
-		dir->i_version++;
+		inode_inc_iversion(dir);
 		if (au_ftest_ren(a->auren_flags, ISDIR_DST)) {
 			/* is this updating defined in POSIX? */
 			au_cpup_attr_timesizes(a->dst_inode);
@@ -762,7 +762,7 @@ static void au_ren_refresh_dir(struct au_ren_args *a)
 		return;
 
 	dir = a->src_dir;
-	dir->i_version++;
+	inode_inc_iversion(dir);
 	if (au_ftest_ren(a->auren_flags, ISDIR_SRC))
 		au_cpup_attr_nlink(dir, /*force*/1);
 	au_dir_ts(dir, a->btgt);

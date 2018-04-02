@@ -83,7 +83,7 @@ void au_dpri_vdir(struct au_vdir *vdir)
 		return;
 	}
 
-	dpri("deblk %u, nblk %lu, deblk %p, last{%lu, %p}, ver %lu\n",
+	dpri("deblk %u, nblk %lu, deblk %p, last{%lu, %p}, ver %llu\n",
 	     vdir->vd_deblk_sz, vdir->vd_nblk, vdir->vd_deblk,
 	     vdir->vd_last.ul, vdir->vd_last.p.deblk, vdir->vd_version);
 	for (ul = 0; ul < vdir->vd_nblk; ul++) {
@@ -120,7 +120,7 @@ static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode, int hn,
 	     i_size_read(inode), (unsigned long long)inode->i_blocks,
 	     hn, (long long)timespec_to_ns(&inode->i_ctime) & 0x0ffff,
 	     inode->i_mapping ? inode->i_mapping->nrpages : 0,
-	     inode->i_state, inode->i_flags, inode->i_version,
+	     inode->i_state, inode->i_flags, inode_peek_iversion(inode),
 	     inode->i_generation,
 	     l ? ", wh " : "", l, n);
 	return 0;

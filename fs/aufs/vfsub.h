@@ -13,6 +13,7 @@
 #ifdef __KERNEL__
 
 #include <linux/fs.h>
+#include <linux/iversion.h>
 #include <linux/mount.h>
 #include <linux/posix_acl.h>
 #include <linux/xattr.h>
@@ -41,13 +42,6 @@ enum {
 /* to debug easier, do not make them inlined functions */
 #define MtxMustLock(mtx)	AuDebugOn(!mutex_is_locked(mtx))
 #define IMustLock(i)		AuDebugOn(!inode_is_locked(i))
-
-/* why VFS doesn't define it? */
-static inline
-void vfsub_inode_lock_shared_nested(struct inode *inode, unsigned int sc)
-{
-	down_read_nested(&inode->i_rwsem, sc);
-}
 
 /* ---------------------------------------------------------------------- */
 

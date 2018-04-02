@@ -246,7 +246,7 @@ static int do_open_dir(struct file *file, int flags, struct file *h_file)
 	err = 0;
 	mnt = file->f_path.mnt;
 	dentry = file->f_path.dentry;
-	file->f_version = d_inode(dentry)->i_version;
+	file->f_version = inode_query_iversion(d_inode(dentry));
 	bindex = au_dbtop(dentry);
 	au_set_fbtop(file, bindex);
 	btail = au_dbtaildir(dentry);
@@ -625,7 +625,7 @@ static int sio_test_empty(struct dentry *dentry, struct test_empty_arg *arg)
 	h_dentry = au_h_dptr(dentry, arg->bindex);
 	h_inode = d_inode(h_dentry);
 	/* todo: i_mode changes anytime? */
-	vfsub_inode_lock_shared_nested(h_inode, AuLsc_I_CHILD);
+	inode_lock_shared_nested(h_inode, AuLsc_I_CHILD);
 	err = au_test_h_perm_sio(h_inode, MAY_EXEC | MAY_READ);
 	inode_unlock_shared(h_inode);
 	if (!err)

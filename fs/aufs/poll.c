@@ -10,15 +10,15 @@
 
 #include "aufs.h"
 
-unsigned int aufs_poll(struct file *file, poll_table *wait)
+__poll_t aufs_poll(struct file *file, poll_table *wait)
 {
-	unsigned int mask;
+	__poll_t mask;
 	int err;
 	struct file *h_file;
 	struct super_block *sb;
 
 	/* We should pretend an error happened. */
-	mask = POLLERR /* | POLLIN | POLLOUT */;
+	mask = EPOLLERR /* | EPOLLIN | EPOLLOUT */;
 	sb = file->f_path.dentry->d_sb;
 	si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLMW);
 

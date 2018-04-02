@@ -368,7 +368,7 @@ static int au_do_copy(struct file *dst, struct file *src, loff_t len)
 	else {
 		inode_unlock_shared(h_src_inode);
 		err = au_copy_file(dst, src, len);
-		vfsub_inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
+		inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
 	}
 
 	return err;
@@ -391,7 +391,7 @@ static int au_clone_or_copy(struct file *dst, struct file *src, loff_t len)
 	if (!au_test_nfs(h_src_sb)) {
 		inode_unlock_shared(h_src_inode);
 		err = vfsub_clone_file_range(src, dst, len);
-		vfsub_inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
+		inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
 	} else
 		err = vfsub_clone_file_range(src, dst, len);
 	/* older XFS has a condition in cloning */
@@ -495,7 +495,7 @@ static int au_do_cpup_regular(struct au_cp_generic *cpg,
 		cpg->len = l;
 	if (cpg->len) {
 		/* try stopping to update while we are referencing */
-		vfsub_inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
+		inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
 		au_pin_hdir_unlock(cpg->pin);
 
 		h_path.dentry = au_h_dptr(cpg->dentry, cpg->bsrc);
@@ -506,8 +506,7 @@ static int au_do_cpup_regular(struct au_cp_generic *cpg,
 		else {
 			inode_unlock_shared(h_src_inode);
 			err = vfsub_getattr(&h_path, &h_src_attr->st);
-			vfsub_inode_lock_shared_nested(h_src_inode,
-						       AuLsc_I_CHILD);
+			inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
 		}
 		if (unlikely(err)) {
 			inode_unlock_shared(h_src_inode);

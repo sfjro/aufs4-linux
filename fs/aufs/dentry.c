@@ -82,7 +82,7 @@ real_lookup:
 	    || (d_really_is_positive(dentry) && !d_is_dir(dentry)))
 		goto out; /* success */
 
-	vfsub_inode_lock_shared_nested(h_inode, AuLsc_I_CHILD);
+	inode_lock_shared_nested(h_inode, AuLsc_I_CHILD);
 	opq = au_diropq_test(h_dentry);
 	inode_unlock_shared(h_inode);
 	if (opq > 0)
@@ -167,7 +167,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t btop,
 		}
 
 		h_dir = d_inode(h_parent);
-		vfsub_inode_lock_shared_nested(h_dir, AuLsc_I_PARENT);
+		inode_lock_shared_nested(h_dir, AuLsc_I_PARENT);
 		h_dentry = au_do_lookup(h_parent, dentry, bindex, &args);
 		inode_unlock_shared(h_dir);
 		err = PTR_ERR(h_dentry);
@@ -310,7 +310,7 @@ static void au_iattr_save(struct au_iattr *ia, struct inode *h_inode)
 	/* ia->i_nlink = h_inode->i_nlink; */
 	ia->i_uid = h_inode->i_uid;
 	ia->i_gid = h_inode->i_gid;
-	ia->i_version = h_inode->i_version;
+	ia->i_version = inode_query_iversion(h_inode);
 /*
 	ia->i_size = h_inode->i_size;
 	ia->i_blocks = h_inode->i_blocks;
@@ -324,7 +324,7 @@ static int au_iattr_test(struct au_iattr *ia, struct inode *h_inode)
 		/* || ia->i_nlink != h_inode->i_nlink */
 		|| !uid_eq(ia->i_uid, h_inode->i_uid)
 		|| !gid_eq(ia->i_gid, h_inode->i_gid)
-		|| ia->i_version != h_inode->i_version
+		|| !inode_eq_iversion(h_inode, ia->i_version)
 /*
 		|| ia->i_size != h_inode->i_size
 		|| ia->i_blocks != h_inode->i_blocks
