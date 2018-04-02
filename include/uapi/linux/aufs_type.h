@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: GPL-2.0
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2018 Junjiro R. Okajima
  */
 
 #ifndef __AUFS_TYPE_H__
@@ -27,7 +27,7 @@
 
 #include <linux/limits.h>
 
-#define AUFS_VERSION	"4.x-rcN"
+#define AUFS_VERSION	"4.16"
 
 /* todo? move this to linux-2.6.19/include/magic.h */
 #define AUFS_SUPER_MAGIC	('a' << 24 | 'u' << 16 | 'f' << 8 | 's')
