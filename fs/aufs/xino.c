@@ -949,9 +949,7 @@ static int au_xino_set_br(struct super_block *sb, struct path *path)
 	int err;
 	ino_t ino;
 	aufs_bindex_t bindex, bbot, bshared;
-	struct {
-		struct file *old, *new;
-	} *fpair, *p;
+	struct file **tmp, **p;
 	struct au_branch *br;
 	struct inode *inode;
 	vfs_writef_t writef;
@@ -960,54 +958,53 @@ static int au_xino_set_br(struct super_block *sb, struct path *path)
 
 	err = -ENOMEM;
 	bbot = au_sbbot(sb);
-	fpair = kcalloc(bbot + 1, sizeof(*fpair), GFP_NOFS);
-	if (unlikely(!fpair))
+	tmp = kcalloc(bbot + 1, sizeof(*tmp), GFP_NOFS);
+	if (unlikely(!tmp))
 		goto out;
 
 	inode = d_inode(sb->s_root);
 	ino = AUFS_ROOT_INO;
 	writef = au_sbi(sb)->si_xwrite;
-	for (bindex = 0, p = fpair; bindex <= bbot; bindex++, p++) {
+	for (bindex = 0, p = tmp; bindex <= bbot; bindex++, p++) {
 		bshared = is_sb_shared(sb, bindex, bindex - 1);
 		if (bshared >= 0) {
 			/* shared xino */
-			*p = fpair[bshared];
-			get_file(p->new);
+			*p = tmp[bshared];
+			get_file(*p);
 		}
 
-		if (!p->new) {
+		if (!*p) {
 			/* new xino */
 			br = au_sbr(sb, bindex);
-			p->old = br->br_xino.xi_file;
-			p->new = au_xino_create2(path, br->br_xino.xi_file);
-			err = PTR_ERR(p->new);
-			if (IS_ERR(p->new)) {
-				p->new = NULL;
-				goto out_pair;
+			*p = au_xino_create2(path, br->br_xino.xi_file);
+			err = PTR_ERR(*p);
+			if (IS_ERR(*p)) {
+				*p = NULL;
+				goto out_tmp;
 			}
 		}
 
-		err = au_xino_do_write(writef, p->new,
+		err = au_xino_do_write(writef, *p,
 				       au_h_iptr(inode, bindex)->i_ino, ino);
 		if (unlikely(err))
-			goto out_pair;
+			goto out_tmp;
 	}
 
-	for (bindex = 0, p = fpair; bindex <= bbot; bindex++, p++) {
+	for (bindex = 0, p = tmp; bindex <= bbot; bindex++, p++) {
 		br = au_sbr(sb, bindex);
 		if (br->br_xino.xi_file)
 			fput(br->br_xino.xi_file);
-		get_file(p->new);
-		br->br_xino.xi_file = p->new;
+		get_file(*p);
+		br->br_xino.xi_file = *p;
 	}
 
-out_pair:
-	for (bindex = 0, p = fpair; bindex <= bbot; bindex++, p++)
-		if (p->new)
-			fput(p->new);
+out_tmp:
+	for (bindex = 0, p = tmp; bindex <= bbot; bindex++, p++)
+		if (*p)
+			fput(*p);
 		else
 			break;
-	kfree(fpair);
+	kfree(tmp);
 out:
 	return err;
 }
