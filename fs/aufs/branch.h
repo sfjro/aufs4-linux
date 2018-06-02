@@ -220,33 +220,37 @@ int au_br_stfs(struct au_branch *br, struct aufs_stfs *stfs);
 /* xino.c */
 static const loff_t au_loff_max = LLONG_MAX;
 
-int au_xib_trunc(struct super_block *sb);
+struct file *au_xino_create(struct super_block *sb, char *fname, int silent);
+struct file *au_xino_create2(struct file *base_file, struct file *copy_src);
+
+int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
+		 ino_t *ino);
+int au_xino_write(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
+		  ino_t ino);
 ssize_t xino_fread(vfs_readf_t func, struct file *file, void *buf, size_t size,
 		   loff_t *pos);
 ssize_t xino_fwrite(vfs_writef_t func, struct file *file, void *buf,
 		    size_t size, loff_t *pos);
-struct file *au_xino_create2(struct file *base_file, struct file *copy_src);
-struct file *au_xino_create(struct super_block *sb, char *fname, int silent);
-ino_t au_xino_new_ino(struct super_block *sb);
-void au_xino_delete_inode(struct inode *inode, const int unlinked);
-int au_xino_write(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
-		  ino_t ino);
-int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
-		 ino_t *ino);
-int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t hino,
-	       struct file *base_file, int do_test);
+
+int au_xib_trunc(struct super_block *sb);
 int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex);
 
 struct au_opt_xino;
-int au_xino_set(struct super_block *sb, struct au_opt_xino *xino, int remount);
 void au_xino_clr(struct super_block *sb);
+int au_xino_set(struct super_block *sb, struct au_opt_xino *xino, int remount);
 struct file *au_xino_def(struct super_block *sb);
-int au_xino_path(struct seq_file *seq, struct file *file);
+int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t hino,
+	       struct file *base_file, int do_test);
+
+ino_t au_xino_new_ino(struct super_block *sb);
+void au_xino_delete_inode(struct inode *inode, const int unlinked);
 
 void au_xinondir_leave(struct super_block *sb, aufs_bindex_t bindex,
 		       ino_t h_ino, int idx);
 int au_xinondir_enter(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 		      int *idx);
+
+int au_xino_path(struct seq_file *seq, struct file *file);
 
 /* ---------------------------------------------------------------------- */
 

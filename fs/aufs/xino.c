@@ -23,134 +23,126 @@
 #include <linux/statfs.h>
 #include "aufs.h"
 
-/* todo: unnecessary to support mmap_sem since kernel-space? */
-ssize_t xino_fread(vfs_readf_t func, struct file *file, void *kbuf, size_t size,
-		   loff_t *pos)
+/*
+ * find another branch who is on the same filesystem of the specified
+ * branch{@btgt}. search until @bbot.
+ */
+static int is_sb_shared(struct super_block *sb, aufs_bindex_t btgt,
+			aufs_bindex_t bbot)
 {
-	ssize_t err;
-	mm_segment_t oldfs;
-	union {
-		void *k;
-		char __user *u;
-	} buf;
+	aufs_bindex_t bindex;
+	struct super_block *tgt_sb = au_sbr_sb(sb, btgt);
 
-	buf.k = kbuf;
-	oldfs = get_fs();
-	set_fs(KERNEL_DS);
-	do {
-		/* todo: signal_pending? */
-		err = func(file, buf.u, size, pos);
-	} while (err == -EAGAIN || err == -EINTR);
-	set_fs(oldfs);
-
-#if 0 /* reserved for future use */
-	if (err > 0)
-		fsnotify_access(file->f_path.dentry);
-#endif
-
-	return err;
+	for (bindex = 0; bindex < btgt; bindex++)
+		if (unlikely(tgt_sb == au_sbr_sb(sb, bindex)))
+			return bindex;
+	for (bindex++; bindex <= bbot; bindex++)
+		if (unlikely(tgt_sb == au_sbr_sb(sb, bindex)))
+			return bindex;
+	return -1;
 }
 
 /* ---------------------------------------------------------------------- */
 
-static ssize_t xino_fwrite_wkq(vfs_writef_t func, struct file *file, void *buf,
-			       size_t size, loff_t *pos);
-
-static ssize_t do_xino_fwrite(vfs_writef_t func, struct file *file, void *kbuf,
-			      size_t size, loff_t *pos)
-{
-	ssize_t err;
-	mm_segment_t oldfs;
-	union {
-		void *k;
-		const char __user *u;
-	} buf;
-	int i;
-	const int prevent_endless = 10;
-
-	i = 0;
-	buf.k = kbuf;
-	oldfs = get_fs();
-	set_fs(KERNEL_DS);
-	do {
-		err = func(file, buf.u, size, pos);
-		if (err == -EINTR
-		    && !au_wkq_test()
-		    && fatal_signal_pending(current)) {
-			set_fs(oldfs);
-			err = xino_fwrite_wkq(func, file, kbuf, size, pos);
-			BUG_ON(err == -EINTR);
-			oldfs = get_fs();
-			set_fs(KERNEL_DS);
-		}
-	} while (i++ < prevent_endless
-		 && (err == -EAGAIN || err == -EINTR));
-	set_fs(oldfs);
-
-#if 0 /* reserved for future use */
-	if (err > 0)
-		fsnotify_modify(file->f_path.dentry);
-#endif
-
-	return err;
-}
-
-struct do_xino_fwrite_args {
-	ssize_t *errp;
-	vfs_writef_t func;
-	struct file *file;
-	void *buf;
-	size_t size;
-	loff_t *pos;
+struct au_xino_lock_dir {
+	struct au_hinode *hdir;
+	struct dentry *parent;
+	struct inode *dir;
 };
 
-static void call_do_xino_fwrite(void *args)
+static void au_xino_lock_dir(struct super_block *sb, struct file *xino,
+			     struct au_xino_lock_dir *ldir)
 {
-	struct do_xino_fwrite_args *a = args;
-	*a->errp = do_xino_fwrite(a->func, a->file, a->buf, a->size, a->pos);
+	aufs_bindex_t brid, bindex;
+
+	ldir->hdir = NULL;
+	bindex = -1;
+	brid = au_xino_brid(sb);
+	if (brid >= 0)
+		bindex = au_br_index(sb, brid);
+	if (bindex >= 0) {
+		ldir->hdir = au_hi(d_inode(sb->s_root), bindex);
+		au_hn_inode_lock_nested(ldir->hdir, AuLsc_I_PARENT);
+	} else {
+		ldir->parent = dget_parent(xino->f_path.dentry);
+		ldir->dir = d_inode(ldir->parent);
+		inode_lock_nested(ldir->dir, AuLsc_I_PARENT);
+	}
 }
 
-static ssize_t xino_fwrite_wkq(vfs_writef_t func, struct file *file, void *buf,
-			       size_t size, loff_t *pos)
+static void au_xino_unlock_dir(struct au_xino_lock_dir *ldir)
 {
-	ssize_t err;
-	int wkq_err;
-	struct do_xino_fwrite_args args = {
-		.errp	= &err,
-		.func	= func,
-		.file	= file,
-		.buf	= buf,
-		.size	= size,
-		.pos	= pos
-	};
-
-	/*
-	 * it breaks RLIMIT_FSIZE and normal user's limit,
-	 * users should care about quota and real 'filesystem full.'
-	 */
-	wkq_err = au_wkq_wait(call_do_xino_fwrite, &args);
-	if (unlikely(wkq_err))
-		err = wkq_err;
-
-	return err;
-}
-
-ssize_t xino_fwrite(vfs_writef_t func, struct file *file, void *buf,
-		    size_t size, loff_t *pos)
-{
-	ssize_t err;
-
-	if (rlimit(RLIMIT_FSIZE) == RLIM_INFINITY) {
-		lockdep_off();
-		err = do_xino_fwrite(func, file, buf, size, pos);
-		lockdep_on();
-	} else
-		err = xino_fwrite_wkq(func, file, buf, size, pos);
-
-	return err;
+	if (ldir->hdir)
+		au_hn_inode_unlock(ldir->hdir);
+	else {
+		inode_unlock(ldir->dir);
+		dput(ldir->parent);
+	}
 }
 
 /* ---------------------------------------------------------------------- */
+
+/* create and set a new xino file */
+struct file *au_xino_create(struct super_block *sb, char *fname, int silent)
+{
+	struct file *file;
+	struct dentry *h_parent, *d;
+	struct inode *h_dir, *inode;
+	int err;
+
+	/*
+	 * at mount-time, and the xino file is the default path,
+	 * hnotify is disabled so we have no notify events to ignore.
+	 * when a user specified the xino, we cannot get au_hdir to be ignored.
+	 */
+	file = vfsub_filp_open(fname, O_RDWR | O_CREAT | O_EXCL | O_LARGEFILE
+			       /* | __FMODE_NONOTIFY */,
+			       S_IRUGO | S_IWUGO);
+	if (IS_ERR(file)) {
+		if (!silent)
+			pr_err("open %s(%ld)\n", fname, PTR_ERR(file));
+		return file;
+	}
+
+	/* keep file count */
+	err = 0;
+	inode = file_inode(file);
+	h_parent = dget_parent(file->f_path.dentry);
+	h_dir = d_inode(h_parent);
+	inode_lock_nested(h_dir, AuLsc_I_PARENT);
+	/* mnt_want_write() is unnecessary here */
+	/* no delegation since it is just created */
+	if (inode->i_nlink)
+		err = vfsub_unlink(h_dir, &file->f_path, /*delegated*/NULL,
+				   /*force*/0);
+	inode_unlock(h_dir);
+	dput(h_parent);
+	if (unlikely(err)) {
+		if (!silent)
+			pr_err("unlink %s(%d)\n", fname, err);
+		goto out;
+	}
+
+	err = -EINVAL;
+	d = file->f_path.dentry;
+	if (unlikely(sb == d->d_sb)) {
+		if (!silent)
+			pr_err("%s must be outside\n", fname);
+		goto out;
+	}
+	if (unlikely(au_test_fs_bad_xino(d->d_sb))) {
+		if (!silent)
+			pr_err("xino doesn't support %s(%s)\n",
+			       fname, au_sbtype(d->d_sb));
+		goto out;
+	}
+	return file; /* success */
+
+out:
+	fput(file);
+	file = ERR_PTR(err);
+	return file;
+}
 
 /*
  * create a new xinofile at the same place/path as @base_file.
@@ -227,46 +219,9 @@ out:
 	return file;
 }
 
-struct au_xino_lock_dir {
-	struct au_hinode *hdir;
-	struct dentry *parent;
-	struct inode *dir;
-};
-
-static void au_xino_lock_dir(struct super_block *sb, struct file *xino,
-			     struct au_xino_lock_dir *ldir)
-{
-	aufs_bindex_t brid, bindex;
-
-	ldir->hdir = NULL;
-	bindex = -1;
-	brid = au_xino_brid(sb);
-	if (brid >= 0)
-		bindex = au_br_index(sb, brid);
-	if (bindex >= 0) {
-		ldir->hdir = au_hi(d_inode(sb->s_root), bindex);
-		au_hn_inode_lock_nested(ldir->hdir, AuLsc_I_PARENT);
-	} else {
-		ldir->parent = dget_parent(xino->f_path.dentry);
-		ldir->dir = d_inode(ldir->parent);
-		inode_lock_nested(ldir->dir, AuLsc_I_PARENT);
-	}
-}
-
-static void au_xino_unlock_dir(struct au_xino_lock_dir *ldir)
-{
-	if (ldir->hdir)
-		au_hn_inode_unlock(ldir->hdir);
-	else {
-		inode_unlock(ldir->dir);
-		dput(ldir->parent);
-	}
-}
-
 /* ---------------------------------------------------------------------- */
 
 /* trucate xino files asynchronously */
-
 int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex)
 {
 	int err;
@@ -435,6 +390,50 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
+/*
+ * read @ino from xinofile for the specified branch{@sb, @bindex}
+ * at the position of @h_ino.
+ * if @ino does not exist and @do_new is true, get new one.
+ */
+int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
+		 ino_t *ino)
+{
+	int err;
+	ssize_t sz;
+	loff_t pos;
+	struct file *file;
+	struct au_sbinfo *sbinfo;
+
+	*ino = 0;
+	if (!au_opt_test(au_mntflags(sb), XINO))
+		return 0; /* no xino */
+
+	err = 0;
+	sbinfo = au_sbi(sb);
+	pos = h_ino;
+	if (unlikely(au_loff_max / sizeof(*ino) - 1 < pos)) {
+		AuIOErr1("too large hi%lu\n", (unsigned long)h_ino);
+		return -EFBIG;
+	}
+	pos *= sizeof(*ino);
+
+	file = au_sbr(sb, bindex)->br_xino.xi_file;
+	if (vfsub_f_size_read(file) < pos + sizeof(*ino))
+		return 0; /* no ino */
+
+	sz = xino_fread(sbinfo->si_xread, file, ino, sizeof(*ino), &pos);
+	if (sz == sizeof(*ino))
+		return 0; /* success */
+
+	err = sz;
+	if (unlikely(sz >= 0)) {
+		err = -EIO;
+		AuIOErr("xino read error (%zd)\n", sz);
+	}
+
+	return err;
+}
+
 static int au_xino_do_write(vfs_writef_t write, struct file *file,
 			    ino_t h_ino, ino_t ino)
 {
@@ -491,10 +490,134 @@ int au_xino_write(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 	return -EIO;
 }
 
+/* todo: unnecessary to support mmap_sem since kernel-space? */
+ssize_t xino_fread(vfs_readf_t func, struct file *file, void *kbuf, size_t size,
+		   loff_t *pos)
+{
+	ssize_t err;
+	mm_segment_t oldfs;
+	union {
+		void *k;
+		char __user *u;
+	} buf;
+
+	buf.k = kbuf;
+	oldfs = get_fs();
+	set_fs(KERNEL_DS);
+	do {
+		/* todo: signal_pending? */
+		err = func(file, buf.u, size, pos);
+	} while (err == -EAGAIN || err == -EINTR);
+	set_fs(oldfs);
+
+#if 0 /* reserved for future use */
+	if (err > 0)
+		fsnotify_access(file->f_path.dentry);
+#endif
+
+	return err;
+}
+
+static ssize_t xino_fwrite_wkq(vfs_writef_t func, struct file *file, void *buf,
+			       size_t size, loff_t *pos);
+
+static ssize_t do_xino_fwrite(vfs_writef_t func, struct file *file, void *kbuf,
+			      size_t size, loff_t *pos)
+{
+	ssize_t err;
+	mm_segment_t oldfs;
+	union {
+		void *k;
+		const char __user *u;
+	} buf;
+	int i;
+	const int prevent_endless = 10;
+
+	i = 0;
+	buf.k = kbuf;
+	oldfs = get_fs();
+	set_fs(KERNEL_DS);
+	do {
+		err = func(file, buf.u, size, pos);
+		if (err == -EINTR
+		    && !au_wkq_test()
+		    && fatal_signal_pending(current)) {
+			set_fs(oldfs);
+			err = xino_fwrite_wkq(func, file, kbuf, size, pos);
+			BUG_ON(err == -EINTR);
+			oldfs = get_fs();
+			set_fs(KERNEL_DS);
+		}
+	} while (i++ < prevent_endless
+		 && (err == -EAGAIN || err == -EINTR));
+	set_fs(oldfs);
+
+#if 0 /* reserved for future use */
+	if (err > 0)
+		fsnotify_modify(file->f_path.dentry);
+#endif
+
+	return err;
+}
+
+struct do_xino_fwrite_args {
+	ssize_t *errp;
+	vfs_writef_t func;
+	struct file *file;
+	void *buf;
+	size_t size;
+	loff_t *pos;
+};
+
+static void call_do_xino_fwrite(void *args)
+{
+	struct do_xino_fwrite_args *a = args;
+	*a->errp = do_xino_fwrite(a->func, a->file, a->buf, a->size, a->pos);
+}
+
+static ssize_t xino_fwrite_wkq(vfs_writef_t func, struct file *file, void *buf,
+			       size_t size, loff_t *pos)
+{
+	ssize_t err;
+	int wkq_err;
+	struct do_xino_fwrite_args args = {
+		.errp	= &err,
+		.func	= func,
+		.file	= file,
+		.buf	= buf,
+		.size	= size,
+		.pos	= pos
+	};
+
+	/*
+	 * it breaks RLIMIT_FSIZE and normal user's limit,
+	 * users should care about quota and real 'filesystem full.'
+	 */
+	wkq_err = au_wkq_wait(call_do_xino_fwrite, &args);
+	if (unlikely(wkq_err))
+		err = wkq_err;
+
+	return err;
+}
+
+ssize_t xino_fwrite(vfs_writef_t func, struct file *file, void *buf,
+		    size_t size, loff_t *pos)
+{
+	ssize_t err;
+
+	if (rlimit(RLIMIT_FSIZE) == RLIM_INFINITY) {
+		lockdep_off();
+		err = do_xino_fwrite(func, file, buf, size, pos);
+		lockdep_on();
+	} else
+		err = xino_fwrite_wkq(func, file, buf, size, pos);
+
+	return err;
+}
+
 /* ---------------------------------------------------------------------- */
 
 /* aufs inode number bitmap */
-
 static const int page_bits = (int)PAGE_SIZE * BITS_PER_BYTE;
 static ino_t xib_calc_ino(unsigned long pindex, int bit)
 {
@@ -559,8 +682,6 @@ out:
 	return err;
 }
 
-/* ---------------------------------------------------------------------- */
-
 static void au_xib_clear_bit(struct inode *inode)
 {
 	int err, bit;
@@ -581,307 +702,6 @@ static void au_xib_clear_bit(struct inode *inode)
 		sbinfo->si_xib_next_bit = bit;
 	}
 	mutex_unlock(&sbinfo->si_xib_mtx);
-}
-
-/* for s_op->delete_inode() */
-void au_xino_delete_inode(struct inode *inode, const int unlinked)
-{
-	int err;
-	unsigned int mnt_flags;
-	aufs_bindex_t bindex, bbot, bi;
-	unsigned char try_trunc;
-	struct au_iinfo *iinfo;
-	struct super_block *sb;
-	struct au_hinode *hi;
-	struct inode *h_inode;
-	struct au_branch *br;
-	vfs_writef_t xwrite;
-
-	AuDebugOn(au_is_bad_inode(inode));
-
-	sb = inode->i_sb;
-	mnt_flags = au_mntflags(sb);
-	if (!au_opt_test(mnt_flags, XINO)
-	    || inode->i_ino == AUFS_ROOT_INO)
-		return;
-
-	if (unlinked) {
-		au_xigen_inc(inode);
-		au_xib_clear_bit(inode);
-	}
-
-	iinfo = au_ii(inode);
-	bindex = iinfo->ii_btop;
-	if (bindex < 0)
-		return;
-
-	xwrite = au_sbi(sb)->si_xwrite;
-	try_trunc = !!au_opt_test(mnt_flags, TRUNC_XINO);
-	hi = au_hinode(iinfo, bindex);
-	bbot = iinfo->ii_bbot;
-	for (; bindex <= bbot; bindex++, hi++) {
-		h_inode = hi->hi_inode;
-		if (!h_inode
-		    || (!unlinked && h_inode->i_nlink))
-			continue;
-
-		/* inode may not be revalidated */
-		bi = au_br_index(sb, hi->hi_id);
-		if (bi < 0)
-			continue;
-
-		br = au_sbr(sb, bi);
-		err = au_xino_do_write(xwrite, br->br_xino.xi_file,
-				       h_inode->i_ino, /*ino*/0);
-		if (!err && try_trunc
-		    && au_test_fs_trunc_xino(au_br_sb(br)))
-			xino_try_trunc(sb, br);
-	}
-}
-
-/* get an unused inode number from bitmap */
-ino_t au_xino_new_ino(struct super_block *sb)
-{
-	ino_t ino;
-	unsigned long *p, pindex, ul, pend;
-	struct au_sbinfo *sbinfo;
-	struct file *file;
-	int free_bit, err;
-
-	if (!au_opt_test(au_mntflags(sb), XINO))
-		return iunique(sb, AUFS_FIRST_INO);
-
-	sbinfo = au_sbi(sb);
-	mutex_lock(&sbinfo->si_xib_mtx);
-	p = sbinfo->si_xib_buf;
-	free_bit = sbinfo->si_xib_next_bit;
-	if (free_bit < page_bits && !test_bit(free_bit, p))
-		goto out; /* success */
-	free_bit = find_first_zero_bit(p, page_bits);
-	if (free_bit < page_bits)
-		goto out; /* success */
-
-	pindex = sbinfo->si_xib_last_pindex;
-	for (ul = pindex - 1; ul < ULONG_MAX; ul--) {
-		err = xib_pindex(sb, ul);
-		if (unlikely(err))
-			goto out_err;
-		free_bit = find_first_zero_bit(p, page_bits);
-		if (free_bit < page_bits)
-			goto out; /* success */
-	}
-
-	file = sbinfo->si_xib;
-	pend = vfsub_f_size_read(file) / PAGE_SIZE;
-	for (ul = pindex + 1; ul <= pend; ul++) {
-		err = xib_pindex(sb, ul);
-		if (unlikely(err))
-			goto out_err;
-		free_bit = find_first_zero_bit(p, page_bits);
-		if (free_bit < page_bits)
-			goto out; /* success */
-	}
-	BUG();
-
-out:
-	set_bit(free_bit, p);
-	sbinfo->si_xib_next_bit = free_bit + 1;
-	pindex = sbinfo->si_xib_last_pindex;
-	mutex_unlock(&sbinfo->si_xib_mtx);
-	ino = xib_calc_ino(pindex, free_bit);
-	AuDbg("i%lu\n", (unsigned long)ino);
-	return ino;
-out_err:
-	mutex_unlock(&sbinfo->si_xib_mtx);
-	AuDbg("i0\n");
-	return 0;
-}
-
-/*
- * read @ino from xinofile for the specified branch{@sb, @bindex}
- * at the position of @h_ino.
- * if @ino does not exist and @do_new is true, get new one.
- */
-int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
-		 ino_t *ino)
-{
-	int err;
-	ssize_t sz;
-	loff_t pos;
-	struct file *file;
-	struct au_sbinfo *sbinfo;
-
-	*ino = 0;
-	if (!au_opt_test(au_mntflags(sb), XINO))
-		return 0; /* no xino */
-
-	err = 0;
-	sbinfo = au_sbi(sb);
-	pos = h_ino;
-	if (unlikely(au_loff_max / sizeof(*ino) - 1 < pos)) {
-		AuIOErr1("too large hi%lu\n", (unsigned long)h_ino);
-		return -EFBIG;
-	}
-	pos *= sizeof(*ino);
-
-	file = au_sbr(sb, bindex)->br_xino.xi_file;
-	if (vfsub_f_size_read(file) < pos + sizeof(*ino))
-		return 0; /* no ino */
-
-	sz = xino_fread(sbinfo->si_xread, file, ino, sizeof(*ino), &pos);
-	if (sz == sizeof(*ino))
-		return 0; /* success */
-
-	err = sz;
-	if (unlikely(sz >= 0)) {
-		err = -EIO;
-		AuIOErr("xino read error (%zd)\n", sz);
-	}
-
-	return err;
-}
-
-/* ---------------------------------------------------------------------- */
-
-/* create and set a new xino file */
-
-struct file *au_xino_create(struct super_block *sb, char *fname, int silent)
-{
-	struct file *file;
-	struct dentry *h_parent, *d;
-	struct inode *h_dir, *inode;
-	int err;
-
-	/*
-	 * at mount-time, and the xino file is the default path,
-	 * hnotify is disabled so we have no notify events to ignore.
-	 * when a user specified the xino, we cannot get au_hdir to be ignored.
-	 */
-	file = vfsub_filp_open(fname, O_RDWR | O_CREAT | O_EXCL | O_LARGEFILE
-			       /* | __FMODE_NONOTIFY */,
-			       S_IRUGO | S_IWUGO);
-	if (IS_ERR(file)) {
-		if (!silent)
-			pr_err("open %s(%ld)\n", fname, PTR_ERR(file));
-		return file;
-	}
-
-	/* keep file count */
-	err = 0;
-	inode = file_inode(file);
-	h_parent = dget_parent(file->f_path.dentry);
-	h_dir = d_inode(h_parent);
-	inode_lock_nested(h_dir, AuLsc_I_PARENT);
-	/* mnt_want_write() is unnecessary here */
-	/* no delegation since it is just created */
-	if (inode->i_nlink)
-		err = vfsub_unlink(h_dir, &file->f_path, /*delegated*/NULL,
-				   /*force*/0);
-	inode_unlock(h_dir);
-	dput(h_parent);
-	if (unlikely(err)) {
-		if (!silent)
-			pr_err("unlink %s(%d)\n", fname, err);
-		goto out;
-	}
-
-	err = -EINVAL;
-	d = file->f_path.dentry;
-	if (unlikely(sb == d->d_sb)) {
-		if (!silent)
-			pr_err("%s must be outside\n", fname);
-		goto out;
-	}
-	if (unlikely(au_test_fs_bad_xino(d->d_sb))) {
-		if (!silent)
-			pr_err("xino doesn't support %s(%s)\n",
-			       fname, au_sbtype(d->d_sb));
-		goto out;
-	}
-	return file; /* success */
-
-out:
-	fput(file);
-	file = ERR_PTR(err);
-	return file;
-}
-
-/*
- * find another branch who is on the same filesystem of the specified
- * branch{@btgt}. search until @bbot.
- */
-static int is_sb_shared(struct super_block *sb, aufs_bindex_t btgt,
-			aufs_bindex_t bbot)
-{
-	aufs_bindex_t bindex;
-	struct super_block *tgt_sb = au_sbr_sb(sb, btgt);
-
-	for (bindex = 0; bindex < btgt; bindex++)
-		if (unlikely(tgt_sb == au_sbr_sb(sb, bindex)))
-			return bindex;
-	for (bindex++; bindex <= bbot; bindex++)
-		if (unlikely(tgt_sb == au_sbr_sb(sb, bindex)))
-			return bindex;
-	return -1;
-}
-
-/* ---------------------------------------------------------------------- */
-
-/*
- * initialize the xinofile for the specified branch @br
- * at the place/path where @base_file indicates.
- * test whether another branch is on the same filesystem or not,
- * if @do_test is true.
- */
-int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t h_ino,
-	       struct file *base_file, int do_test)
-{
-	int err;
-	ino_t ino;
-	aufs_bindex_t bbot, bindex;
-	struct au_branch *shared_br, *b;
-	struct file *file;
-	struct super_block *tgt_sb;
-
-	shared_br = NULL;
-	bbot = au_sbbot(sb);
-	if (do_test) {
-		tgt_sb = au_br_sb(br);
-		for (bindex = 0; bindex <= bbot; bindex++) {
-			b = au_sbr(sb, bindex);
-			if (tgt_sb == au_br_sb(b)) {
-				shared_br = b;
-				break;
-			}
-		}
-	}
-
-	if (!shared_br || !shared_br->br_xino.xi_file) {
-		struct au_xino_lock_dir ldir;
-
-		au_xino_lock_dir(sb, base_file, &ldir);
-		/* mnt_want_write() is unnecessary here */
-		file = au_xino_create2(base_file, NULL);
-		au_xino_unlock_dir(&ldir);
-		err = PTR_ERR(file);
-		if (IS_ERR(file))
-			goto out;
-		br->br_xino.xi_file = file;
-	} else {
-		br->br_xino.xi_file = shared_br->br_xino.xi_file;
-		get_file(br->br_xino.xi_file);
-	}
-
-	ino = AUFS_ROOT_INO;
-	err = au_xino_do_write(au_sbi(sb)->si_xwrite, br->br_xino.xi_file,
-			       h_ino, ino);
-	if (unlikely(err)) {
-		fput(br->br_xino.xi_file);
-		br->br_xino.xi_file = NULL;
-	}
-
-out:
-	return err;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1235,8 +1055,6 @@ out:
 	return err;
 }
 
-/* ---------------------------------------------------------------------- */
-
 /*
  * create a xinofile at the default place/path.
  */
@@ -1299,19 +1117,58 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
-int au_xino_path(struct seq_file *seq, struct file *file)
+/*
+ * initialize the xinofile for the specified branch @br
+ * at the place/path where @base_file indicates.
+ * test whether another branch is on the same filesystem or not,
+ * if @do_test is true.
+ */
+int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t h_ino,
+	       struct file *base_file, int do_test)
 {
 	int err;
+	ino_t ino;
+	aufs_bindex_t bbot, bindex;
+	struct au_branch *shared_br, *b;
+	struct file *file;
+	struct super_block *tgt_sb;
 
-	err = au_seq_path(seq, &file->f_path);
-	if (unlikely(err))
-		goto out;
+	shared_br = NULL;
+	bbot = au_sbbot(sb);
+	if (do_test) {
+		tgt_sb = au_br_sb(br);
+		for (bindex = 0; bindex <= bbot; bindex++) {
+			b = au_sbr(sb, bindex);
+			if (tgt_sb == au_br_sb(b)) {
+				shared_br = b;
+				break;
+			}
+		}
+	}
 
-#define Deleted "\\040(deleted)"
-	seq->count -= sizeof(Deleted) - 1;
-	AuDebugOn(memcmp(seq->buf + seq->count, Deleted,
-			 sizeof(Deleted) - 1));
-#undef Deleted
+	if (!shared_br || !shared_br->br_xino.xi_file) {
+		struct au_xino_lock_dir ldir;
+
+		au_xino_lock_dir(sb, base_file, &ldir);
+		/* mnt_want_write() is unnecessary here */
+		file = au_xino_create2(base_file, NULL);
+		au_xino_unlock_dir(&ldir);
+		err = PTR_ERR(file);
+		if (IS_ERR(file))
+			goto out;
+		br->br_xino.xi_file = file;
+	} else {
+		br->br_xino.xi_file = shared_br->br_xino.xi_file;
+		get_file(br->br_xino.xi_file);
+	}
+
+	ino = AUFS_ROOT_INO;
+	err = au_xino_do_write(au_sbi(sb)->si_xwrite, br->br_xino.xi_file,
+			       h_ino, ino);
+	if (unlikely(err)) {
+		fput(br->br_xino.xi_file);
+		br->br_xino.xi_file = NULL;
+	}
 
 out:
 	return err;
@@ -1319,21 +1176,121 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
-void au_xinondir_leave(struct super_block *sb, aufs_bindex_t bindex,
-		       ino_t h_ino, int idx)
+/* get an unused inode number from bitmap */
+ino_t au_xino_new_ino(struct super_block *sb)
 {
-	struct au_xino_file *xino;
+	ino_t ino;
+	unsigned long *p, pindex, ul, pend;
+	struct au_sbinfo *sbinfo;
+	struct file *file;
+	int free_bit, err;
 
-	AuDebugOn(!au_opt_test(au_mntflags(sb), XINO));
-	xino = &au_sbr(sb, bindex)->br_xino;
-	AuDebugOn(idx < 0 || xino->xi_nondir.total <= idx);
+	if (!au_opt_test(au_mntflags(sb), XINO))
+		return iunique(sb, AUFS_FIRST_INO);
 
-	spin_lock(&xino->xi_nondir.spin);
-	AuDebugOn(xino->xi_nondir.array[idx] != h_ino);
-	xino->xi_nondir.array[idx] = 0;
-	spin_unlock(&xino->xi_nondir.spin);
-	wake_up_all(&xino->xi_nondir.wqh);
+	sbinfo = au_sbi(sb);
+	mutex_lock(&sbinfo->si_xib_mtx);
+	p = sbinfo->si_xib_buf;
+	free_bit = sbinfo->si_xib_next_bit;
+	if (free_bit < page_bits && !test_bit(free_bit, p))
+		goto out; /* success */
+	free_bit = find_first_zero_bit(p, page_bits);
+	if (free_bit < page_bits)
+		goto out; /* success */
+
+	pindex = sbinfo->si_xib_last_pindex;
+	for (ul = pindex - 1; ul < ULONG_MAX; ul--) {
+		err = xib_pindex(sb, ul);
+		if (unlikely(err))
+			goto out_err;
+		free_bit = find_first_zero_bit(p, page_bits);
+		if (free_bit < page_bits)
+			goto out; /* success */
+	}
+
+	file = sbinfo->si_xib;
+	pend = vfsub_f_size_read(file) / PAGE_SIZE;
+	for (ul = pindex + 1; ul <= pend; ul++) {
+		err = xib_pindex(sb, ul);
+		if (unlikely(err))
+			goto out_err;
+		free_bit = find_first_zero_bit(p, page_bits);
+		if (free_bit < page_bits)
+			goto out; /* success */
+	}
+	BUG();
+
+out:
+	set_bit(free_bit, p);
+	sbinfo->si_xib_next_bit = free_bit + 1;
+	pindex = sbinfo->si_xib_last_pindex;
+	mutex_unlock(&sbinfo->si_xib_mtx);
+	ino = xib_calc_ino(pindex, free_bit);
+	AuDbg("i%lu\n", (unsigned long)ino);
+	return ino;
+out_err:
+	mutex_unlock(&sbinfo->si_xib_mtx);
+	AuDbg("i0\n");
+	return 0;
 }
+
+/* for s_op->delete_inode() */
+void au_xino_delete_inode(struct inode *inode, const int unlinked)
+{
+	int err;
+	unsigned int mnt_flags;
+	aufs_bindex_t bindex, bbot, bi;
+	unsigned char try_trunc;
+	struct au_iinfo *iinfo;
+	struct super_block *sb;
+	struct au_hinode *hi;
+	struct inode *h_inode;
+	struct au_branch *br;
+	vfs_writef_t xwrite;
+
+	AuDebugOn(au_is_bad_inode(inode));
+
+	sb = inode->i_sb;
+	mnt_flags = au_mntflags(sb);
+	if (!au_opt_test(mnt_flags, XINO)
+	    || inode->i_ino == AUFS_ROOT_INO)
+		return;
+
+	if (unlinked) {
+		au_xigen_inc(inode);
+		au_xib_clear_bit(inode);
+	}
+
+	iinfo = au_ii(inode);
+	bindex = iinfo->ii_btop;
+	if (bindex < 0)
+		return;
+
+	xwrite = au_sbi(sb)->si_xwrite;
+	try_trunc = !!au_opt_test(mnt_flags, TRUNC_XINO);
+	hi = au_hinode(iinfo, bindex);
+	bbot = iinfo->ii_bbot;
+	for (; bindex <= bbot; bindex++, hi++) {
+		h_inode = hi->hi_inode;
+		if (!h_inode
+		    || (!unlinked && h_inode->i_nlink))
+			continue;
+
+		/* inode may not be revalidated */
+		bi = au_br_index(sb, hi->hi_id);
+		if (bi < 0)
+			continue;
+
+		br = au_sbr(sb, bi);
+		err = au_xino_do_write(xwrite, br->br_xino.xi_file,
+				       h_inode->i_ino, /*ino*/0);
+		if (!err && try_trunc
+		    && au_test_fs_trunc_xino(au_br_sb(br)))
+			xino_try_trunc(sb, br);
+	}
+}
+
+/* ---------------------------------------------------------------------- */
 
 static int au_xinondir_find(struct au_xino_file *xino, ino_t h_ino)
 {
@@ -1375,6 +1332,22 @@ out:
 	return err;
 }
 
+void au_xinondir_leave(struct super_block *sb, aufs_bindex_t bindex,
+		       ino_t h_ino, int idx)
+{
+	struct au_xino_file *xino;
+
+	AuDebugOn(!au_opt_test(au_mntflags(sb), XINO));
+	xino = &au_sbr(sb, bindex)->br_xino;
+	AuDebugOn(idx < 0 || xino->xi_nondir.total <= idx);
+
+	spin_lock(&xino->xi_nondir.spin);
+	AuDebugOn(xino->xi_nondir.array[idx] != h_ino);
+	xino->xi_nondir.array[idx] = 0;
+	spin_unlock(&xino->xi_nondir.spin);
+	wake_up_all(&xino->xi_nondir.wqh);
+}
+
 int au_xinondir_enter(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 		      int *idx)
 {
@@ -1410,6 +1383,26 @@ again:
 
 out_unlock:
 	spin_unlock(&xino->xi_nondir.spin);
+out:
+	return err;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int au_xino_path(struct seq_file *seq, struct file *file)
+{
+	int err;
+
+	err = au_seq_path(seq, &file->f_path);
+	if (unlikely(err))
+		goto out;
+
+#define Deleted "\\040(deleted)"
+	seq->count -= sizeof(Deleted) - 1;
+	AuDebugOn(memcmp(seq->buf + seq->count, Deleted,
+			 sizeof(Deleted) - 1));
+#undef Deleted
+
 out:
 	return err;
 }
