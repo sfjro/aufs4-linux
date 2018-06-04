@@ -609,8 +609,8 @@ static int fixup_compat_flock(struct flock *flock)
 	return 0;
 }
 
-COMPAT_SYSCALL_DEFINE3(fcntl64, unsigned int, fd, unsigned int, cmd,
-		       compat_ulong_t, arg)
+static long do_compat_fcntl64(unsigned int fd, unsigned int cmd,
+			     compat_ulong_t arg)
 {
 	struct fd f = fdget_raw(fd);
 	struct flock flock;
@@ -674,6 +674,12 @@ out_put:
 	return err;
 }
 
+COMPAT_SYSCALL_DEFINE3(fcntl64, unsigned int, fd, unsigned int, cmd,
+		       compat_ulong_t, arg)
+{
+	return do_compat_fcntl64(fd, cmd, arg);
+}
+
 COMPAT_SYSCALL_DEFINE3(fcntl, unsigned int, fd, unsigned int, cmd,
 		       compat_ulong_t, arg)
 {
@@ -686,7 +692,7 @@ COMPAT_SYSCALL_DEFINE3(fcntl, unsigned int, fd, unsigned int, cmd,
 	case F_OFD_SETLKW:
 		return -EINVAL;
 	}
-	return compat_sys_fcntl64(fd, cmd, arg);
+	return do_compat_fcntl64(fd, cmd, arg);
 }
 #endif
 
