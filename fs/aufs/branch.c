@@ -420,7 +420,7 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 		brbase = au_sbr(sb, 0);
 		xf = brbase->br_xino.xi_file;
 		h_inode = d_inode(add->path.dentry);
-		err = au_xino_init_br(sb, br, h_inode->i_ino, xf, /*do_test*/1);
+		err = au_xino_init_br(sb, br, h_inode->i_ino, &xf->f_path);
 		if (unlikely(err)) {
 			AuDebugOn(br->br_xino.xi_file);
 			goto out_err;

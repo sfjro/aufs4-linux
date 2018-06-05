@@ -23,24 +23,33 @@
 #include <linux/statfs.h>
 #include "aufs.h"
 
+static aufs_bindex_t sbr_find_shared(struct super_block *sb, aufs_bindex_t btop,
+				     aufs_bindex_t bbot,
+				     struct super_block *h_sb)
+{
+	/* todo: try binary-search if the branches are many */
+	for (; btop <= bbot; btop++)
+		if (h_sb == au_sbr_sb(sb, btop))
+			return btop;
+	return -1;
+}
+
 /*
  * find another branch who is on the same filesystem of the specified
  * branch{@btgt}. search until @bbot.
- * todo: try binary-search if the branches are many.
  */
-static int is_sb_shared(struct super_block *sb, aufs_bindex_t btgt,
-			aufs_bindex_t bbot)
+static aufs_bindex_t is_sb_shared(struct super_block *sb, aufs_bindex_t btgt,
+				  aufs_bindex_t bbot)
 {
 	aufs_bindex_t bindex;
-	struct super_block *tgt_sb = au_sbr_sb(sb, btgt);
+	struct super_block *tgt_sb;
 
-	for (bindex = 0; bindex < btgt; bindex++)
-		if (tgt_sb == au_sbr_sb(sb, bindex))
-			return bindex;
-	for (bindex++; bindex <= bbot; bindex++)
-		if (tgt_sb == au_sbr_sb(sb, bindex))
-			return bindex;
-	return -1;
+	tgt_sb = au_sbr_sb(sb, btgt);
+	bindex = sbr_find_shared(sb, /*btop*/0, btgt - 1, tgt_sb);
+	if (bindex < 0)
+		bindex = sbr_find_shared(sb, btgt + 1, bbot, tgt_sb);
+
+	return bindex;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1138,55 +1147,42 @@ out:
  * initialize the xinofile for the specified branch @br
  * at the place/path where @base_file indicates.
  * test whether another branch is on the same filesystem or not,
- * if @do_test is true.
+ * if found then share the xinofile with another branch.
  */
 int au_xino_init_br(struct super_block *sb, struct au_branch *br, ino_t h_ino,
-		    struct file *base_file, int do_test)
+		    struct path *base)
 {
 	int err;
-	aufs_bindex_t bbot, bindex;
-	struct au_branch *shared_br, *b;
+	aufs_bindex_t bshared;
+	struct au_branch *shared_br;
 	struct file *file;
-	struct path *path;
-	struct super_block *tgt_sb;
+	struct au_xino_lock_dir ldir;
 
-	shared_br = NULL;
-	bbot = au_sbbot(sb);
-	if (do_test) {
-		tgt_sb = au_br_sb(br);
-		for (bindex = 0; bindex <= bbot; bindex++) {
-			b = au_sbr(sb, bindex);
-			if (tgt_sb == au_br_sb(b)) {
-				shared_br = b;
-				break;
-			}
-		}
-	}
-
-	if (!shared_br || !shared_br->br_xino.xi_file) {
-		struct au_xino_lock_dir ldir;
-
-		path = &base_file->f_path;
-		au_xino_lock_dir(sb, path, &ldir);
-		/* mnt_want_write() is unnecessary here */
-		file = au_xino_create2(path, NULL);
-		au_xino_unlock_dir(&ldir);
-		err = PTR_ERR(file);
-		if (IS_ERR(file))
-			goto out;
+	bshared = sbr_find_shared(sb, /*btop*/0, au_sbbot(sb), au_br_sb(br));
+	if (bshared >= 0) {
+		shared_br = au_sbr(sb, bshared);
+		file = shared_br->br_xino.xi_file;
 		br->br_xino.xi_file = file;
-	} else {
-		br->br_xino.xi_file = shared_br->br_xino.xi_file;
-		get_file(br->br_xino.xi_file);
+		get_file(file);
+		goto out_ino;
 	}
 
-	err = au_xino_do_write(au_sbi(sb)->si_xwrite, br->br_xino.xi_file,
-			       h_ino, AUFS_ROOT_INO);
+	au_xino_lock_dir(sb, base, &ldir);
+	/* mnt_want_write() is unnecessary here */
+	file = au_xino_create2(base, NULL);
+	au_xino_unlock_dir(&ldir);
+	err = PTR_ERR(file);
+	if (IS_ERR(file))
+		goto out;
+	br->br_xino.xi_file = file;
+
+out_ino:
+	err = au_xino_do_write(au_sbi(sb)->si_xwrite, file, h_ino,
+			       AUFS_ROOT_INO);
 	if (unlikely(err)) {
-		fput(br->br_xino.xi_file);
+		fput(file);
 		br->br_xino.xi_file = NULL;
 	}
-
 out:
 	return err;
 }
