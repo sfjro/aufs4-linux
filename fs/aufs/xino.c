@@ -857,8 +857,7 @@ static void xino_clear_xib(struct super_block *sb)
 	SiMustWriteLock(sb);
 
 	sbinfo = au_sbi(sb);
-	sbinfo->si_xread = NULL;
-	sbinfo->si_xwrite = NULL;
+	/* unnecessary to clear sbinfo->si_xread and ->si_xwrite */
 	if (sbinfo->si_xib)
 		fput(sbinfo->si_xib);
 	sbinfo->si_xib = NULL;
@@ -914,8 +913,6 @@ out_free:
 out_unset:
 	fput(sbinfo->si_xib);
 	sbinfo->si_xib = NULL;
-	sbinfo->si_xread = NULL;
-	sbinfo->si_xwrite = NULL;
 out:
 	return err;
 }
