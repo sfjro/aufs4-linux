@@ -220,7 +220,7 @@ int au_br_stfs(struct au_branch *br, struct aufs_stfs *stfs);
 static const loff_t au_loff_max = LLONG_MAX;
 
 struct file *au_xino_create(struct super_block *sb, char *fpath, int silent);
-struct file *au_xino_create2(struct file *base_file, struct file *copy_src);
+struct file *au_xino_create2(struct path *base, struct file *copy_src);
 
 int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 		 ino_t *ino);
