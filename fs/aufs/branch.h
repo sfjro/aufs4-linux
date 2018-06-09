@@ -33,7 +33,7 @@
 /* ---------------------------------------------------------------------- */
 
 /* a xino file */
-struct au_xino_file {
+struct au_xino {
 	struct file		*xi_file;
 	struct {
 		spinlock_t		spin;
@@ -99,7 +99,7 @@ enum {
 
 /* protected by superblock rwsem */
 struct au_branch {
-	struct au_xino_file	br_xino;
+	struct au_xino		br_xino;
 
 	aufs_bindex_t		br_id;
 
@@ -112,8 +112,7 @@ struct au_branch {
 	struct au_wbr		*br_wbr;
 	struct au_br_fhsm	*br_fhsm;
 
-	/* xino truncation */
-	atomic_t		br_xino_running;
+	atomic_t		br_xino_truncating;
 
 #ifdef CONFIG_AUFS_HFSNOTIFY
 	struct au_br_hfsnotify	*br_hfsn;
@@ -220,7 +219,7 @@ int au_br_stfs(struct au_branch *br, struct aufs_stfs *stfs);
 /* xino.c */
 static const loff_t au_loff_max = LLONG_MAX;
 
-struct file *au_xino_create(struct super_block *sb, char *fname, int silent);
+struct file *au_xino_create(struct super_block *sb, char *fpath, int silent);
 struct file *au_xino_create2(struct file *base_file, struct file *copy_src);
 
 int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
@@ -237,10 +236,10 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex);
 
 struct au_opt_xino;
 void au_xino_clr(struct super_block *sb);
-int au_xino_set(struct super_block *sb, struct au_opt_xino *xino, int remount);
+int au_xino_set(struct super_block *sb, struct au_opt_xino *xiopt, int remount);
 struct file *au_xino_def(struct super_block *sb);
-int au_xino_br(struct super_block *sb, struct au_branch *br, ino_t hino,
-	       struct file *base_file, int do_test);
+int au_xino_init_br(struct super_block *sb, struct au_branch *br, ino_t hino,
+		    struct file *base_file, int do_test);
 
 ino_t au_xino_new_ino(struct super_block *sb);
 void au_xino_delete_inode(struct inode *inode, const int unlinked);

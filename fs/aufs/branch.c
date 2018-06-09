@@ -390,6 +390,8 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 		      struct au_opt_add *add)
 {
 	int err;
+	struct au_branch *brbase;
+	struct file *xf;
 	struct inode *h_inode;
 
 	err = 0;
@@ -399,7 +401,7 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	br->br_path = add->path; /* set first, path_get() later */
 	spin_lock_init(&br->br_dykey_lock);
 	au_br_count_init(br);
-	atomic_set(&br->br_xino_running, 0);
+	atomic_set(&br->br_xino_truncating, 0);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
 
@@ -415,9 +417,10 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	}
 
 	if (au_opt_test(au_mntflags(sb), XINO)) {
+		brbase = au_sbr(sb, 0);
+		xf = brbase->br_xino.xi_file;
 		h_inode = d_inode(add->path.dentry);
-		err = au_xino_br(sb, br, h_inode->i_ino,
-				 au_sbr(sb, 0)->br_xino.xi_file, /*do_test*/1);
+		err = au_xino_init_br(sb, br, h_inode->i_ino, xf, /*do_test*/1);
 		if (unlikely(err)) {
 			AuDebugOn(br->br_xino.xi_file);
 			goto out_err;
@@ -863,7 +866,7 @@ out:
 }
 
 static void br_del_file(struct file **to_free, unsigned long long opened,
-			  aufs_bindex_t br_id)
+			aufs_bindex_t br_id)
 {
 	unsigned long long ull;
 	aufs_bindex_t bindex, btop, bbot, bfound;

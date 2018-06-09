@@ -222,6 +222,7 @@ static int dbgaufs_xino_open(struct inode *inode, struct file *file)
 	struct super_block *sb;
 	struct file *xf;
 	struct qstr *name;
+	struct au_branch *br;
 
 	err = -ENOENT;
 	xf = NULL;
@@ -238,7 +239,8 @@ static int dbgaufs_xino_open(struct inode *inode, struct file *file)
 	sb = sbinfo->si_sb;
 	si_noflush_read_lock(sb);
 	if (l <= au_sbbot(sb)) {
-		xf = au_sbr(sb, (aufs_bindex_t)l)->br_xino.xi_file;
+		br = au_sbr(sb, (aufs_bindex_t)l);
+		xf = br->br_xino.xi_file;
 		err = dbgaufs_xi_open(xf, file, /*do_fcnt*/1);
 	} else
 		err = -ENOENT;
@@ -259,7 +261,7 @@ void dbgaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 {
 	aufs_bindex_t bbot;
 	struct au_branch *br;
-	struct au_xino_file *xi;
+	struct au_xino *xi;
 
 	if (!au_sbi(sb)->si_dbgaufs)
 		return;
@@ -281,7 +283,7 @@ void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 	struct au_sbinfo *sbinfo;
 	struct dentry *parent;
 	struct au_branch *br;
-	struct au_xino_file *xi;
+	struct au_xino *xi;
 	aufs_bindex_t bbot;
 	char name[sizeof(DbgaufsXi_PREFIX) + 5]; /* "xi" bindex NULL */
 
@@ -396,16 +398,18 @@ int dbgaufs_si_init(struct au_sbinfo *sbinfo)
 		goto out;
 	kobject_get(&sbinfo->si_kobj);
 
-	sbinfo->si_dbgaufs_xib = debugfs_create_file
-		("xib", dbgaufs_mode, sbinfo->si_dbgaufs, sbinfo,
-		 &dbgaufs_xib_fop);
-	if (unlikely(!sbinfo->si_dbgaufs_xib))
-		goto out_dir;
-
+	/* regardless plink/noplink option */
 	sbinfo->si_dbgaufs_plink = debugfs_create_file
 		("plink", dbgaufs_mode, sbinfo->si_dbgaufs, sbinfo,
 		 &dbgaufs_plink_fop);
 	if (unlikely(!sbinfo->si_dbgaufs_plink))
+		goto out_dir;
+
+	/* regardless xino/noxino option */
+	sbinfo->si_dbgaufs_xib = debugfs_create_file
+		("xib", dbgaufs_mode, sbinfo->si_dbgaufs, sbinfo,
+		 &dbgaufs_xib_fop);
+	if (unlikely(!sbinfo->si_dbgaufs_xib))
 		goto out_dir;
 
 	err = dbgaufs_xigen_init(sbinfo);
@@ -415,6 +419,8 @@ int dbgaufs_si_init(struct au_sbinfo *sbinfo)
 out_dir:
 	dbgaufs_si_fin(sbinfo);
 out:
+	if (unlikely(err))
+		pr_err("debugfs/aufs failed\n");
 	return err;
 }
 
