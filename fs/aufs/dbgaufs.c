@@ -325,6 +325,9 @@ void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex, int topdown)
 	struct dentry *parent;
 	aufs_bindex_t bbot;
 
+	if (!au_opt_test(au_mntflags(sb), XINO))
+		return;
+
 	sbinfo = au_sbi(sb);
 	parent = sbinfo->si_dbgaufs;
 	if (!parent)
