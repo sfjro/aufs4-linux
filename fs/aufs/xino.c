@@ -1010,6 +1010,7 @@ void au_xino_clr(struct super_block *sb)
 	au_xigen_clr(sb);
 	xino_clear_xib(sb);
 	xino_clear_br(sb);
+	au_xino_brid_set(sb, -1);
 	sbinfo = au_sbi(sb);
 	/* lvalue, do not call au_mntflags() */
 	au_opt_clr(sbinfo->si_mntflags, XINO);
