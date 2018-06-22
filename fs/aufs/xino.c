@@ -1070,8 +1070,7 @@ int au_xino_set(struct super_block *sb, struct au_opt_xino *xiopt, int remount)
 
 	/* reset all */
 	AuIOErr("failed setting xino(%d).\n", err);
-	au_xigen_clr(sb);
-	xino_clear_xib(sb);
+	au_xino_clr(sb);
 
 out:
 	dput(parent);
