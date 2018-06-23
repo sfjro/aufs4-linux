@@ -466,11 +466,8 @@ static void aufs_put_super(struct super_block *sb)
 	struct au_sbinfo *sbinfo;
 
 	sbinfo = au_sbi(sb);
-	if (!sbinfo)
-		return;
-
-	dbgaufs_si_fin(sbinfo);
-	kobject_put(&sbinfo->si_kobj);
+	if (sbinfo)
+		kobject_put(&sbinfo->si_kobj);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -972,7 +969,6 @@ out_root:
 	dput(root);
 	sb->s_root = NULL;
 out_info:
-	dbgaufs_si_fin(sbinfo);
 	kobject_put(&sbinfo->si_kobj);
 	sb->s_fs_info = NULL;
 out_opts:

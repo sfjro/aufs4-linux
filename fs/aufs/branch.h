@@ -46,9 +46,6 @@ struct au_xino {
 
 	/* todo: make xino files an array to support huge inode number */
 
-#ifdef CONFIG_DEBUG_FS
-	struct dentry		 *xi_dbgaufs;
-#endif
 };
 
 /* File-based Hierarchical Storage Management */
@@ -121,6 +118,10 @@ struct au_branch {
 #ifdef CONFIG_SYSFS
 	/* entries under sysfs per mount-point */
 	struct au_brsysfs	br_sysfs[AuBrSysfs_Last];
+#endif
+
+#ifdef CONFIG_DEBUG_FS
+	struct dentry		 *br_dbgaufs; /* xino */
 #endif
 
 	struct au_dr_br		br_dirren;

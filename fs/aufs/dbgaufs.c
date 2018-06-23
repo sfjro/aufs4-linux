@@ -261,7 +261,6 @@ void dbgaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 {
 	aufs_bindex_t bbot;
 	struct au_branch *br;
-	struct au_xino *xi;
 
 	if (!au_sbi(sb)->si_dbgaufs)
 		return;
@@ -269,12 +268,11 @@ void dbgaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 	bbot = au_sbbot(sb);
 	for (; bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
-		xi = &br->br_xino;
 		/* debugfs acquires the parent i_mutex */
 		lockdep_off();
-		debugfs_remove(xi->xi_dbgaufs);
+		debugfs_remove(br->br_dbgaufs);
 		lockdep_on();
-		xi->xi_dbgaufs = NULL;
+		br->br_dbgaufs = NULL;
 	}
 }
 
@@ -283,7 +281,6 @@ void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 	struct au_sbinfo *sbinfo;
 	struct dentry *parent;
 	struct au_branch *br;
-	struct au_xino *xi;
 	aufs_bindex_t bbot;
 	char name[sizeof(DbgaufsXi_PREFIX) + 5]; /* "xi" bindex NULL */
 
@@ -296,15 +293,14 @@ void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 	for (; bindex <= bbot; bindex++) {
 		snprintf(name, sizeof(name), DbgaufsXi_PREFIX "%d", bindex);
 		br = au_sbr(sb, bindex);
-		xi = &br->br_xino;
-		AuDebugOn(xi->xi_dbgaufs);
+		AuDebugOn(br->br_dbgaufs);
 		/* debugfs acquires the parent i_mutex */
 		lockdep_off();
-		xi->xi_dbgaufs = debugfs_create_file(name, dbgaufs_mode, parent,
+		br->br_dbgaufs = debugfs_create_file(name, dbgaufs_mode, parent,
 						     sbinfo, &dbgaufs_xino_fop);
 		lockdep_on();
 		/* ignore an error */
-		if (unlikely(!xi->xi_dbgaufs))
+		if (unlikely(!br->br_dbgaufs))
 			AuWarn1("failed %s under debugfs\n", name);
 	}
 }
@@ -371,7 +367,6 @@ void dbgaufs_si_fin(struct au_sbinfo *sbinfo)
 
 	debugfs_remove_recursive(sbinfo->si_dbgaufs);
 	sbinfo->si_dbgaufs = NULL;
-	kobject_put(&sbinfo->si_kobj);
 }
 
 int dbgaufs_si_init(struct au_sbinfo *sbinfo)
@@ -396,7 +391,6 @@ int dbgaufs_si_init(struct au_sbinfo *sbinfo)
 	sbinfo->si_dbgaufs = debugfs_create_dir(name, dbgaufs);
 	if (unlikely(!sbinfo->si_dbgaufs))
 		goto out;
-	kobject_get(&sbinfo->si_kobj);
 
 	/* regardless plink/noplink option */
 	sbinfo->si_dbgaufs_plink = debugfs_create_file
