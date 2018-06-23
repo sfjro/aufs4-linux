@@ -240,7 +240,7 @@ static int dbgaufs_xino_open(struct inode *inode, struct file *file)
 	si_noflush_read_lock(sb);
 	if (l <= au_sbbot(sb)) {
 		br = au_sbr(sb, (aufs_bindex_t)l);
-		xf = br->br_xino.xi_file;
+		xf = au_xino_file(br);
 		err = dbgaufs_xi_open(xf, file, /*do_fcnt*/1);
 	} else
 		err = -ENOENT;

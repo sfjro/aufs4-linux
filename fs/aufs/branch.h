@@ -196,6 +196,11 @@ static inline int au_br_test_oflag(int oflag, struct au_branch *br)
 	return err;
 }
 
+static inline struct file *au_xino_file(struct au_branch *br)
+{
+	return br->br_xino.xi_file;
+}
+
 /* ---------------------------------------------------------------------- */
 
 /* branch.c */
@@ -234,6 +239,8 @@ ssize_t xino_fwrite(vfs_writef_t func, struct file *file, void *buf,
 
 int au_xib_trunc(struct super_block *sb);
 int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex);
+
+void au_xino_file_set(struct au_branch *br, struct file *file);
 
 struct au_opt_xino;
 void au_xino_clr(struct super_block *sb);

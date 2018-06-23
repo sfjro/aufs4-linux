@@ -29,6 +29,7 @@
 static void au_br_do_free(struct au_branch *br)
 {
 	int i;
+	struct file *file;
 	struct au_wbr *wbr;
 	struct au_dykey **key;
 
@@ -36,8 +37,9 @@ static void au_br_do_free(struct au_branch *br)
 	/* always, regardless the mount option */
 	au_dr_hino_free(&br->br_dirren);
 
-	if (br->br_xino.xi_file)
-		fput(br->br_xino.xi_file);
+	file = au_xino_file(br);
+	if (file)
+		fput(file);
 	for (i = br->br_xino.xi_nondir.total - 1; i >= 0; i--)
 		AuDebugOn(br->br_xino.xi_nondir.array[i]);
 	kfree(br->br_xino.xi_nondir.array);
@@ -418,11 +420,12 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 
 	if (au_opt_test(au_mntflags(sb), XINO)) {
 		brbase = au_sbr(sb, 0);
-		xf = brbase->br_xino.xi_file;
+		xf = au_xino_file(brbase);
+		AuDebugOn(!xf);
 		h_inode = d_inode(add->path.dentry);
 		err = au_xino_init_br(sb, br, h_inode->i_ino, &xf->f_path);
 		if (unlikely(err)) {
-			AuDebugOn(br->br_xino.xi_file);
+			AuDebugOn(au_xino_file(br));
 			goto out_err;
 		}
 	}
@@ -512,6 +515,7 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 	struct dentry *root, *h_dentry;
 	struct inode *root_inode;
 	struct au_branch *add_branch;
+	struct file *xf;
 
 	root = sb->s_root;
 	root_inode = d_inode(root);
@@ -560,10 +564,11 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 	 */
 	if (au_xino_brid(sb) < 0
 	    && au_br_writable(add_branch->br_perm)
-	    && !au_test_fs_bad_xino(h_dentry->d_sb)
-	    && add_branch->br_xino.xi_file
-	    && add_branch->br_xino.xi_file->f_path.dentry->d_parent == h_dentry)
-		au_xino_brid_set(sb, add_branch->br_id);
+	    && !au_test_fs_bad_xino(h_dentry->d_sb)) {
+		xf = au_xino_file(add_branch);
+		if (xf && xf->f_path.dentry->d_parent == h_dentry)
+			au_xino_brid_set(sb, add_branch->br_id);
+	}
 
 out:
 	return err;
