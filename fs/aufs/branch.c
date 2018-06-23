@@ -542,13 +542,10 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 	}
 
 	add_bindex = add->bindex;
-	if (!remount)
-		au_br_do_add(sb, add_branch, add_bindex);
-	else {
-		sysaufs_brs_del(sb, add_bindex);
-		au_br_do_add(sb, add_branch, add_bindex);
-		sysaufs_brs_add(sb, add_bindex);
-	}
+	sysaufs_brs_del(sb, add_bindex);	/* remove successors */
+	au_br_do_add(sb, add_branch, add_bindex);
+	sysaufs_brs_add(sb, add_bindex);	/* append successors */
+	dbgaufs_brs_add(sb, add_bindex, /*topdown*/0);	/* rename successors */
 
 	h_dentry = add->path.dentry;
 	if (!add_bindex) {
@@ -1098,13 +1095,11 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 		di_write_lock_child(root);
 	}
 
-	if (!remount)
-		au_br_do_del(sb, bindex, br);
-	else {
-		sysaufs_brs_del(sb, bindex);
-		au_br_do_del(sb, bindex, br);
-		sysaufs_brs_add(sb, bindex);
-	}
+	sysaufs_brs_del(sb, bindex);	/* remove successors */
+	dbgaufs_xino_del(br);		/* remove one */
+	au_br_do_del(sb, bindex, br);
+	sysaufs_brs_add(sb, bindex);	/* append successors */
+	dbgaufs_brs_add(sb, bindex, /*topdown*/1);	/* rename successors */
 
 	if (!bindex) {
 		au_cpup_attr_all(d_inode(root), /*force*/1);

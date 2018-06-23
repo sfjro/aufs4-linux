@@ -987,7 +987,6 @@ static struct dentry *aufs_mount(struct file_system_type *fs_type, int flags,
 				 void *raw_data)
 {
 	struct dentry *root;
-	struct super_block *sb;
 
 	/* all timestamps always follow the ones on the branch */
 	/* mnt->mnt_flags |= MNT_NOATIME | MNT_NODIRATIME; */
@@ -995,11 +994,7 @@ static struct dentry *aufs_mount(struct file_system_type *fs_type, int flags,
 	if (IS_ERR(root))
 		goto out;
 
-	sb = root->d_sb;
-	si_write_lock(sb, !AuLock_FLUSH);
-	sysaufs_brs_add(sb, 0);
-	si_write_unlock(sb);
-	au_sbilist_add(sb);
+	au_sbilist_add(root->d_sb);
 
 out:
 	return root;

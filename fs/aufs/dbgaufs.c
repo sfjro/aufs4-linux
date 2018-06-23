@@ -257,6 +257,21 @@ static const struct file_operations dbgaufs_xino_fop = {
 	.read		= dbgaufs_xi_read
 };
 
+void dbgaufs_xino_del(struct au_branch *br)
+{
+	struct dentry *dbgaufs;
+
+	dbgaufs = br->br_dbgaufs;
+	if (!dbgaufs)
+		return;
+
+	br->br_dbgaufs = NULL;
+	/* debugfs acquires the parent i_mutex */
+	lockdep_off();
+	debugfs_remove(dbgaufs);
+	lockdep_on();
+}
+
 void dbgaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 {
 	aufs_bindex_t bbot;
@@ -268,21 +283,47 @@ void dbgaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 	bbot = au_sbbot(sb);
 	for (; bindex <= bbot; bindex++) {
 		br = au_sbr(sb, bindex);
-		/* debugfs acquires the parent i_mutex */
-		lockdep_off();
-		debugfs_remove(br->br_dbgaufs);
-		lockdep_on();
-		br->br_dbgaufs = NULL;
+		dbgaufs_xino_del(br);
 	}
 }
 
-void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
+static void dbgaufs_br_add(struct super_block *sb, aufs_bindex_t bindex,
+			   struct dentry *parent, struct au_sbinfo *sbinfo)
+{
+	struct au_branch *br;
+	struct dentry *d;
+	char name[sizeof(DbgaufsXi_PREFIX) + 5]; /* "xi" bindex NULL */
+
+	snprintf(name, sizeof(name), DbgaufsXi_PREFIX "%d", bindex);
+	br = au_sbr(sb, bindex);
+	if (br->br_dbgaufs) {
+		struct qstr qstr = QSTR_INIT(name, strlen(name));
+
+		if (!au_qstreq(&br->br_dbgaufs->d_name, &qstr)) {
+			/* debugfs acquires the parent i_mutex */
+			lockdep_off();
+			d = debugfs_rename(parent, br->br_dbgaufs, parent, name);
+			lockdep_on();
+			if (unlikely(!d))
+				pr_warn("failed renaming %pd/%s, ignored.\n",
+					parent, name);
+		}
+	} else {
+		lockdep_off();
+		br->br_dbgaufs = debugfs_create_file(name, dbgaufs_mode, parent,
+						     sbinfo, &dbgaufs_xino_fop);
+		lockdep_on();
+		if (unlikely(!br->br_dbgaufs))
+			pr_warn("failed creaiting %pd/%s, ignored.\n",
+				parent, name);
+	}
+}
+
+void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex, int topdown)
 {
 	struct au_sbinfo *sbinfo;
 	struct dentry *parent;
-	struct au_branch *br;
 	aufs_bindex_t bbot;
-	char name[sizeof(DbgaufsXi_PREFIX) + 5]; /* "xi" bindex NULL */
 
 	sbinfo = au_sbi(sb);
 	parent = sbinfo->si_dbgaufs;
@@ -290,19 +331,12 @@ void dbgaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 		return;
 
 	bbot = au_sbbot(sb);
-	for (; bindex <= bbot; bindex++) {
-		snprintf(name, sizeof(name), DbgaufsXi_PREFIX "%d", bindex);
-		br = au_sbr(sb, bindex);
-		AuDebugOn(br->br_dbgaufs);
-		/* debugfs acquires the parent i_mutex */
-		lockdep_off();
-		br->br_dbgaufs = debugfs_create_file(name, dbgaufs_mode, parent,
-						     sbinfo, &dbgaufs_xino_fop);
-		lockdep_on();
-		/* ignore an error */
-		if (unlikely(!br->br_dbgaufs))
-			AuWarn1("failed %s under debugfs\n", name);
-	}
+	if (topdown)
+		for (; bindex <= bbot; bindex++)
+			dbgaufs_br_add(sb, bindex, parent, sbinfo);
+	else
+		for (; bbot >= bindex; bbot--)
+			dbgaufs_br_add(sb, bbot, parent, sbinfo);
 }
 
 /* ---------------------------------------------------------------------- */
