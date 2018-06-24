@@ -45,7 +45,8 @@ static int dbgaufs_xi_release(struct inode *inode __maybe_unused,
 	return 0;
 }
 
-static int dbgaufs_xi_open(struct file *xf, struct file *file, int do_fcnt)
+static int dbgaufs_xi_open(struct file *xf, struct file *file, int do_fcnt,
+			   int cnt)
 {
 	int err;
 	struct kstat st;
@@ -66,9 +67,8 @@ static int dbgaufs_xi_open(struct file *xf, struct file *file, int do_fcnt)
 	if (!err) {
 		if (do_fcnt)
 			p->n = snprintf
-				(p->a, sizeof(p->a), "%ld, %llux%lu %lld\n",
-				 (long)file_count(xf), st.blocks, st.blksize,
-				 (long long)st.size);
+				(p->a, sizeof(p->a), "%d, %llux%lu %lld\n",
+				 cnt, st.blocks, st.blksize, (long long)st.size);
 		else
 			p->n = snprintf(p->a, sizeof(p->a), "%llux%lu %lld\n",
 					st.blocks, st.blksize,
@@ -198,7 +198,7 @@ static int dbgaufs_xib_open(struct inode *inode, struct file *file)
 	sbinfo = inode->i_private;
 	sb = sbinfo->si_sb;
 	si_noflush_read_lock(sb);
-	err = dbgaufs_xi_open(sbinfo->si_xib, file, /*do_fcnt*/0);
+	err = dbgaufs_xi_open(sbinfo->si_xib, file, /*do_fcnt*/0, /*cnt*/0);
 	si_read_unlock(sb);
 	return err;
 }
@@ -241,7 +241,7 @@ static int dbgaufs_xino_open(struct inode *inode, struct file *file)
 	if (l <= au_sbbot(sb)) {
 		br = au_sbr(sb, (aufs_bindex_t)l);
 		xf = au_xino_file(br);
-		err = dbgaufs_xi_open(xf, file, /*do_fcnt*/1);
+		err = dbgaufs_xi_open(xf, file, /*do_fcnt*/1, au_xino_count(br));
 	} else
 		err = -ENOENT;
 	si_read_unlock(sb);
@@ -351,7 +351,7 @@ static int dbgaufs_xigen_open(struct inode *inode, struct file *file)
 	sbinfo = inode->i_private;
 	sb = sbinfo->si_sb;
 	si_noflush_read_lock(sb);
-	err = dbgaufs_xi_open(sbinfo->si_xigen, file, /*do_fcnt*/0);
+	err = dbgaufs_xi_open(sbinfo->si_xigen, file, /*do_fcnt*/0, /*cnt*/0);
 	si_read_unlock(sb);
 	return err;
 }

@@ -29,20 +29,13 @@
 static void au_br_do_free(struct au_branch *br)
 {
 	int i;
-	struct file *file;
 	struct au_wbr *wbr;
 	struct au_dykey **key;
 
 	au_hnotify_fin_br(br);
 	/* always, regardless the mount option */
 	au_dr_hino_free(&br->br_dirren);
-
-	file = au_xino_file(br);
-	if (file)
-		fput(file);
-	for (i = br->br_xino.xi_nondir.total - 1; i >= 0; i--)
-		AuDebugOn(br->br_xino.xi_nondir.array[i]);
-	kfree(br->br_xino.xi_nondir.array);
+	au_xino_put(br);
 
 	AuDebugOn(au_br_count(br));
 	au_br_count_fin(br);
@@ -139,16 +132,12 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 	add_branch = kzalloc(sizeof(*add_branch), GFP_NOFS);
 	if (unlikely(!add_branch))
 		goto out;
-	add_branch->br_xino.xi_nondir.total = 8; /* initial size */
-	add_branch->br_xino.xi_nondir.array
-		= kcalloc(add_branch->br_xino.xi_nondir.total, sizeof(ino_t),
-			  GFP_NOFS);
-	if (unlikely(!add_branch->br_xino.xi_nondir.array))
+	add_branch->br_xino = au_xino_alloc();
+	if (unlikely(!add_branch->br_xino))
 		goto out_br;
-
 	err = au_hnotify_init_br(add_branch, perm);
 	if (unlikely(err))
-		goto out_xinondir;
+		goto out_xino;
 
 	if (au_br_writable(perm)) {
 		/* may be freed separately at changing the branch permission */
@@ -180,8 +169,8 @@ out_wbr:
 	kfree(add_branch->br_wbr);
 out_hnotify:
 	au_hnotify_fin_br(add_branch);
-out_xinondir:
-	kfree(add_branch->br_xino.xi_nondir.array);
+out_xino:
+	au_xino_put(add_branch);
 out_br:
 	kfree(add_branch);
 out:
@@ -397,13 +386,10 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	struct inode *h_inode;
 
 	err = 0;
-	spin_lock_init(&br->br_xino.xi_nondir.spin);
-	init_waitqueue_head(&br->br_xino.xi_nondir.wqh);
 	br->br_perm = add->perm;
 	br->br_path = add->path; /* set first, path_get() later */
 	spin_lock_init(&br->br_dykey_lock);
 	au_br_count_init(br);
-	atomic_set(&br->br_xino_truncating, 0);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
 

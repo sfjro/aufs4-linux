@@ -44,8 +44,11 @@ struct au_xino {
 		wait_queue_head_t	wqh;
 	} xi_nondir;
 
-	/* todo: make xino files an array to support huge inode number */
+	atomic_t		xi_truncating;
 
+	struct kref		xi_kref;
+
+	/* todo: make xino files an array to support huge inode number */
 };
 
 /* File-based Hierarchical Storage Management */
@@ -96,7 +99,7 @@ enum {
 
 /* protected by superblock rwsem */
 struct au_branch {
-	struct au_xino		br_xino;
+	struct au_xino		*br_xino;
 
 	aufs_bindex_t		br_id;
 
@@ -108,8 +111,6 @@ struct au_branch {
 
 	struct au_wbr		*br_wbr;
 	struct au_br_fhsm	*br_fhsm;
-
-	atomic_t		br_xino_truncating;
 
 #ifdef CONFIG_AUFS_HFSNOTIFY
 	struct au_br_hfsnotify	*br_hfsn;
@@ -197,9 +198,34 @@ static inline int au_br_test_oflag(int oflag, struct au_branch *br)
 	return err;
 }
 
+static inline void au_xino_get(struct au_branch *br)
+{
+	struct au_xino *xi;
+
+	xi = br->br_xino;
+	if (xi)
+		kref_get(&xi->xi_kref);
+}
+
+static inline int au_xino_count(struct au_branch *br)
+{
+	int v;
+	struct au_xino *xi;
+
+	v = 0;
+	xi = br->br_xino;
+	if (xi)
+		v = atomic_read(&xi->xi_kref.refcount);
+
+	return v;
+}
+
 static inline struct file *au_xino_file(struct au_branch *br)
 {
-	return br->br_xino.xi_file;
+	struct au_xino *xi;
+
+	xi = br->br_xino;
+	return xi ? xi->xi_file : NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -241,6 +267,8 @@ ssize_t xino_fwrite(vfs_writef_t func, struct file *file, void *buf,
 int au_xib_trunc(struct super_block *sb);
 int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex);
 
+struct au_xino *au_xino_alloc(void);
+int au_xino_put(struct au_branch *br);
 void au_xino_file_set(struct au_branch *br, struct file *file);
 
 struct au_opt_xino;
