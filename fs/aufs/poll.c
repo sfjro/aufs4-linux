@@ -35,7 +35,7 @@ __poll_t aufs_poll(struct file *file, poll_table *wait)
 
 out:
 	si_read_unlock(sb);
-	if (mask & POLLERR)
+	if (mask & EPOLLERR)
 		AuDbg("mask 0x%x\n", mask);
 	return mask;
 }
