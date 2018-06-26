@@ -10,7 +10,7 @@
 
 #include "aufs.h"
 
-__poll_t aufs_poll(struct file *file, poll_table *wait)
+__poll_t aufs_poll(struct file *file, struct poll_table_struct *pt)
 {
 	__poll_t mask;
 	struct file *h_file;
@@ -27,10 +27,7 @@ __poll_t aufs_poll(struct file *file, poll_table *wait)
 		goto out;
 	}
 
-	/* it is not an error if h_file has no operation */
-	mask = DEFAULT_POLLMASK;
-	if (h_file->f_op->poll)
-		mask = h_file->f_op->poll(h_file, wait);
+	mask = vfs_poll(h_file, pt);
 	fput(h_file); /* instead of au_read_post() */
 
 out:

@@ -1322,7 +1322,7 @@ static int au_is_special(struct inode *inode)
 	return (inode->i_mode & (S_IFBLK | S_IFCHR | S_IFIFO | S_IFSOCK));
 }
 
-static int aufs_update_time(struct inode *inode, struct timespec *ts, int flags)
+static int aufs_update_time(struct inode *inode, struct timespec64 *ts, int flags)
 {
 	int err;
 	aufs_bindex_t bindex;
