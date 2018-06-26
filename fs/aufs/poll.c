@@ -25,7 +25,6 @@
 __poll_t aufs_poll(struct file *file, poll_table *wait)
 {
 	__poll_t mask;
-	int err;
 	struct file *h_file;
 	struct super_block *sb;
 
@@ -35,9 +34,10 @@ __poll_t aufs_poll(struct file *file, poll_table *wait)
 	si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLMW);
 
 	h_file = au_read_pre(file, /*keep_fi*/0, /*lsc*/0);
-	err = PTR_ERR(h_file);
-	if (IS_ERR(h_file))
+	if (IS_ERR(h_file)) {
+		AuDbg("h_file %ld\n", PTR_ERR(h_file));
 		goto out;
+	}
 
 	/* it is not an error if h_file has no operation */
 	mask = DEFAULT_POLLMASK;
@@ -47,7 +47,7 @@ __poll_t aufs_poll(struct file *file, poll_table *wait)
 
 out:
 	si_read_unlock(sb);
-	if (mask & POLLERR)
+	if (mask & EPOLLERR)
 		AuDbg("mask 0x%x\n", mask);
 	return mask;
 }
