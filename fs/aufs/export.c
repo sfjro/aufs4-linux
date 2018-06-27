@@ -181,7 +181,7 @@ out:
 	return err;
 }
 
-int au_xigen_set(struct super_block *sb, struct file *base)
+int au_xigen_set(struct super_block *sb, struct path *path)
 {
 	int err;
 	struct au_sbinfo *sbinfo;
@@ -190,7 +190,7 @@ int au_xigen_set(struct super_block *sb, struct file *base)
 	SiMustWriteLock(sb);
 
 	sbinfo = au_sbi(sb);
-	file = au_xino_create2(base, sbinfo->si_xigen);
+	file = au_xino_create2(sb, path, sbinfo->si_xigen);
 	err = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out;
@@ -200,6 +200,7 @@ int au_xigen_set(struct super_block *sb, struct file *base)
 	sbinfo->si_xigen = file;
 
 out:
+	AuTraceErr(err);
 	return err;
 }
 

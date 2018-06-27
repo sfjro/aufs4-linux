@@ -345,7 +345,7 @@ int au_test_nfsd(void);
 void au_export_init(struct super_block *sb);
 void au_xigen_inc(struct inode *inode);
 int au_xigen_new(struct inode *inode);
-int au_xigen_set(struct super_block *sb, struct file *base);
+int au_xigen_set(struct super_block *sb, struct path *path);
 void au_xigen_clr(struct super_block *sb);
 
 static inline int au_busy_or_stale(void)
