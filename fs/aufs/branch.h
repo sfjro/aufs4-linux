@@ -202,7 +202,7 @@ static inline int au_xino_count(struct au_branch *br)
 	v = 0;
 	xi = br->br_xino;
 	if (xi)
-		v = atomic_read(&xi->xi_kref.refcount);
+		v = kref_read(&xi->xi_kref);
 
 	return v;
 }
