@@ -1558,14 +1558,7 @@ static int au_opt_xino(struct super_block *sb, struct au_opt *opt,
 	err = 0;
 	switch (opt->type) {
 	case Opt_xino:
-		err = au_xino_set(sb, &opt->xino,
-				  !!au_ftest_opts(opts->flags, REMOUNT));
-		if (unlikely(err))
-			break;
-
-		*opt_xino = &opt->xino;
 		au_xino_brid_set(sb, -1);
-
 		/* safe d_parent access */
 		parent = opt->xino.file->f_path.dentry->d_parent;
 		root = sb->s_root;
@@ -1577,11 +1570,17 @@ static int au_opt_xino(struct super_block *sb, struct au_opt *opt,
 				break;
 			}
 		}
+
+		err = au_xino_set(sb, &opt->xino,
+				  !!au_ftest_opts(opts->flags, REMOUNT));
+		if (unlikely(err))
+			break;
+
+		*opt_xino = &opt->xino;
 		break;
 
 	case Opt_noxino:
 		au_xino_clr(sb);
-		au_xino_brid_set(sb, -1);
 		*opt_xino = (void *)-1;
 		break;
 	}
