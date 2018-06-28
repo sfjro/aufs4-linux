@@ -293,7 +293,7 @@ static int do_pri_br(aufs_bindex_t bindex, struct au_branch *br)
 	     bindex, br->br_perm, br->br_id, au_br_count(br),
 	     br->br_wbr, au_sbtype(sb), MAJOR(sb->s_dev), MINOR(sb->s_dev),
 	     sb->s_flags, sb->s_count,
-	     atomic_read(&sb->s_active), !!br->br_xino.xi_file);
+	     atomic_read(&sb->s_active), !!au_xino_file(br));
 	return 0;
 
 out:
