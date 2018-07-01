@@ -529,7 +529,7 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 		au_add_nlink(root_inode, d_inode(h_dentry));
 
 	/*
-	 * this test/set prevents aufs from handling unnecesary notify events
+	 * this test/set prevents aufs from handling unnecessary notify events
 	 * of xino files, in case of re-adding a writable branch which was
 	 * once detached from aufs.
 	 */
