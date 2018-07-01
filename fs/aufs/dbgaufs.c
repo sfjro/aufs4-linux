@@ -56,7 +56,8 @@ static int dbgaufs_xi_open(struct file *xf, struct file *file, int do_fcnt,
 		if (do_fcnt)
 			p->n = snprintf
 				(p->a, sizeof(p->a), "%d, %llux%u %lld\n",
-				 cnt, st.blocks, st.blksize, (long long)st.size);
+				 cnt, st.blocks, st.blksize,
+				 (long long)st.size);
 		else
 			p->n = snprintf(p->a, sizeof(p->a), "%llux%u %lld\n",
 					st.blocks, st.blksize,
@@ -229,7 +230,8 @@ static int dbgaufs_xino_open(struct inode *inode, struct file *file)
 	if (l <= au_sbbot(sb)) {
 		br = au_sbr(sb, (aufs_bindex_t)l);
 		xf = au_xino_file(br);
-		err = dbgaufs_xi_open(xf, file, /*do_fcnt*/1, au_xino_count(br));
+		err = dbgaufs_xi_open(xf, file, /*do_fcnt*/1,
+				      au_xino_count(br));
 	} else
 		err = -ENOENT;
 	si_read_unlock(sb);
@@ -290,7 +292,8 @@ static void dbgaufs_br_add(struct super_block *sb, aufs_bindex_t bindex,
 		if (!au_qstreq(&br->br_dbgaufs->d_name, &qstr)) {
 			/* debugfs acquires the parent i_mutex */
 			lockdep_off();
-			d = debugfs_rename(parent, br->br_dbgaufs, parent, name);
+			d = debugfs_rename(parent, br->br_dbgaufs, parent,
+					   name);
 			lockdep_on();
 			if (unlikely(!d))
 				pr_warn("failed renaming %pd/%s, ignored.\n",
