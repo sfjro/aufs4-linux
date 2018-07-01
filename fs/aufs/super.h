@@ -204,7 +204,7 @@ struct au_sbinfo {
 /*
  * set true when refresh_dirs() failed at remount time.
  * then try refreshing dirs at access time again.
- * if it is false, refreshing dirs at access time is unnecesary
+ * if it is false, refreshing dirs at access time is unnecessary
  */
 #define AuSi_FAILED_REFRESH_DIR	1
 #define AuSi_FHSM		(1 << 1)	/* fhsm is active now */
