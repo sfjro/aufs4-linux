@@ -426,7 +426,7 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 	if (tsk->flags & PF_KTHREAD)
 		__fput_sync(file[DST].file);
 	else {
-		/* it happend actually */
+		/* it happened actually */
 		fput(file[DST].file);
 		/*
 		 * too bad.
