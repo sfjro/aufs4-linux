@@ -70,7 +70,7 @@ static aufs_bindex_t is_sb_shared(struct super_block *sb, aufs_bindex_t btgt,
 /* ---------------------------------------------------------------------- */
 
 /*
- * stop unnecesary notify events at creating xino files
+ * stop unnecessary notify events at creating xino files
  */
 struct au_xino_lock_dir {
 	struct au_hinode *hdir;
