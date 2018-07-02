@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (C) 2005-2018 Junjiro R. Okajima
  *
@@ -740,7 +741,7 @@ static void au_remount_refresh(struct super_block *sb, unsigned int do_idop)
 			AuDebugOn(sbi->si_iop_array == aufs_iop);
 			sbi->si_iop_array = aufs_iop;
 		}
-		pr_info("reset to %pf and %pf\n",
+		pr_info("reset to %ps and %ps\n",
 			sb->s_d_op, sbi->si_iop_array);
 	}
 
@@ -960,7 +961,7 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 	au_opts_free(&opts);
 	if (!err && au_ftest_si(sbinfo, NO_DREVAL)) {
 		sb->s_d_op = &aufs_dop_noreval;
-		pr_info("%pf\n", sb->s_d_op);
+		pr_info("%ps\n", sb->s_d_op);
 		au_refresh_dop(root, /*force_reval*/0);
 		sbinfo->si_iop_array = aufs_iop_nogetattr;
 		au_refresh_iop(inode, /*force_getattr*/0);
