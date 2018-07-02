@@ -573,7 +573,7 @@ int vfsub_iterate_dir(struct file *file, struct dir_context *ctx)
 {
 	int err;
 
-	AuDbg("%pD, ctx{%pf, %llu}\n", file, ctx->actor, ctx->pos);
+	AuDbg("%pD, ctx{%ps, %llu}\n", file, ctx->actor, ctx->pos);
 
 	lockdep_off();
 	err = iterate_dir(file, ctx);
