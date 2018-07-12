@@ -1131,51 +1131,65 @@ static void au_xino_set_br_shared(struct super_block *sb, struct au_branch *br,
 	}
 }
 
+struct au_xino_do_set_br {
+	vfs_writef_t writef;
+	struct au_branch *br;
+	ino_t h_ino;
+	aufs_bindex_t bshared;
+};
+
+static int au_xino_do_set_br(struct super_block *sb, struct path *path,
+			     struct au_xino_do_set_br *args)
+{
+	int err;
+	struct file *file;
+
+	if (args->bshared >= 0) {
+		/* shared xino */
+		au_xino_set_br_shared(sb, args->br, args->bshared);
+		file = au_xino_file(args->br);
+		goto out_ino; /* success */
+	}
+
+	/* new xino */
+	file = au_xino_create2(sb, path, au_xino_file(args->br));
+	err = PTR_ERR(file);
+	if (IS_ERR(file))
+		goto out;
+	if (!args->br->br_xino) {
+		err = au_xino_init(args->br, file);
+		fput(file);
+		if (unlikely(err))
+			goto out;
+	} else {
+		au_xino_file_set(args->br, file);
+		fput(file);
+	}
+
+out_ino:
+	err = au_xino_do_write(args->writef, file, args->h_ino, AUFS_ROOT_INO);
+out:
+	AuTraceErr(err);
+	return err;
+}
+
 static int au_xino_set_br(struct super_block *sb, struct path *path)
 {
 	int err;
-	ino_t h_ino;
-	aufs_bindex_t bindex, bbot, bshared;
-	struct file *f;
-	struct au_branch *br;
+	aufs_bindex_t bindex, bbot;
+	struct au_xino_do_set_br args;
 	struct inode *inode;
-	vfs_writef_t writef;
-	struct au_xino *xi;
 
 	SiMustWriteLock(sb);
 
 	bbot = au_sbbot(sb);
 	inode = d_inode(sb->s_root);
-	writef = au_sbi(sb)->si_xwrite;
+	args.writef = au_sbi(sb)->si_xwrite;
 	for (bindex = 0; bindex <= bbot; bindex++) {
-		br = au_sbr(sb, bindex);
-		bshared = is_sb_shared(sb, bindex, bindex - 1);
-		if (bshared >= 0) {
-			/* shared xino */
-			au_xino_set_br_shared(sb, br, bshared);
-			f = au_xino_file(br);
-			goto ino;
-		}
-
-		/* new xino */
-		f = au_xino_create2(sb, path, au_xino_file(br));
-		err = PTR_ERR(f);
-		if (IS_ERR(f))
-			break;
-		xi = br->br_xino;
-		if (!xi) {
-			err = au_xino_init(br, f);
-			fput(f);
-			if (unlikely(err))
-				break;
-		} else {
-			au_xino_file_set(br, f);
-			fput(f);
-		}
-
-	ino: /* indented label */
-		h_ino = au_h_iptr(inode, bindex)->i_ino;
-		err = au_xino_do_write(writef, f, h_ino, AUFS_ROOT_INO);
+		args.h_ino = au_h_iptr(inode, bindex)->i_ino;
+		args.br = au_sbr(sb, bindex);
+		args.bshared = is_sb_shared(sb, bindex, bindex - 1);
+		err = au_xino_do_set_br(sb, path, &args);
 		if (unlikely(err))
 			break;
 	}
@@ -1324,38 +1338,18 @@ int au_xino_init_br(struct super_block *sb, struct au_branch *br, ino_t h_ino,
 		    struct path *base)
 {
 	int err;
-	aufs_bindex_t bshared;
-	struct file *file;
+	struct au_xino_do_set_br args = {
+		.h_ino	= h_ino,
+		.br	= br
+	};
 
-	err = 0;
-	bshared = sbr_find_shared(sb, /*btop*/0, au_sbbot(sb), au_br_sb(br));
-	if (bshared >= 0) {
-		au_xino_set_br_shared(sb, br, bshared);
-		file = au_xino_file(br);
-		goto out_ino; /* success */
-	}
-
-	file = au_xino_create2(sb, base, NULL);
-	err = PTR_ERR(file);
-	if (IS_ERR(file))
-		goto out;
-
-	if (!br->br_xino) {
-		err = au_xino_init(br, file);
-		fput(file);
-		if (unlikely(err))
-			goto out;
-	} else {
-		au_xino_file_set(br, file);
-		fput(file);
-	}
-
-out_ino:
-	err = au_xino_do_write(au_sbi(sb)->si_xwrite, file, h_ino,
-			       AUFS_ROOT_INO);
+	args.writef = au_sbi(sb)->si_xwrite;
+	args.bshared = sbr_find_shared(sb, /*btop*/0, au_sbbot(sb),
+				       au_br_sb(br));
+	err = au_xino_do_set_br(sb, base, &args);
 	if (unlikely(err))
 		au_xino_put(br);
-out:
+
 	return err;
 }
 
