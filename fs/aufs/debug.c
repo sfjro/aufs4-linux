@@ -53,7 +53,7 @@ static struct kernel_param_ops param_ops_atomic_t = {
 
 atomic_t aufs_debug = ATOMIC_INIT(0);
 MODULE_PARM_DESC(debug, "debug print");
-module_param_named(debug, aufs_debug, atomic_t, S_IRUGO | S_IWUSR | S_IWGRP);
+module_param_named(debug, aufs_debug, atomic_t, 0664);
 
 DEFINE_MUTEX(au_dbg_mtx);	/* just to serialize the dbg msgs */
 char *au_plevel = KERN_DEBUG;
