@@ -21,7 +21,7 @@
 
 #include "aufs.h"
 
-#define WH_MASK			S_IRUGO
+#define WH_MASK			0444
 
 /*
  * If a directory contains this file, then it is opaque.  We start with the
@@ -314,10 +314,10 @@ static int au_whdir(struct inode *h_dir, struct path *path)
 
 	err = -EEXIST;
 	if (d_is_negative(path->dentry)) {
-		int mode = S_IRWXU;
+		int mode = 0700;
 
 		if (au_test_nfs(path->dentry->d_sb))
-			mode |= S_IXUGO;
+			mode |= 0111;
 		err = vfsub_mkdir(h_dir, path, mode);
 	} else if (d_is_dir(path->dentry))
 		err = 0;
