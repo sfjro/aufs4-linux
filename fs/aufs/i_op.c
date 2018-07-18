@@ -39,7 +39,7 @@ static int h_permission(struct inode *h_inode, int mask,
 	if (((mask & MAY_EXEC)
 	     && S_ISREG(h_inode->i_mode)
 	     && (path_noexec(h_path)
-		 || !(h_inode->i_mode & S_IXUGO))))
+		 || !(h_inode->i_mode & 0111))))
 		goto out;
 
 	/*
