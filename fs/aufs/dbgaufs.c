@@ -28,7 +28,7 @@
 #endif
 
 static struct dentry *dbgaufs;
-static const mode_t dbgaufs_mode = S_IRUSR | S_IRGRP | S_IROTH;
+static const mode_t dbgaufs_mode = 0444;
 
 /* 20 is max digits length of ulong 64 */
 struct dbgaufs_arg {

@@ -291,7 +291,7 @@ void sysaufs_br_init(struct au_branch *br)
 		attr = &br_sysfs->attr;
 		sysfs_attr_init(attr);
 		attr->name = br_sysfs->name;
-		attr->mode = S_IRUGO;
+		attr->mode = 0444;
 		br_sysfs++;
 	}
 }

@@ -149,12 +149,12 @@ MODULE_VERSION(AUFS_VERSION);
 /* this module parameter has no meaning when SYSFS is disabled */
 int sysaufs_brs = 1;
 MODULE_PARM_DESC(brs, "use <sysfs>/fs/aufs/si_*/brN");
-module_param_named(brs, sysaufs_brs, int, S_IRUGO);
+module_param_named(brs, sysaufs_brs, int, 0444);
 
 /* this module parameter has no meaning when USER_NS is disabled */
 bool au_userns;
 MODULE_PARM_DESC(allow_userns, "allow unprivileged to mount under userns");
-module_param_named(allow_userns, au_userns, bool, S_IRUGO);
+module_param_named(allow_userns, au_userns, bool, 0444);
 
 /* ---------------------------------------------------------------------- */
 
