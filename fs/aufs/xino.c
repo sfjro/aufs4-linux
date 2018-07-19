@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2005-2018 Junjiro R. Okajima
  *
@@ -155,7 +155,7 @@ struct file *au_xino_create(struct super_block *sb, char *fpath, int silent)
 	 */
 	file = vfsub_filp_open(fpath, O_RDWR | O_CREAT | O_EXCL | O_LARGEFILE
 			       /* | __FMODE_NONOTIFY */,
-			       S_IRUGO | S_IWUGO);
+			       0666);
 	if (IS_ERR(file)) {
 		if (!silent)
 			pr_err("open %s(%ld)\n", fpath, PTR_ERR(file));
@@ -231,7 +231,7 @@ struct file *au_xino_create2(struct super_block *sb, struct path *base,
 	}
 
 	/* no need to mnt_want_write() since we call dentry_open() later */
-	err = vfs_create(dir, path.dentry, S_IRUGO | S_IWUGO, NULL);
+	err = vfs_create(dir, path.dentry, 0666, NULL);
 	if (unlikely(err)) {
 		file = ERR_PTR(err);
 		pr_err("%pd create err %d\n", dentry, err);
