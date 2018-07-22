@@ -1067,6 +1067,7 @@ static int au_xino_set_xib(struct super_block *sb, struct path *path)
 	loff_t pos;
 	struct au_sbinfo *sbinfo;
 	struct file *file;
+	struct super_block *xi_sb;
 
 	SiMustWriteLock(sb);
 
@@ -1080,6 +1081,15 @@ static int au_xino_set_xib(struct super_block *sb, struct path *path)
 	sbinfo->si_xib = file;
 	sbinfo->si_xread = vfs_readf(file);
 	sbinfo->si_xwrite = vfs_writef(file);
+	xi_sb = file_inode(file)->i_sb;
+	sbinfo->si_ximaxent = xi_sb->s_maxbytes;
+	if (unlikely(sbinfo->si_ximaxent < PAGE_SIZE)) {
+		err = -EIO;
+		pr_err("s_maxbytes(%llu) on %s is too small\n",
+		       (u64)sbinfo->si_ximaxent, au_sbtype(xi_sb));
+		goto out_unset;
+	}
+	sbinfo->si_ximaxent /= sizeof(ino_t);
 
 	err = -ENOMEM;
 	if (!sbinfo->si_xib_buf)
