@@ -175,8 +175,8 @@ static void ata_eh_handle_port_resume(struct ata_port *ap)
 { }
 #endif /* CONFIG_PM */
 
-static void __ata_ehi_pushv_desc(struct ata_eh_info *ehi, const char *fmt,
-				 va_list args)
+static __printf(2, 0) void __ata_ehi_pushv_desc(struct ata_eh_info *ehi,
+				 const char *fmt, va_list args)
 {
 	ehi->desc_len += vscnprintf(ehi->desc + ehi->desc_len,
 				     ATA_EH_DESC_LEN - ehi->desc_len,
@@ -2264,8 +2264,8 @@ static void ata_eh_link_autopsy(struct ata_link *link)
 		if (dev->flags & ATA_DFLAG_DUBIOUS_XFER)
 			eflags |= ATA_EFLAG_DUBIOUS_XFER;
 		ehc->i.action |= ata_eh_speed_down(dev, eflags, all_err_mask);
+		trace_ata_eh_link_autopsy(dev, ehc->i.action, all_err_mask);
 	}
-	trace_ata_eh_link_autopsy(dev, ehc->i.action, all_err_mask);
 	DPRINTK("EXIT\n");
 }
 

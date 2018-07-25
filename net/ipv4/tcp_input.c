@@ -521,9 +521,6 @@ static void tcp_rcv_rtt_update(struct tcp_sock *tp, u32 sample, int win_dep)
 	u32 new_sample = tp->rcv_rtt_est.rtt_us;
 	long m = sample;
 
-	if (m == 0)
-		m = 1;
-
 	if (new_sample != 0) {
 		/* If we sample in larger samples in the non-timestamp
 		 * case, we could grossly overestimate the RTT especially
@@ -560,6 +557,8 @@ static inline void tcp_rcv_rtt_measure(struct tcp_sock *tp)
 	if (before(tp->rcv_nxt, tp->rcv_rtt_est.seq))
 		return;
 	delta_us = tcp_stamp_us_delta(tp->tcp_mstamp, tp->rcv_rtt_est.time);
+	if (!delta_us)
+		delta_us = 1;
 	tcp_rcv_rtt_update(tp, delta_us, 1);
 
 new_measure:
@@ -576,8 +575,11 @@ static inline void tcp_rcv_rtt_measure_ts(struct sock *sk,
 	    (TCP_SKB_CB(skb)->end_seq -
 	     TCP_SKB_CB(skb)->seq >= inet_csk(sk)->icsk_ack.rcv_mss)) {
 		u32 delta = tcp_time_stamp(tp) - tp->rx_opt.rcv_tsecr;
-		u32 delta_us = delta * (USEC_PER_SEC / TCP_TS_HZ);
+		u32 delta_us;
 
+		if (!delta)
+			delta = 1;
+		delta_us = delta * (USEC_PER_SEC / TCP_TS_HZ);
 		tcp_rcv_rtt_update(tp, delta_us, 0);
 	}
 }
@@ -589,9 +591,10 @@ static inline void tcp_rcv_rtt_measure_ts(struct sock *sk,
 void tcp_rcv_space_adjust(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	u32 copied;
 	int time;
-	int copied;
 
+	tcp_mstamp_refresh(tp);
 	time = tcp_stamp_us_delta(tp->tcp_mstamp, tp->rcvq_space.time);
 	if (time < (tp->rcv_rtt_est.rtt_us >> 3) || tp->rcv_rtt_est.rtt_us == 0)
 		return;
@@ -612,12 +615,13 @@ void tcp_rcv_space_adjust(struct sock *sk)
 
 	if (sysctl_tcp_moderate_rcvbuf &&
 	    !(sk->sk_userlocks & SOCK_RCVBUF_LOCK)) {
-		int rcvwin, rcvmem, rcvbuf;
+		int rcvmem, rcvbuf;
+		u64 rcvwin;
 
 		/* minimal window to cope with packet losses, assuming
 		 * steady state. Add some cushion because of small variations.
 		 */
-		rcvwin = (copied << 1) + 16 * tp->advmss;
+		rcvwin = ((u64)copied << 1) + 16 * tp->advmss;
 
 		/* If rate increased by 25%,
 		 *	assume slow start, rcvwin = 3 * copied
@@ -637,12 +641,13 @@ void tcp_rcv_space_adjust(struct sock *sk)
 		while (tcp_win_from_space(rcvmem) < tp->advmss)
 			rcvmem += 128;
 
-		rcvbuf = min(rcvwin / tp->advmss * rcvmem, sysctl_tcp_rmem[2]);
+		do_div(rcvwin, tp->advmss);
+		rcvbuf = min_t(u64, rcvwin * rcvmem, sysctl_tcp_rmem[2]);
 		if (rcvbuf > sk->sk_rcvbuf) {
 			sk->sk_rcvbuf = rcvbuf;
 
 			/* Make the window clamp follow along.  */
-			tp->window_clamp = rcvwin;
+			tp->window_clamp = tcp_win_from_space(rcvbuf);
 		}
 	}
 	tp->rcvq_space.space = copied;
@@ -1974,6 +1979,8 @@ void tcp_enter_loss(struct sock *sk)
 		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPSACKRENEGING);
 		tp->sacked_out = 0;
 		tp->fackets_out = 0;
+		/* Mark SACK reneging until we recover from this loss event. */
+		tp->is_sack_reneg = 1;
 	}
 	tcp_clear_all_retrans_hints(tp);
 
@@ -2008,11 +2015,6 @@ void tcp_enter_loss(struct sock *sk)
 	/* F-RTO RFC5682 sec 3.1 step 1: retransmit SND.UNA if no previous
 	 * loss recovery is underway except recurring timeout(s) on
 	 * the same SND.UNA (sec 3.2). Disable F-RTO on path MTU probing
-	 *
-	 * In theory F-RTO can be used repeatedly during loss recovery.
-	 * In practice this interacts badly with broken middle-boxes that
-	 * falsely raise the receive window, which results in repeated
-	 * timeouts and stop-and-go behavior.
 	 */
 	tp->frto = sysctl_tcp_frto &&
 		   (new_recovery || icsk->icsk_retransmits) &&
@@ -2427,6 +2429,7 @@ static bool tcp_try_undo_recovery(struct sock *sk)
 		return true;
 	}
 	tcp_set_ca_state(sk, TCP_CA_Open);
+	tp->is_sack_reneg = 0;
 	return false;
 }
 
@@ -2458,8 +2461,10 @@ static bool tcp_try_undo_loss(struct sock *sk, bool frto_undo)
 			NET_INC_STATS(sock_net(sk),
 					LINUX_MIB_TCPSPURIOUSRTOS);
 		inet_csk(sk)->icsk_retransmits = 0;
-		if (frto_undo || tcp_is_sack(tp))
+		if (frto_undo || tcp_is_sack(tp)) {
 			tcp_set_ca_state(sk, TCP_CA_Open);
+			tp->is_sack_reneg = 0;
+		}
 		return true;
 	}
 	return false;
@@ -2691,18 +2696,14 @@ static void tcp_process_loss(struct sock *sk, int flag, bool is_dupack,
 	    tcp_try_undo_loss(sk, false))
 		return;
 
-	/* The ACK (s)acks some never-retransmitted data meaning not all
-	 * the data packets before the timeout were lost. Therefore we
-	 * undo the congestion window and state. This is essentially
-	 * the operation in F-RTO (RFC5682 section 3.1 step 3.b). Since
-	 * a retransmitted skb is permantly marked, we can apply such an
-	 * operation even if F-RTO was not used.
-	 */
-	if ((flag & FLAG_ORIG_SACK_ACKED) &&
-	    tcp_try_undo_loss(sk, tp->undo_marker))
-		return;
-
 	if (tp->frto) { /* F-RTO RFC5682 sec 3.1 (sack enhanced version). */
+		/* Step 3.b. A timeout is spurious if not all data are
+		 * lost, i.e., never-retransmitted data are (s)acked.
+		 */
+		if ((flag & FLAG_ORIG_SACK_ACKED) &&
+		    tcp_try_undo_loss(sk, true))
+			return;
+
 		if (after(tp->snd_nxt, tp->high_seq)) {
 			if (flag & FLAG_DATA_SACKED || is_dupack)
 				tp->frto = 0; /* Step 3.a. loss was real */
@@ -3020,7 +3021,7 @@ void tcp_rearm_rto(struct sock *sk)
 /* Try to schedule a loss probe; if that doesn't work, then schedule an RTO. */
 static void tcp_set_xmit_timer(struct sock *sk)
 {
-	if (!tcp_schedule_loss_probe(sk))
+	if (!tcp_schedule_loss_probe(sk, true))
 		tcp_rearm_rto(sk);
 }
 
@@ -3550,6 +3551,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	struct tcp_sacktag_state sack_state;
 	struct rate_sample rs = { .prior_delivered = 0 };
 	u32 prior_snd_una = tp->snd_una;
+	bool is_sack_reneg = tp->is_sack_reneg;
 	u32 ack_seq = TCP_SKB_CB(skb)->seq;
 	u32 ack = TCP_SKB_CB(skb)->ack_seq;
 	bool is_dupack = false;
@@ -3665,7 +3667,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 
 	delivered = tp->delivered - delivered;	/* freshly ACKed or SACKed */
 	lost = tp->lost - lost;			/* freshly marked lost */
-	tcp_rate_gen(sk, delivered, lost, sack_state.rate);
+	tcp_rate_gen(sk, delivered, lost, is_sack_reneg, sack_state.rate);
 	tcp_cong_control(sk, ack, delivered, flag, sack_state.rate);
 	tcp_xmit_recovery(sk, rexmit);
 	return 1;
@@ -3892,11 +3894,8 @@ const u8 *tcp_parse_md5sig_option(const struct tcphdr *th)
 	int length = (th->doff << 2) - sizeof(*th);
 	const u8 *ptr = (const u8 *)(th + 1);
 
-	/* If the TCP option is too short, we can short cut */
-	if (length < TCPOLEN_MD5SIG)
-		return NULL;
-
-	while (length > 0) {
+	/* If not enough data remaining, we can short cut */
+	while (length >= TCPOLEN_MD5SIG) {
 		int opcode = *ptr++;
 		int opsize;
 
@@ -4011,6 +4010,7 @@ void tcp_reset(struct sock *sk)
 	/* This barrier is coupled with smp_rmb() in tcp_poll() */
 	smp_wmb();
 
+	tcp_write_queue_purge(sk);
 	tcp_done(sk);
 
 	if (!sock_flag(sk, SOCK_DEAD))
@@ -6195,7 +6195,6 @@ struct request_sock *inet_reqsk_alloc(const struct request_sock_ops *ops,
 	if (req) {
 		struct inet_request_sock *ireq = inet_rsk(req);
 
-		kmemcheck_annotate_bitfield(ireq, flags);
 		ireq->ireq_opt = NULL;
 #if IS_ENABLED(CONFIG_IPV6)
 		ireq->pktopts = NULL;

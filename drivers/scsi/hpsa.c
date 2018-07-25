@@ -8638,7 +8638,7 @@ out:
 	kfree(options);
 }
 
-static void hpsa_shutdown(struct pci_dev *pdev)
+static void __hpsa_shutdown(struct pci_dev *pdev)
 {
 	struct ctlr_info *h;
 
@@ -8651,6 +8651,12 @@ static void hpsa_shutdown(struct pci_dev *pdev)
 	h->access.set_intr_mask(h, HPSA_INTR_OFF);
 	hpsa_free_irqs(h);			/* init_one 4 */
 	hpsa_disable_interrupt_mode(h);		/* pci_init 2 */
+}
+
+static void hpsa_shutdown(struct pci_dev *pdev)
+{
+	__hpsa_shutdown(pdev);
+	pci_disable_device(pdev);
 }
 
 static void hpsa_free_device_info(struct ctlr_info *h)
@@ -8684,6 +8690,8 @@ static void hpsa_remove_one(struct pci_dev *pdev)
 	destroy_workqueue(h->rescan_ctlr_wq);
 	destroy_workqueue(h->resubmit_wq);
 
+	hpsa_delete_sas_host(h);
+
 	/*
 	 * Call before disabling interrupts.
 	 * scsi_remove_host can trigger I/O operations especially
@@ -8694,7 +8702,7 @@ static void hpsa_remove_one(struct pci_dev *pdev)
 		scsi_remove_host(h->scsi_host);		/* init_one 8 */
 	/* includes hpsa_free_irqs - init_one 4 */
 	/* includes hpsa_disable_interrupt_mode - pci_init 2 */
-	hpsa_shutdown(pdev);
+	__hpsa_shutdown(pdev);
 
 	hpsa_free_device_info(h);		/* scan */
 
@@ -8717,8 +8725,6 @@ static void hpsa_remove_one(struct pci_dev *pdev)
 	free_percpu(h->lockup_detected);		/* init_one 2 */
 	h->lockup_detected = NULL;			/* init_one 2 */
 	/* (void) pci_disable_pcie_error_reporting(pdev); */	/* init_one 1 */
-
-	hpsa_delete_sas_host(h);
 
 	kfree(h);					/* init_one 1 */
 }
@@ -9207,9 +9213,9 @@ static void hpsa_free_sas_phy(struct hpsa_sas_phy *hpsa_sas_phy)
 	struct sas_phy *phy = hpsa_sas_phy->phy;
 
 	sas_port_delete_phy(hpsa_sas_phy->parent_port->port, phy);
-	sas_phy_free(phy);
 	if (hpsa_sas_phy->added_to_port)
 		list_del(&hpsa_sas_phy->phy_list_entry);
+	sas_phy_delete(phy);
 	kfree(hpsa_sas_phy);
 }
 

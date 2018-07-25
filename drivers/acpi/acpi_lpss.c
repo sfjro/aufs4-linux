@@ -229,11 +229,13 @@ static const struct lpss_device_desc lpt_sdio_dev_desc = {
 
 static const struct lpss_device_desc byt_pwm_dev_desc = {
 	.flags = LPSS_SAVE_CTX,
+	.prv_offset = 0x800,
 	.setup = byt_pwm_setup,
 };
 
 static const struct lpss_device_desc bsw_pwm_dev_desc = {
 	.flags = LPSS_SAVE_CTX | LPSS_NO_D3_DELAY,
+	.prv_offset = 0x800,
 	.setup = bsw_pwm_setup,
 };
 
@@ -465,6 +467,8 @@ static int acpi_lpss_create_device(struct acpi_device *adev,
 	acpi_dev_free_resource_list(&resource_list);
 
 	if (!pdata->mmio_base) {
+		/* Avoid acpi_bus_attach() instantiating a pdev for this dev. */
+		adev->pnp.type.platform_id = 0;
 		/* Skip the device, but continue the namespace scan. */
 		ret = 0;
 		goto err_out;
