@@ -804,6 +804,10 @@ static void dm_old_request_fn(struct request_queue *q)
 		int srcu_idx;
 		struct dm_table *map = dm_get_live_table(md, &srcu_idx);
 
+		if (unlikely(!map)) {
+			dm_put_live_table(md, srcu_idx);
+			return;
+		}
 		ti = dm_table_find_target(map, pos);
 		dm_put_live_table(md, srcu_idx);
 	}
@@ -993,10 +997,14 @@ int dm_mq_init_request_queue(struct mapped_device *md, struct dm_table *t)
 	dm_init_md_queue(md);
 
 	/* backfill 'mq' sysfs registration normally done in blk_register_queue */
-	blk_mq_register_dev(disk_to_dev(md->disk), q);
+	err = blk_mq_register_dev(disk_to_dev(md->disk), q);
+	if (err)
+		goto out_cleanup_queue;
 
 	return 0;
 
+out_cleanup_queue:
+	blk_cleanup_queue(q);
 out_tag_set:
 	blk_mq_free_tag_set(md->tag_set);
 out_kfree_tag_set:
