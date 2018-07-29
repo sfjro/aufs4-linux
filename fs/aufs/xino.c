@@ -307,7 +307,7 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex)
 	blkcnt_t blocks;
 	aufs_bindex_t bbot;
 	struct kstatfs *st;
-	struct au_branch *br;
+	struct au_xino *xi;
 	struct file *new_xino, *file;
 	struct path *path;
 
@@ -320,8 +320,8 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex)
 	bbot = au_sbbot(sb);
 	if (unlikely(bindex < 0 || bbot < bindex))
 		goto out_st;
-	br = au_sbr(sb, bindex);
-	file = au_xino_file(br);
+	xi = au_sbr(sb, bindex)->br_xino;
+	file = au_xino_file(xi);
 	if (!file)
 		goto out_st;
 
@@ -341,7 +341,7 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex)
 		goto out_st;
 	}
 	err = 0;
-	au_xino_file_set(br->br_xino, new_xino);
+	au_xino_file_set(xi, new_xino);
 
 	err = vfs_statfs(&new_xino->f_path, st);
 	if (!err) {
@@ -398,6 +398,7 @@ static int xino_trunc_test(struct super_block *sb, struct au_branch *br)
 	int err;
 	struct kstatfs st;
 	struct au_sbinfo *sbinfo;
+	struct au_xino *xi;
 	struct file *file;
 
 	/* todo: si_xino_expire and the ratio should be customizable */
@@ -407,7 +408,8 @@ static int xino_trunc_test(struct super_block *sb, struct au_branch *br)
 		return 0;
 
 	/* truncation border */
-	file = au_xino_file(br);
+	xi = br->br_xino;
+	file = au_xino_file(xi);
 	AuDebugOn(!file);
 	err = vfs_statfs(&file->f_path, &st);
 	if (unlikely(err)) {
@@ -483,7 +485,7 @@ int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 	pos *= sizeof(*ino);
 
 	br = au_sbr(sb, bindex);
-	file = au_xino_file(br);
+	file = au_xino_file(br->br_xino);
 	if (vfsub_f_size_read(file) < pos + sizeof(*ino))
 		return 0; /* no ino */
 
@@ -533,6 +535,8 @@ int au_xino_write(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 	int err;
 	unsigned int mnt_flags;
 	struct au_branch *br;
+	struct au_xino *xi;
+	struct file *file;
 
 	BUILD_BUG_ON(sizeof(long long) != sizeof(au_loff_max)
 		     || ((loff_t)-1) > 0);
@@ -543,8 +547,9 @@ int au_xino_write(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 		return 0;
 
 	br = au_sbr(sb, bindex);
-	err = au_xino_do_write(au_sbi(sb)->si_xwrite, au_xino_file(br), h_ino,
-			       ino);
+	xi = br->br_xino;
+	file = au_xino_file(xi);
+	err = au_xino_do_write(au_sbi(sb)->si_xwrite, file, h_ino, ino);
 	if (!err) {
 		if (au_opt_test(mnt_flags, TRUNC_XINO)
 		    && au_test_fs_trunc_xino(au_br_sb(br)))
@@ -882,6 +887,8 @@ static int xib_restore(struct super_block *sb)
 	aufs_bindex_t bindex, bbot;
 	void *page;
 	struct au_branch *br;
+	struct au_xino *xi;
+	struct file *file;
 
 	err = -ENOMEM;
 	page = (void *)__get_free_page(GFP_NOFS);
@@ -893,7 +900,9 @@ static int xib_restore(struct super_block *sb)
 	for (bindex = 0; !err && bindex <= bbot; bindex++)
 		if (!bindex || is_sb_shared(sb, bindex, bindex - 1) < 0) {
 			br = au_sbr(sb, bindex);
-			err = do_xib_restore(sb, au_xino_file(br), page);
+			xi = br->br_xino;
+			file = au_xino_file(xi);
+			err = do_xib_restore(sb, file, page);
 		} else
 			AuDbg("skip shared b%d\n", bindex);
 	free_page((unsigned long)page);
@@ -1154,12 +1163,12 @@ static int au_xino_do_set_br(struct super_block *sb, struct path *path,
 		/* shared xino */
 		au_xino_set_br_shared(sb, br, args->bshared);
 		xi = br->br_xino;
-		file = au_xino_file(br);
+		file = au_xino_file(xi);
 		goto out_ino; /* success */
 	}
 
 	/* new xino */
-	file = au_xino_create2(sb, path, au_xino_file(br));
+	file = au_xino_create2(sb, path, au_xino_file(xi));
 	err = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out;
@@ -1435,6 +1444,7 @@ void au_xino_delete_inode(struct inode *inode, const int unlinked)
 	struct inode *h_inode;
 	struct au_branch *br;
 	vfs_writef_t xwrite;
+	struct file *file;
 
 	AuDebugOn(au_is_bad_inode(inode));
 
@@ -1470,8 +1480,8 @@ void au_xino_delete_inode(struct inode *inode, const int unlinked)
 			continue;
 
 		br = au_sbr(sb, bi);
-		err = au_xino_do_write(xwrite, au_xino_file(br),
-				       h_inode->i_ino, /*ino*/0);
+		file = au_xino_file(br->br_xino);
+		err = au_xino_do_write(xwrite, file, h_inode->i_ino, /*ino*/0);
 		if (!err && try_trunc
 		    && au_test_fs_trunc_xino(au_br_sb(br)))
 			xino_try_trunc(sb, br);

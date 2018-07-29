@@ -221,14 +221,6 @@ static inline int au_xino_count(struct au_branch *br)
 	return v;
 }
 
-static inline struct file *au_xino_file(struct au_branch *br)
-{
-	struct au_xino *xi;
-
-	xi = br->br_xino;
-	return xi ? xi->xi_file : NULL;
-}
-
 /* ---------------------------------------------------------------------- */
 
 /* branch.c */
@@ -287,6 +279,13 @@ int au_xinondir_enter(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 		      int *idx);
 
 int au_xino_path(struct seq_file *seq, struct file *file);
+
+/* ---------------------------------------------------------------------- */
+
+static inline struct file *au_xino_file(struct au_xino *xi)
+{
+	return xi ? xi->xi_file : NULL;
+}
 
 /* ---------------------------------------------------------------------- */
 

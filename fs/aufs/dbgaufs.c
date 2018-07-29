@@ -222,6 +222,7 @@ static int dbgaufs_xino_open(struct inode *inode, struct file *file)
 	long l;
 	struct au_sbinfo *sbinfo;
 	struct super_block *sb;
+	struct au_xino *xi;
 	struct file *xf;
 	struct qstr *name;
 	struct au_branch *br;
@@ -242,7 +243,8 @@ static int dbgaufs_xino_open(struct inode *inode, struct file *file)
 	si_noflush_read_lock(sb);
 	if (l <= au_sbbot(sb)) {
 		br = au_sbr(sb, (aufs_bindex_t)l);
-		xf = au_xino_file(br);
+		xi = br->br_xino;
+		xf = au_xino_file(xi);
 		err = dbgaufs_xi_open(xf, file, /*do_fcnt*/1,
 				      au_xino_count(br));
 	} else
