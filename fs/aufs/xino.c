@@ -282,6 +282,19 @@ out:
 	return file;
 }
 
+static void au_xino_file_set(struct au_xino *xi, struct file *file)
+{
+	struct file *f;
+
+	if (file)
+		get_file(file);
+	AuDebugOn(!xi);
+	f = xi->xi_file;
+	if (f)
+		fput(f);
+	xi->xi_file = file;
+}
+
 /* ---------------------------------------------------------------------- */
 
 /*
@@ -328,7 +341,7 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex)
 		goto out_st;
 	}
 	err = 0;
-	au_xino_file_set(br, new_xino);
+	au_xino_file_set(br->br_xino, new_xino);
 
 	err = vfs_statfs(&new_xino->f_path, st);
 	if (!err) {
@@ -1016,21 +1029,6 @@ int au_xino_put(struct au_branch *br)
 	return ret;
 }
 
-void au_xino_file_set(struct au_branch *br, struct file *file)
-{
-	struct au_xino *xi;
-	struct file *f;
-
-	if (file)
-		get_file(file);
-	xi = br->br_xino;
-	AuDebugOn(!xi);
-	f = xi->xi_file;
-	if (f)
-		fput(f);
-	xi->xi_file = file;
-}
-
 /* ---------------------------------------------------------------------- */
 
 /*
@@ -1146,27 +1144,32 @@ static int au_xino_do_set_br(struct super_block *sb, struct path *path,
 			     struct au_xino_do_set_br *args)
 {
 	int err;
+	struct au_branch *br;
+	struct au_xino *xi;
 	struct file *file;
 
+	br = args->br;
+	xi = br->br_xino;
 	if (args->bshared >= 0) {
 		/* shared xino */
-		au_xino_set_br_shared(sb, args->br, args->bshared);
-		file = au_xino_file(args->br);
+		au_xino_set_br_shared(sb, br, args->bshared);
+		xi = br->br_xino;
+		file = au_xino_file(br);
 		goto out_ino; /* success */
 	}
 
 	/* new xino */
-	file = au_xino_create2(sb, path, au_xino_file(args->br));
+	file = au_xino_create2(sb, path, au_xino_file(br));
 	err = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out;
-	if (!args->br->br_xino) {
-		err = au_xino_init(args->br, file);
+	if (!xi) {
+		err = au_xino_init(br, file);
 		fput(file);
 		if (unlikely(err))
 			goto out;
 	} else {
-		au_xino_file_set(args->br, file);
+		au_xino_file_set(xi, file);
 		fput(file);
 	}
 

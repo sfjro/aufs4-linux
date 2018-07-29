@@ -270,7 +270,6 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex);
 
 struct au_xino *au_xino_alloc(void);
 int au_xino_put(struct au_branch *br);
-void au_xino_file_set(struct au_branch *br, struct file *file);
 
 struct au_opt_xino;
 void au_xino_clr(struct super_block *sb);
