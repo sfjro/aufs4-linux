@@ -319,6 +319,7 @@ static int au_xino_file_set(struct au_xino *xi, int idx, struct file *file)
 				 sizeof(*xi->xi_file) * (idx + 1),
 				 GFP_NOFS, /*may_shrink*/0);
 		if (p) {
+			MtxMustLock(&xi->xi_mtx);
 			xi->xi_file = p;
 			xi->xi_nfile = idx + 1;
 		} else {
@@ -585,6 +586,115 @@ static void au_xi_calc(struct super_block *sb, ino_t h_ino,
 	calc->pos *= sizeof(ino_t);
 }
 
+static int au_xino_do_new_async(struct super_block *sb, struct au_branch *br,
+				struct au_xi_calc *calc)
+{
+	int err;
+	struct file *file;
+	struct au_xino *xi = br->br_xino;
+	struct au_xi_new xinew = {
+		.xi = xi
+	};
+
+	SiMustAnyLock(sb);
+
+	err = 0;
+	if (!xi)
+		goto out;
+
+	mutex_lock(&xi->xi_mtx);
+	file = au_xino_file(xi, calc->idx);
+	if (file)
+		goto out_mtx;
+
+	file = au_xino_file(xi, /*idx*/-1);
+	AuDebugOn(!file);
+	xinew.idx = calc->idx;
+	xinew.base = &file->f_path;
+	/* xinew.copy_src = NULL; */
+	file = au_xi_new(sb, &xinew);
+	if (IS_ERR(file))
+		err = PTR_ERR(file);
+
+out_mtx:
+	mutex_unlock(&xi->xi_mtx);
+out:
+	return err;
+}
+
+struct au_xino_do_new_async_args {
+	struct super_block *sb;
+	struct au_branch *br;
+	struct au_xi_calc calc;
+	ino_t ino;
+};
+
+static int au_xino_do_write(vfs_writef_t write, struct file *file,
+			    struct au_xi_calc *calc, ino_t ino);
+
+static void au_xino_call_do_new_async(void *args)
+{
+	struct au_xino_do_new_async_args *a = args;
+	struct au_branch *br;
+	struct super_block *sb;
+	struct au_sbinfo *sbi;
+	struct inode *root;
+	struct file *file;
+	int err;
+
+	br = a->br;
+	sb = a->sb;
+	sbi = au_sbi(sb);
+	si_noflush_read_lock(sb);
+	root = d_inode(sb->s_root);
+	ii_read_lock_child(root);
+	err = au_xino_do_new_async(sb, br, &a->calc);
+	if (!err) {
+		file = au_xino_file(br->br_xino, a->calc.idx);
+		if (file)
+			err = au_xino_do_write(sbi->si_xwrite, file, &a->calc,
+					       a->ino);
+		if (unlikely(err))
+			AuIOErr("err %d\n", err);
+	} else
+		AuIOErr("err %d\n", err);
+	au_br_put(br);
+	ii_read_unlock(root);
+	si_read_unlock(sb);
+	au_nwt_done(&sbi->si_nowait);
+	kfree(args);
+}
+
+/*
+ * create a new xino file asynchoronously
+ */
+static int au_xino_new_async(struct super_block *sb, struct au_branch *br,
+			     struct au_xi_calc *calc, ino_t ino)
+{
+	int err;
+	struct au_xino_do_new_async_args *arg;
+
+	err = -ENOMEM;
+	arg = kmalloc(sizeof(*arg), GFP_NOFS);
+	if (unlikely(!arg))
+		goto out;
+
+	arg->sb = sb;
+	arg->br = br;
+	arg->calc = *calc;
+	arg->ino = ino;
+	au_br_get(br);
+	err = au_wkq_nowait(au_xino_call_do_new_async, arg, sb, AuWkq_NEST);
+	if (unlikely(err)) {
+		pr_err("wkq %d\n", err);
+		au_br_put(br);
+		kfree(arg);
+	}
+
+out:
+	return err;
+}
+
 /*
  * read @ino from xinofile for the specified branch{@sb, @bindex}
  * at the position of @h_ino.
@@ -663,12 +773,10 @@ int au_xino_write(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 	xi = br->br_xino;
 	file = au_xino_file(xi, calc.idx);
 	if (!file) {
-#if 0 /* re-commit later */
 		/* create and write a new xino file asynchoronously */
 		err = au_xino_new_async(sb, br, &calc, ino);
 		if (!err)
 			return 0; /* success */
-#endif
 		goto out;
 	}
 
@@ -1111,6 +1219,9 @@ struct au_xino *au_xino_alloc(unsigned int nfile)
 
 	spin_lock_init(&xi->xi_nondir.spin);
 	init_waitqueue_head(&xi->xi_nondir.wqh);
+	mutex_init(&xi->xi_mtx);
+	/* init_waitqueue_head(&xi->xi_wq); */
+	/* atomic_set(&xi->xi_pending, 0); */
 	atomic_set(&xi->xi_truncating, 0);
 	kref_init(&xi->xi_kref);
 	goto out; /* success */
@@ -1157,6 +1268,7 @@ static void au_xino_release(struct kref *kref)
 			fput(xi->xi_file[i]);
 	for (i = xi->xi_nondir.total - 1; i >= 0; i--)
 		AuDebugOn(xi->xi_nondir.array[i]);
+	mutex_destroy(&xi->xi_mtx);
 	kfree(xi->xi_file);
 	kfree(xi->xi_nondir.array);
 	kfree(xi);
@@ -1326,7 +1438,9 @@ static int au_xino_do_set_br(struct super_block *sb, struct path *path,
 	/* force re-creating */
 	xinew.xi = br->br_xino;
 	xinew.idx = calc.idx;
+	mutex_lock(&xinew.xi->xi_mtx);
 	file = au_xi_new(sb, &xinew);
+	mutex_unlock(&xinew.xi->xi_mtx);
 	err = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out;

@@ -47,6 +47,11 @@ struct au_xino {
 		wait_queue_head_t	wqh;
 	} xi_nondir;
 
+	struct mutex		xi_mtx;	/* protects xi_file array */
+	/* reserved for future use */
+	/* wait_queue_head_t	xi_wq; */
+	/* atomic_t		xi_pending; */
+
 	atomic_t		xi_truncating;
 
 	struct kref		xi_kref;
