@@ -35,7 +35,9 @@
 
 /* a xino file */
 struct au_xino {
-	struct file		*xi_file;
+	struct file		**xi_file;
+	unsigned int		xi_nfile;
+
 	struct {
 		spinlock_t		spin;
 		ino_t			*array;
@@ -48,8 +50,6 @@ struct au_xino {
 	atomic_t		xi_truncating;
 
 	struct kref		xi_kref;
-
-	/* todo: make xino files an array to support huge inode number */
 };
 
 /* File-based Hierarchical Storage Management */
@@ -260,7 +260,7 @@ ssize_t xino_fwrite(vfs_writef_t func, struct file *file, void *buf,
 int au_xib_trunc(struct super_block *sb);
 int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex);
 
-struct au_xino *au_xino_alloc(void);
+struct au_xino *au_xino_alloc(unsigned int nfile);
 int au_xino_put(struct au_branch *br);
 
 struct au_opt_xino;
@@ -284,7 +284,7 @@ int au_xino_path(struct seq_file *seq, struct file *file);
 
 static inline struct file *au_xino_file(struct au_xino *xi)
 {
-	return xi ? xi->xi_file : NULL;
+	return xi ? xi->xi_file[0] : NULL;
 }
 
 /* ---------------------------------------------------------------------- */

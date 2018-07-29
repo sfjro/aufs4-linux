@@ -133,7 +133,7 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 	add_branch = kzalloc(sizeof(*add_branch), GFP_NOFS);
 	if (unlikely(!add_branch))
 		goto out;
-	add_branch->br_xino = au_xino_alloc();
+	add_branch->br_xino = au_xino_alloc(/*nfile*/1);
 	if (unlikely(!add_branch->br_xino))
 		goto out_br;
 	err = au_hnotify_init_br(add_branch, perm);

@@ -289,10 +289,10 @@ static void au_xino_file_set(struct au_xino *xi, struct file *file)
 	if (file)
 		get_file(file);
 	AuDebugOn(!xi);
-	f = xi->xi_file;
+	f = xi->xi_file[0];
 	if (f)
 		fput(f);
-	xi->xi_file = file;
+	xi->xi_file[0] = file;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -961,19 +961,23 @@ out:
 
 /* ---------------------------------------------------------------------- */
 
-struct au_xino *au_xino_alloc(void)
+struct au_xino *au_xino_alloc(unsigned int nfile)
 {
 	struct au_xino *xi;
 
 	xi = kzalloc(sizeof(*xi), GFP_NOFS);
 	if (unlikely(!xi))
 		goto out;
+	xi->xi_nfile = nfile;
+	xi->xi_file = kcalloc(nfile, sizeof(*xi->xi_file), GFP_NOFS);
+	if (unlikely(!xi->xi_file))
+		goto out_free;
 
 	xi->xi_nondir.total = 8; /* initial size */
 	xi->xi_nondir.array = kcalloc(xi->xi_nondir.total, sizeof(ino_t),
 				      GFP_NOFS);
 	if (unlikely(!xi->xi_nondir.array))
-		goto out_free;
+		goto out_file;
 
 	spin_lock_init(&xi->xi_nondir.spin);
 	init_waitqueue_head(&xi->xi_nondir.wqh);
@@ -981,6 +985,8 @@ struct au_xino *au_xino_alloc(void)
 	kref_init(&xi->xi_kref);
 	goto out; /* success */
 
+out_file:
+	kfree(xi->xi_file);
 out_free:
 	kfree(xi);
 	xi = NULL;
@@ -994,14 +1000,15 @@ static int au_xino_init(struct au_branch *br, struct file *file)
 	struct au_xino *xi;
 
 	err = 0;
-	xi = au_xino_alloc();
+	xi = au_xino_alloc(1);
 	if (unlikely(!xi)) {
 		err = -ENOMEM;
 		goto out;
 	}
 
-	get_file(file);
-	xi->xi_file = file;
+	if (file)
+		get_file(file);
+	xi->xi_file[0] = file;
 	AuDebugOn(br->br_xino);
 	br->br_xino = xi;
 
@@ -1015,10 +1022,12 @@ static void au_xino_release(struct kref *kref)
 	int i;
 
 	xi = container_of(kref, struct au_xino, xi_kref);
-	if (xi->xi_file)
-		fput(xi->xi_file);
+	for (i = 0; i < xi->xi_nfile; i++)
+		if (xi->xi_file[i])
+			fput(xi->xi_file[i]);
 	for (i = xi->xi_nondir.total - 1; i >= 0; i--)
 		AuDebugOn(xi->xi_nondir.array[i]);
+	kfree(xi->xi_file);
 	kfree(xi->xi_nondir.array);
 	kfree(xi);
 }
