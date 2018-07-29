@@ -407,12 +407,12 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 
 	if (au_opt_test(au_mntflags(sb), XINO)) {
 		brbase = au_sbr(sb, 0);
-		xf = au_xino_file(brbase->br_xino);
+		xf = au_xino_file(brbase->br_xino, /*idx*/-1);
 		AuDebugOn(!xf);
 		h_inode = d_inode(add->path.dentry);
 		err = au_xino_init_br(sb, br, h_inode->i_ino, &xf->f_path);
 		if (unlikely(err)) {
-			AuDebugOn(au_xino_file(br->br_xino));
+			AuDebugOn(au_xino_file(br->br_xino, /*idx*/-1));
 			goto out_err;
 		}
 	}
@@ -549,7 +549,7 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 	if (au_xino_brid(sb) < 0
 	    && au_br_writable(add_branch->br_perm)
 	    && !au_test_fs_bad_xino(h_dentry->d_sb)) {
-		xf = au_xino_file(add_branch->br_xino);
+		xf = au_xino_file(add_branch->br_xino, /*idx*/-1);
 		if (xf && xf->f_path.dentry->d_parent == h_dentry)
 			au_xino_brid_set(sb, add_branch->br_id);
 	}
