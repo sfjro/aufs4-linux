@@ -104,8 +104,7 @@ enum d_walk_ret {
 };
 
 extern void d_walk(struct dentry *parent, void *data,
-		   enum d_walk_ret (*enter)(void *, struct dentry *),
-		   void (*finish)(void *));
+		   enum d_walk_ret (*enter)(void *, struct dentry *));
 
 struct ac_dpages_arg {
 	int err;
@@ -145,7 +144,7 @@ int au_dcsub_pages(struct au_dcsub_pages *dpages, struct dentry *root,
 		.arg	= arg
 	};
 
-	d_walk(root, &args, au_call_dpages_append, NULL);
+	d_walk(root, &args, au_call_dpages_append);
 
 	return args.err;
 }

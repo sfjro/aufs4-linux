@@ -80,7 +80,7 @@ int au_do_flush(struct file *file, fl_owner_t id,
 
 /* poll.c */
 #ifdef CONFIG_AUFS_POLL
-__poll_t aufs_poll(struct file *file, poll_table *wait);
+__poll_t aufs_poll(struct file *file, struct poll_table_struct *pt);
 #endif
 
 #ifdef CONFIG_AUFS_BR_HFSPLUS

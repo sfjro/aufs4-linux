@@ -77,7 +77,7 @@ int au_test_and_cpup_dirs(struct dentry *dentry, aufs_bindex_t bdst);
 struct au_dtime {
 	struct dentry *dt_dentry;
 	struct path dt_h_path;
-	struct timespec dt_atime, dt_mtime;
+	struct timespec64 dt_atime, dt_mtime;
 };
 void au_dtime_store(struct au_dtime *dt, struct dentry *dentry,
 		    struct path *h_path);

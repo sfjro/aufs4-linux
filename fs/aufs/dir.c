@@ -131,7 +131,7 @@ static void au_do_dir_ts(void *arg)
 	au_hn_inode_lock_nested(hdir, AuLsc_I_PARENT);
 	h_dir = au_h_iptr(dir, btop);
 	if (h_dir->i_nlink
-	    && timespec_compare(&h_dir->i_mtime, &dt.dt_mtime) < 0) {
+	    && timespec64_compare(&h_dir->i_mtime, &dt.dt_mtime) < 0) {
 		dt.dt_h_path = h_path;
 		au_dtime_revert(&dt);
 	}
