@@ -282,16 +282,15 @@ static int au_do_aopen(struct inode *inode, struct file *file)
 
 static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 			    struct file *file, unsigned int open_flag,
-			    umode_t create_mode, int *opened)
+			    umode_t create_mode)
 {
-	int err, unlocked, h_opened = *opened;
+	int err, unlocked, opened;
 	unsigned int lkup_flags;
 	struct dentry *parent, *d;
 	struct hlist_bl_head *aopen;
 	struct vfsub_aopen_args args = {
 		.open_flag	= open_flag,
-		.create_mode	= create_mode,
-		.opened		= &h_opened
+		.create_mode	= create_mode
 	};
 	struct aopen_node aopen_node = {
 		.file	= file
@@ -330,6 +329,7 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 		goto out_no_open;
 
 	unlocked = 0;
+	opened = 0;
 	err = aufs_read_lock(dentry, AuLock_DW | AuLock_FLUSH | AuLock_GEN);
 	if (unlikely(err))
 		goto out;
@@ -344,37 +344,35 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 	if (d_is_positive(dentry))
 		goto out_unlock;
 
-	args.file = get_empty_filp();
+	args.file = alloc_empty_file(file->f_flags, current_cred());
 	err = PTR_ERR(args.file);
 	if (IS_ERR(args.file))
 		goto out_unlock;
 
-	args.file->f_flags = file->f_flags;
 	err = au_aopen_or_create(dir, dentry, &args);
 	AuTraceErr(err);
 	AuDbgFile(args.file);
-	if (unlikely(err < 0)) {
-		if (h_opened & FILE_OPENED)
-			fput(args.file);
-		else
-			put_filp(args.file);
+	if (unlikely(err)) {
+		fput(args.file);
 		goto out_unlock;
 	}
 	di_write_unlock(parent);
 	di_write_unlock(dentry);
 	unlocked = 1;
 
-	/* some filesystems don't set FILE_CREATED while succeeded? */
-	*opened |= FILE_CREATED;
-	if (h_opened & FILE_OPENED)
-		aopen_node.h_file = args.file;
-	else {
-		put_filp(args.file);
-		args.file = NULL;
+	opened = !!(args.file->f_mode & FMODE_OPENED);
+	file->f_mode = args.file->f_mode & ~FMODE_OPENED;
+	if (!opened) {
+		/* branch fs doesn't have ->atomic_open */
+		fput(args.file);
+		goto out_unlock;
 	}
+
+	AuLabel(finish_open);
+	aopen_node.h_file = args.file;
 	aopen = &au_sbi(dir->i_sb)->si_aopen;
 	au_hbl_add(&aopen_node.hblist, aopen);
-	err = finish_open(file, dentry, au_do_aopen, opened);
+	err = finish_open(file, dentry, au_do_aopen);
 	au_hbl_del(&aopen_node.hblist, aopen);
 	AuTraceErr(err);
 	AuDbgFile(file);
@@ -382,25 +380,21 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 		fput(aopen_node.h_file);
 
 out_unlock:
-	if (unlocked)
+	if (unlocked) {
 		si_read_unlock(dentry->d_sb);
-	else {
+		if (opened)
+			goto out;
+	} else {
 		di_write_unlock(parent);
 		aufs_read_unlock(dentry, AuLock_DW);
 	}
-	AuDbgDentry(dentry);
-	if (unlikely(err < 0))
-		goto out;
 out_no_open:
-	if (err >= 0 && !(*opened & FILE_CREATED)) {
+	if (!err) {
 		AuLabel(out_no_open);
 		dget(dentry);
 		err = finish_no_open(file, dentry);
 	}
 out:
-	AuDbg("%pd%s%s\n", dentry,
-	      (*opened & FILE_CREATED) ? " created" : "",
-	      (*opened & FILE_OPENED) ? " opened" : "");
 	AuTraceErr(err);
 	return err;
 }

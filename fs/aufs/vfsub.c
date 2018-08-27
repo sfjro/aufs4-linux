@@ -127,29 +127,24 @@ int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
 
 	file->f_path.dentry = DENTRY_NOT_SET;
 	file->f_path.mnt = au_br_mnt(br);
+	AuDbg("%ps\n", dir->i_op->atomic_open);
 	err = dir->i_op->atomic_open(dir, dentry, file, args->open_flag,
-				     args->create_mode, args->opened);
-	if (err >= 0) {
-		/* some filesystems don't set FILE_CREATED while succeeded? */
-		if (*args->opened & FILE_CREATED)
-			fsnotify_create(dir, dentry);
-	} else
+				     args->create_mode);
+	if (unlikely(err))
 		goto out;
 
-
-	if (!err) {
+	if (file->f_mode & FMODE_CREATED)
+		fsnotify_create(dir, dentry);
+	if (file->f_mode & FMODE_OPENED)
 		/* todo: call VFS:may_open() here */
-		err = open_check_o_direct(file);
-		/* todo: ima_file_check() too? */
-		if (!err && (args->open_flag & __FMODE_EXEC))
-			err = deny_write_access(file);
-		if (unlikely(err))
-			/* note that the file is created and still opened */
-			goto out;
-	}
+		fsnotify_open(file);
+	else
+		AuDbg("no open\n");
 
-	au_br_get(br);
-	fsnotify_open(file);
+	/* todo: ima_file_check() too? */
+	if (!err && (args->open_flag & __FMODE_EXEC))
+		err = deny_write_access(file);
+	/* note that the file is created and still opened */
 
 	/* temporary workaround for nfsv4 branch */
 	if (au_test_nfs(dir->i_sb))
