@@ -568,8 +568,7 @@ static void au_xi_calc(struct super_block *sb, ino_t h_ino,
 	loff_t maxent;
 
 	maxent = au_xi_maxent(sb);
-	calc->idx = h_ino / maxent;
-	calc->pos = h_ino % maxent;
+	calc->idx = div64_u64_rem(h_ino, maxent, &calc->pos);
 	calc->pos *= sizeof(ino_t);
 }
 
