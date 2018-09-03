@@ -489,7 +489,6 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 	struct dentry *root, *h_dentry;
 	struct inode *root_inode;
 	struct au_branch *add_branch;
-	struct file *xf;
 
 	root = sb->s_root;
 	root_inode = d_inode(root);
@@ -527,19 +526,6 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 		sb->s_maxbytes = h_dentry->d_sb->s_maxbytes;
 	} else
 		au_add_nlink(root_inode, d_inode(h_dentry));
-
-	/*
-	 * this test/set prevents aufs from handling unnecessary notify events
-	 * of xino files, in case of re-adding a writable branch which was
-	 * once detached from aufs.
-	 */
-	if (au_xino_brid(sb) < 0
-	    && au_br_writable(add_branch->br_perm)
-	    && !au_test_fs_bad_xino(h_dentry->d_sb)) {
-		xf = au_xino_file(add_branch->br_xino, /*idx*/-1);
-		if (xf && xf->f_path.dentry->d_parent == h_dentry)
-			au_xino_brid_set(sb, add_branch->br_id);
-	}
 
 out:
 	return err;
@@ -1083,8 +1069,6 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 	if (au_opt_test(mnt_flags, PLINK))
 		au_plink_half_refresh(sb, br_id);
 
-	if (au_xino_brid(sb) == br_id)
-		au_xino_brid_set(sb, -1);
 	goto out; /* success */
 
 out_wh:
