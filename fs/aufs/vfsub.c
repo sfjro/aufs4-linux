@@ -151,6 +151,10 @@ int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
 	au_br_get(br);
 	fsnotify_open(file);
 
+	/* temporary workaround for nfsv4 branch */
+	if (au_test_nfs(dir->i_sb))
+		nfs_mark_for_revalidate(dir);
+
 out:
 	return err;
 }
