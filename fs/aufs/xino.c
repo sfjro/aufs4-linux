@@ -60,6 +60,28 @@ static aufs_bindex_t is_sb_shared(struct super_block *sb, aufs_bindex_t btgt,
 /*
  * stop unnecessary notify events at creating xino files
  */
+
+aufs_bindex_t au_xi_root(struct super_block *sb, struct dentry *dentry)
+{
+	aufs_bindex_t bfound, bindex, bbot;
+	struct dentry *parent;
+	struct au_branch *br;
+
+	bfound = -1;
+	parent = dentry->d_parent; /* safe d_parent access */
+	bbot = au_sbbot(sb);
+	for (bindex = 0; bindex <= bbot; bindex++) {
+		br = au_sbr(sb, bindex);
+		if (au_br_dentry(br) == parent) {
+			bfound = bindex;
+			break;
+		}
+	}
+
+	AuDbg("bfound b%d\n", bfound);
+	return bfound;
+}
+
 struct au_xino_lock_dir {
 	struct au_hinode *hdir;
 	struct dentry *parent;
@@ -94,13 +116,10 @@ out:
 static void au_xino_lock_dir(struct super_block *sb, struct path *xipath,
 			     struct au_xino_lock_dir *ldir)
 {
-	aufs_bindex_t brid, bindex;
+	aufs_bindex_t bindex;
 
 	ldir->hdir = NULL;
-	bindex = -1;
-	brid = au_xino_brid(sb);
-	if (brid >= 0)
-		bindex = au_br_index(sb, brid);
+	bindex = au_xi_root(sb, xipath->dentry);
 	if (bindex >= 0) {
 		/* rw branch root */
 		ldir->hdir = au_hi(d_inode(sb->s_root), bindex);
@@ -1474,7 +1493,6 @@ void au_xino_clr(struct super_block *sb)
 	xino_clear_xib(sb);
 	xino_clear_br(sb);
 	dbgaufs_brs_del(sb, 0);
-	au_xino_brid_set(sb, -1);
 	sbinfo = au_sbi(sb);
 	/* lvalue, do not call au_mntflags() */
 	au_opt_clr(sbinfo->si_mntflags, XINO);
@@ -1571,8 +1589,6 @@ struct file *au_xino_def(struct super_block *sb)
 			strcat(p, "/" AUFS_XINO_FNAME);
 			AuDbg("%s\n", p);
 			file = au_xino_create(sb, p, /*silent*/0);
-			if (!IS_ERR(file))
-				au_xino_brid_set(sb, br->br_id);
 		}
 		free_page((unsigned long)page);
 	} else {
@@ -1586,8 +1602,6 @@ struct file *au_xino_def(struct super_block *sb)
 			fput(file);
 			file = ERR_PTR(-EINVAL);
 		}
-		if (!IS_ERR(file))
-			au_xino_brid_set(sb, -1);
 	}
 
 out:
