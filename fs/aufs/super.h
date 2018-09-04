@@ -127,7 +127,6 @@ struct au_sbinfo {
 	unsigned long		si_xib_last_pindex;
 	int			si_xib_next_bit;
 
-	aufs_bindex_t		si_xino_brid;
 	unsigned long		si_xino_jiffy;
 	unsigned long		si_xino_expire;
 	/* reserved for future use */
@@ -600,18 +599,6 @@ static inline struct au_branch *au_sbr(struct super_block *sb,
 {
 	SiMustAnyLock(sb);
 	return au_sbi(sb)->si_branch[0 + bindex];
-}
-
-static inline void au_xino_brid_set(struct super_block *sb, aufs_bindex_t brid)
-{
-	SiMustWriteLock(sb);
-	au_sbi(sb)->si_xino_brid = brid;
-}
-
-static inline aufs_bindex_t au_xino_brid(struct super_block *sb)
-{
-	SiMustAnyLock(sb);
-	return au_sbi(sb)->si_xino_brid;
 }
 
 static inline loff_t au_xi_maxent(struct super_block *sb)
