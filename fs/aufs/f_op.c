@@ -42,6 +42,7 @@ int au_do_open_nondir(struct file *file, int flags, struct file *h_file)
 		if (unlikely(err))
 			goto out;
 		get_file(h_file);
+		au_br_get(au_sbr(dentry->d_sb, bindex));
 	}
 	if (IS_ERR(h_file))
 		err = PTR_ERR(h_file);
