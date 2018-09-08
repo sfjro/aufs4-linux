@@ -22,7 +22,7 @@
 /* copied from linux/fs/internal.h */
 /* todo: BAD approach!! */
 extern void __mnt_drop_write(struct vfsmount *);
-extern int open_check_o_direct(struct file *f);
+extern struct file *alloc_empty_file(int, const struct cred *);
 
 /* ---------------------------------------------------------------------- */
 
@@ -83,7 +83,6 @@ struct vfsub_aopen_args {
 	struct file	*file;
 	unsigned int	open_flag;
 	umode_t		create_mode;
-	int		*opened;
 };
 struct au_branch;
 int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,

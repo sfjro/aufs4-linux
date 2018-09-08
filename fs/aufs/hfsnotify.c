@@ -49,8 +49,7 @@ static int au_hfsn_alloc(struct au_hinode *hinode)
 	 * h_inode, so specify 1 to allow dups.
 	 */
 	lockdep_off();
-	err = fsnotify_add_mark(mark, hinode->hi_inode, /*mnt*/NULL,
-				/*allow_dups*/1);
+	err = fsnotify_add_inode_mark(mark, hinode->hi_inode, /*allow_dups*/1);
 	lockdep_on();
 
 	return err;
