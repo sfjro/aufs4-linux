@@ -111,9 +111,10 @@ out:
  * cf. linux/fs/namei.c:do_last(), lookup_open() and atomic_open().
  */
 int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
-		      struct vfsub_aopen_args *args, struct au_branch *br)
+		      struct vfsub_aopen_args *args)
 {
 	int err;
+	struct au_branch *br = args->br;
 	struct file *file = args->file;
 	/* copied from linux/fs/namei.c:atomic_open() */
 	struct dentry *const DENTRY_NOT_SET = (void *)-1UL;

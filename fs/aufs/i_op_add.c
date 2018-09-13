@@ -247,6 +247,7 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	unsigned char created;
 	const unsigned char try_aopen
 		= (arg->type == Creat && arg->u.c.try_aopen);
+	struct vfsub_aopen_args *aopen = arg->u.c.aopen;
 	struct dentry *wh_dentry, *parent;
 	struct inode *h_dir;
 	struct super_block *sb;
@@ -298,9 +299,10 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 		if (!try_aopen || !h_dir->i_op->atomic_open)
 			err = vfsub_create(h_dir, &a->h_path, arg->u.c.mode,
 					   arg->u.c.want_excl);
-		else
-			err = vfsub_atomic_open(h_dir, a->h_path.dentry,
-						arg->u.c.aopen, br);
+		else {
+			aopen->br = br;
+			err = vfsub_atomic_open(h_dir, a->h_path.dentry, aopen);
+		}
 		break;
 	case Symlink:
 		err = vfsub_symlink(h_dir, &a->h_path, arg->u.s.symname);
