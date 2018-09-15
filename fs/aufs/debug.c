@@ -300,10 +300,10 @@ static int do_pri_br(aufs_bindex_t bindex, struct au_branch *br)
 	if (!sb || IS_ERR(sb))
 		goto out;
 
-	dpri("s%d: {perm 0x%x, id %d, cnt %lld, wbr %p}, "
+	dpri("s%d: {perm 0x%x, id %d, cnt %ld?, wbr %p}, "
 	     "%s, dev 0x%02x%02x, flags 0x%lx, cnt %d, active %d, "
 	     "xino %d\n",
-	     bindex, br->br_perm, br->br_id, au_br_count(br),
+	     bindex, br->br_perm, br->br_id, /*au_br_count(br)*/-1L,
 	     br->br_wbr, au_sbtype(sb), MAJOR(sb->s_dev), MINOR(sb->s_dev),
 	     sb->s_flags, sb->s_count,
 	     atomic_read(&sb->s_active),
@@ -335,9 +335,9 @@ void au_dpri_sb(struct super_block *sb)
 
 	a->mnt.mnt_sb = sb;
 	a->fake.br_path.mnt = &a->mnt;
-	au_br_count_init(&a->fake);
+	/* au_br_count_init(&a->fake); */
 	err = do_pri_br(-1, &a->fake);
-	au_br_count_fin(&a->fake);
+	/* au_br_count_fin(&a->fake, /\*do_sync*\/1); */
 	kfree(a);
 	dpri("dev 0x%x\n", sb->s_dev);
 	if (err || !au_test_aufs(sb))
