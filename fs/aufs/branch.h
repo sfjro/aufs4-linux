@@ -15,6 +15,7 @@
 #include <linux/mount.h>
 #include "dirren.h"
 #include "dynop.h"
+#include "lcnt.h"
 #include "rwsem.h"
 #include "super.h"
 
@@ -100,7 +101,7 @@ struct au_branch {
 	struct path		br_path;
 	spinlock_t		br_dykey_lock;
 	struct au_dykey		*br_dykey[AuBrDynOp];
-	struct percpu_counter	br_count;
+	au_lcnt_t		br_count;
 
 	struct au_wbr		*br_wbr;
 	struct au_br_fhsm	*br_fhsm;
@@ -140,27 +141,27 @@ static inline struct super_block *au_br_sb(struct au_branch *br)
 
 static inline void au_br_get(struct au_branch *br)
 {
-	percpu_counter_inc(&br->br_count);
+	au_lcnt_inc(&br->br_count);
 }
 
 static inline void au_br_put(struct au_branch *br)
 {
-	percpu_counter_dec(&br->br_count);
+	au_lcnt_dec(&br->br_count);
 }
 
-static inline s64 au_br_count(struct au_branch *br)
+static inline long au_br_count(struct au_branch *br)
 {
-	return percpu_counter_sum(&br->br_count);
+	return au_lcnt_read(&br->br_count, /*do_rev*/1);
 }
 
 static inline void au_br_count_init(struct au_branch *br)
 {
-	percpu_counter_init(&br->br_count, 0, GFP_NOFS);
+	au_lcnt_init(&br->br_count, /*release*/NULL);
 }
 
-static inline void au_br_count_fin(struct au_branch *br)
+static inline void au_br_count_fin(struct au_branch *br, int do_sync)
 {
-	percpu_counter_destroy(&br->br_count);
+	au_lcnt_fin(&br->br_count, do_sync);
 }
 
 static inline int au_br_rdonly(struct au_branch *br)
