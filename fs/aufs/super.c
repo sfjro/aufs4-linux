@@ -528,7 +528,10 @@ static unsigned long long au_iarray_cb(struct super_block *sb, void *a,
 
 struct inode **au_iarray_alloc(struct super_block *sb, unsigned long long *max)
 {
-	*max = au_ninodes(sb);
+	struct au_sbinfo *sbi;
+
+	sbi = au_sbi(sb);
+	*max = au_lcnt_read(&sbi->si_ninodes, /*do_rev*/1);
 	return au_array_alloc(max, au_iarray_cb, sb, &sb->s_inodes);
 }
 
