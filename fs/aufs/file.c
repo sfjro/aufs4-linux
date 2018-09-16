@@ -272,10 +272,12 @@ int au_reopen_nondir(struct file *file)
 	int err;
 	aufs_bindex_t btop;
 	struct dentry *dentry;
+	struct au_branch *br;
 	struct file *h_file, *h_file_tmp;
 
 	dentry = file->f_path.dentry;
 	btop = au_dbtop(dentry);
+	br = au_sbr(dentry->d_sb, btop);
 	h_file_tmp = NULL;
 	if (au_fbtop(file) == btop) {
 		h_file = au_hf_top(file);
@@ -283,6 +285,7 @@ int au_reopen_nondir(struct file *file)
 			return 0; /* success */
 		h_file_tmp = h_file;
 		get_file(h_file_tmp);
+		au_br_get(br);
 		au_set_h_fptr(file, btop, NULL);
 	}
 	AuDebugOn(au_fi(file)->fi_hdir);
@@ -303,7 +306,7 @@ int au_reopen_nondir(struct file *file)
 	err = PTR_ERR(h_file);
 	if (IS_ERR(h_file)) {
 		if (h_file_tmp) {
-			au_sbr_get(dentry->d_sb, btop);
+			/* revert */
 			au_set_h_fptr(file, btop, h_file_tmp);
 			h_file_tmp = NULL;
 		}
@@ -318,8 +321,10 @@ int au_reopen_nondir(struct file *file)
 	/* file->f_ra = h_file->f_ra; */
 
 out:
-	if (h_file_tmp)
+	if (h_file_tmp) {
 		fput(h_file_tmp);
+		au_br_put(br);
+	}
 	return err;
 }
 

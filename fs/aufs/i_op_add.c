@@ -232,8 +232,9 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	int err, rerr;
 	aufs_bindex_t btop;
 	unsigned char created;
-	struct vfsub_aopen_args	*aopen = arg->u.c.aopen;
-	const unsigned char try_aopen = (arg->type == Creat && aopen);
+	const unsigned char try_aopen
+		= (arg->type == Creat && arg->u.c.try_aopen);
+	struct vfsub_aopen_args *aopen = arg->u.c.aopen;
 	struct dentry *wh_dentry, *parent;
 	struct inode *h_dir;
 	struct super_block *sb;
@@ -281,32 +282,42 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	h_dir = au_pinned_h_dir(&a->pin);
 	switch (arg->type) {
 	case Creat:
-		err = 0;
 		if (!try_aopen || !h_dir->i_op->atomic_open) {
 			err = vfsub_create(h_dir, &a->h_path, arg->u.c.mode,
 					   arg->u.c.want_excl);
-			if (!err && try_aopen /* && aopen->file */)
+			created = !err;
+			if (!err && try_aopen)
 				aopen->file->f_mode |= FMODE_CREATED;
-		} else
-			err = vfsub_atomic_open(h_dir, a->h_path.dentry, aopen,
-						br);
+		} else {
+			aopen->br = br;
+			err = vfsub_atomic_open(h_dir, a->h_path.dentry, aopen);
+			AuDbg("err %d\n", err);
+			AuDbgFile(aopen->file);
+			created = err >= 0
+				&& !!(aopen->file->f_mode & FMODE_CREATED);
+		}
 		break;
 	case Symlink:
 		err = vfsub_symlink(h_dir, &a->h_path, arg->u.s.symname);
+		created = !err;
 		break;
 	case Mknod:
 		err = vfsub_mknod(h_dir, &a->h_path, arg->u.m.mode,
 				  arg->u.m.dev);
+		created = !err;
 		break;
 	default:
 		BUG();
 	}
-	created = !err;
+	if (unlikely(err < 0))
+		goto out_unpin;
+
+	err = epilog(dir, btop, wh_dentry, dentry);
 	if (!err)
-		err = epilog(dir, btop, wh_dentry, dentry);
+		goto out_unpin; /* success */
 
 	/* revert */
-	if (unlikely(created && err && d_is_positive(a->h_path.dentry))) {
+	if (created /* && d_is_positive(a->h_path.dentry) */) {
 		/* no delegation since it is just created */
 		rerr = vfsub_unlink(h_dir, &a->h_path, /*delegated*/NULL,
 				    /*force*/0);
@@ -317,9 +328,14 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 		}
 		au_dtime_revert(&a->dt);
 	}
+	if (try_aopen && h_dir->i_op->atomic_open
+	    && (aopen->file->f_mode & FMODE_OPENED))
+		/* aopen->file is still opened */
+		au_br_put(aopen->br);
+
+out_unpin:
 	au_unpin(&a->pin);
 	dput(wh_dentry);
-
 out_parent:
 	if (!try_aopen)
 		di_write_unlock(parent);
