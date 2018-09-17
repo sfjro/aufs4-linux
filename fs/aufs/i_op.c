@@ -398,12 +398,12 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 	err = au_aopen_or_create(dir, dentry, &args);
 	AuTraceErr(err);
 	AuDbgFile(args.file);
+	file->f_mode = args.file->f_mode & ~FMODE_OPENED;
 	did_open = !!(args.file->f_mode & FMODE_OPENED);
 	if (!did_open) {
 		fput(args.file);
 		args.file = NULL;
 	}
-	file->f_mode = args.file->f_mode & ~FMODE_OPENED;
 	di_write_unlock(parent);
 	di_write_unlock(dentry);
 	if (unlikely(err < 0)) {
@@ -412,7 +412,6 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 		goto out_sb;
 	}
 
-	AuDbgFile(args.file);
 	if (!did_open)
 		err = au_aopen_no_open(file, dentry);
 	else {
