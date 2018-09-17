@@ -38,8 +38,8 @@ static void au_br_do_free(struct au_branch *br)
 	au_dr_hino_free(&br->br_dirren);
 	au_xino_put(br);
 
-	AuDebugOn(au_br_count(br));
-	au_br_count_fin(br);
+	AuLCntZero(au_br_count(br));
+	au_br_count_fin(br, /*do_sync*/0);
 
 	wbr = br->br_wbr;
 	if (wbr) {
@@ -62,10 +62,14 @@ static void au_br_do_free(struct au_branch *br)
 			break;
 
 	/* recursive lock, s_umount of branch's */
+	/* synchronize_rcu(); */ /* why? */
 	lockdep_off();
 	path_put(&br->br_path);
 	lockdep_on();
 	kfree(wbr);
+	au_lcnt_wait_for_fin(&br->br_count);
+	/* I don't know why, but percpu_refcount requires this */
+	/* synchronize_rcu(); */
 	kfree(br);
 }
 
@@ -578,7 +582,10 @@ static unsigned long long au_farray_cb(struct super_block *sb, void *a,
 static struct file **au_farray_alloc(struct super_block *sb,
 				     unsigned long long *max)
 {
-	*max = au_nfiles(sb);
+	struct au_sbinfo *sbi;
+
+	sbi = au_sbi(sb);
+	*max = au_lcnt_read(&sbi->si_nfiles, /*do_rev*/1);
 	return au_array_alloc(max, au_farray_cb, sb, /*arg*/NULL);
 }
 

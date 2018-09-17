@@ -111,9 +111,10 @@ out:
  * cf. linux/fs/namei.c:do_last(), lookup_open() and atomic_open().
  */
 int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
-		      struct vfsub_aopen_args *args, struct au_branch *br)
+		      struct vfsub_aopen_args *args)
 {
 	int err;
+	struct au_branch *br = args->br;
 	struct file *file = args->file;
 	/* copied from linux/fs/namei.c:atomic_open() */
 	struct dentry *const DENTRY_NOT_SET = (void *)-1UL;
@@ -125,30 +126,37 @@ int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
 	if (unlikely(err))
 		goto out;
 
+	au_br_get(br);
 	file->f_path.dentry = DENTRY_NOT_SET;
 	file->f_path.mnt = au_br_mnt(br);
 	AuDbg("%ps\n", dir->i_op->atomic_open);
 	err = dir->i_op->atomic_open(dir, dentry, file, args->open_flag,
 				     args->create_mode);
-	if (unlikely(err))
+	if (unlikely(err < 0)) {
+		au_br_put(br);
 		goto out;
-
-	if (file->f_mode & FMODE_CREATED)
-		fsnotify_create(dir, dentry);
-	if (file->f_mode & FMODE_OPENED)
-		/* todo: call VFS:may_open() here */
-		fsnotify_open(file);
-	else
-		AuDbg("no open\n");
-
-	/* todo: ima_file_check() too? */
-	if (!err && (args->open_flag & __FMODE_EXEC))
-		err = deny_write_access(file);
-	/* note that the file is created and still opened */
+	}
 
 	/* temporary workaround for nfsv4 branch */
 	if (au_test_nfs(dir->i_sb))
 		nfs_mark_for_revalidate(dir);
+
+	if (file->f_mode & FMODE_CREATED)
+		fsnotify_create(dir, dentry);
+	if (!(file->f_mode & FMODE_OPENED)) {
+		au_br_put(br);
+		goto out;
+	}
+
+	/* todo: call VFS:may_open() here */
+	/* todo: ima_file_check() too? */
+	if (!err && (args->open_flag & __FMODE_EXEC))
+		err = deny_write_access(file);
+	if (!err)
+		fsnotify_open(file);
+	else
+		au_br_put(br);
+	/* note that the file is created and still opened */
 
 out:
 	return err;
