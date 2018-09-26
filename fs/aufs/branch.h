@@ -114,7 +114,8 @@ struct au_branch {
 	struct path		br_path;
 	spinlock_t		br_dykey_lock;
 	struct au_dykey		*br_dykey[AuBrDynOp];
-	au_lcnt_t		br_count;
+	au_lcnt_t		br_nfiles;	/* opened files */
+	au_lcnt_t		br_count;	/* in-use for other */
 
 	struct au_wbr		*br_wbr;
 	struct au_br_fhsm	*br_fhsm;
