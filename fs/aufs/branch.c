@@ -40,8 +40,8 @@ static void au_br_do_free(struct au_branch *br)
 
 	AuLCntZero(au_lcnt_read(&br->br_nfiles, /*do_rev*/0));
 	au_lcnt_fin(&br->br_nfiles, /*do_sync*/0);
-	AuLCntZero(au_br_count(br));
-	au_br_count_fin(br, /*do_sync*/0);
+	AuLCntZero(au_lcnt_read(&br->br_count, /*do_rev*/0));
+	au_lcnt_fin(&br->br_count, /*do_sync*/0);
 
 	wbr = br->br_wbr;
 	if (wbr) {
@@ -398,7 +398,7 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	br->br_path = add->path; /* set first, path_get() later */
 	spin_lock_init(&br->br_dykey_lock);
 	au_lcnt_init(&br->br_nfiles, /*release*/NULL);
-	au_br_count_init(br);
+	au_lcnt_init(&br->br_count, /*release*/NULL);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
 
@@ -1032,8 +1032,13 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 		AuVerbose(verbose, "no more branches left\n");
 		goto out;
 	}
+
 	br = au_sbr(sb, bindex);
 	AuDebugOn(!path_equal(&br->br_path, &del->h_path));
+	if (unlikely(au_lcnt_read(&br->br_count, /*do_rev*/1))) {
+		AuVerbose(verbose, "br %pd2 is busy now\n", del->h_path.dentry);
+		goto out;
+	}
 
 	br_id = br->br_id;
 	opened = au_lcnt_read(&br->br_nfiles, /*do_rev*/1);
