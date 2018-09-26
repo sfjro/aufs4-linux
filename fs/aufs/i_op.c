@@ -394,7 +394,7 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 	parent = dentry->d_parent;	/* dir is locked */
 	di_write_lock_parent(parent);
 	err = au_lkup_dentry(dentry, /*btop*/0, AuLkup_ALLOW_NEG);
-	if (unlikely(err))
+	if (unlikely(err < 0))
 		goto out_parent;
 
 	AuDbgDentry(dentry);
