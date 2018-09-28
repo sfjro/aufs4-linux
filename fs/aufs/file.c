@@ -83,7 +83,7 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 		}
 	}
 	flags &= ~O_CREAT;
-	au_br_get(br);
+	au_lcnt_inc(&br->br_nfiles);
 	h_path.dentry = h_dentry;
 	h_path.mnt = au_br_mnt(br);
 	h_file = vfsub_dentry_open(&h_path, flags);
@@ -102,7 +102,7 @@ struct file *au_h_open(struct dentry *dentry, aufs_bindex_t bindex, int flags,
 	goto out; /* success */
 
 out_br:
-	au_br_put(br);
+	au_lcnt_dec(&br->br_nfiles);
 out:
 	return h_file;
 }
@@ -298,7 +298,7 @@ int au_reopen_nondir(struct file *file)
 			return 0; /* success */
 		h_file_tmp = h_file;
 		get_file(h_file_tmp);
-		au_br_get(br);
+		au_lcnt_inc(&br->br_nfiles);
 		au_set_h_fptr(file, btop, NULL);
 	}
 	AuDebugOn(au_fi(file)->fi_hdir);
@@ -336,7 +336,7 @@ int au_reopen_nondir(struct file *file)
 out:
 	if (h_file_tmp) {
 		fput(h_file_tmp);
-		au_br_put(br);
+		au_lcnt_dec(&br->br_nfiles);
 	}
 	return err;
 }
