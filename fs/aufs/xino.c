@@ -506,7 +506,7 @@ static void xino_do_trunc(void *_args)
 	if (unlikely(err))
 		pr_warn("err b%d, (%d)\n", bindex, err);
 	atomic_dec(&br->br_xino->xi_truncating);
-	au_br_put(br);
+	au_lcnt_dec(&br->br_count);
 	si_write_unlock(sb);
 	au_nwt_done(&au_sbi(sb)->si_nowait);
 	kfree(args);
@@ -571,7 +571,7 @@ static void xino_try_trunc(struct super_block *sb, struct au_branch *br)
 		goto out;
 	}
 
-	au_br_get(br);
+	au_lcnt_inc(&br->br_count);
 	args->sb = sb;
 	args->br = br;
 	args->idx = idx;
@@ -580,7 +580,7 @@ static void xino_try_trunc(struct super_block *sb, struct au_branch *br)
 		return; /* success */
 
 	pr_err("wkq %d\n", wkq_err);
-	au_br_put(br);
+	au_lcnt_dec(&br->br_count);
 	kfree(args);
 
 out:
@@ -676,7 +676,7 @@ static void au_xino_call_do_new_async(void *args)
 			AuIOErr("err %d\n", err);
 	} else
 		AuIOErr("err %d\n", err);
-	au_br_put(br);
+	au_lcnt_dec(&br->br_count);
 	ii_read_unlock(root);
 	si_read_unlock(sb);
 	au_nwt_done(&sbi->si_nowait);
@@ -701,11 +701,11 @@ static int au_xino_new_async(struct super_block *sb, struct au_branch *br,
 	arg->br = br;
 	arg->calc = *calc;
 	arg->ino = ino;
-	au_br_get(br);
+	au_lcnt_inc(&br->br_count);
 	err = au_wkq_nowait(au_xino_call_do_new_async, arg, sb, AuWkq_NEST);
 	if (unlikely(err)) {
 		pr_err("wkq %d\n", err);
-		au_br_put(br);
+		au_lcnt_dec(&br->br_count);
 		kfree(arg);
 	}
 

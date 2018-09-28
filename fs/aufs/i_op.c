@@ -260,7 +260,7 @@ out:
  *     + vfsub_atomic_open()
  *       + branch fs ->atomic_open()
  *	   may call the actual 'open' for h_file
- *       + au_br_get() only if opened
+ *       + inc br_nfiles only if opened
  * + au_aopen_no_open() or au_aopen_do_open()
  *
  * au_aopen_do_open()
@@ -394,7 +394,7 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 	parent = dentry->d_parent;	/* dir is locked */
 	di_write_lock_parent(parent);
 	err = au_lkup_dentry(dentry, /*btop*/0, AuLkup_ALLOW_NEG);
-	if (unlikely(err))
+	if (unlikely(err < 0))
 		goto out_parent;
 
 	AuDbgDentry(dentry);
@@ -438,7 +438,7 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 		if (args.file)
 			fput(args.file);
 		if (did_open)
-			au_br_put(args.br);
+			au_lcnt_dec(&args.br->br_nfiles);
 	}
 	goto out_sb; /* success */
 
