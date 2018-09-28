@@ -126,14 +126,14 @@ int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
 	if (unlikely(err))
 		goto out;
 
-	au_br_get(br);
+	au_lcnt_inc(&br->br_nfiles);
 	file->f_path.dentry = DENTRY_NOT_SET;
 	file->f_path.mnt = au_br_mnt(br);
 	AuDbg("%ps\n", dir->i_op->atomic_open);
 	err = dir->i_op->atomic_open(dir, dentry, file, args->open_flag,
 				     args->create_mode);
 	if (unlikely(err < 0)) {
-		au_br_put(br);
+		au_lcnt_dec(&br->br_nfiles);
 		goto out;
 	}
 
@@ -144,7 +144,7 @@ int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
 	if (file->f_mode & FMODE_CREATED)
 		fsnotify_create(dir, dentry);
 	if (!(file->f_mode & FMODE_OPENED)) {
-		au_br_put(br);
+		au_lcnt_dec(&br->br_nfiles);
 		goto out;
 	}
 
@@ -155,7 +155,7 @@ int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
 	if (!err)
 		fsnotify_open(file);
 	else
-		au_br_put(br);
+		au_lcnt_dec(&br->br_nfiles);
 	/* note that the file is created and still opened */
 
 out:

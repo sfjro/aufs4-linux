@@ -344,7 +344,7 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	if (try_aopen && h_dir->i_op->atomic_open
 	    && (aopen->file->f_mode & FMODE_OPENED))
 		/* aopen->file is still opened */
-		au_br_put(aopen->br);
+		au_lcnt_dec(&aopen->br->br_nfiles);
 
 out_unpin:
 	au_unpin(&a->pin);
