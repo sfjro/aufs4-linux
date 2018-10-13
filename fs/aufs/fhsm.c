@@ -356,7 +356,7 @@ int au_fhsm_fd(struct super_block *sb, int oflags)
 	if (unlikely(fd < 0))
 		goto out_pid;
 
-	/* succeed reglardless 'fhsm' status */
+	/* succeed regardless 'fhsm' status */
 	kobject_get(&sbinfo->si_kobj);
 	si_noflush_read_lock(sb);
 	if (au_ftest_si(sbinfo, FHSM))

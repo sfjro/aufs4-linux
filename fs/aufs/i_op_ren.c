@@ -659,7 +659,7 @@ out:
  * locking order
  * (VFS)
  * - src_dir and dir by lock_rename()
- * - inode if exitsts
+ * - inode if exists
  * (aufs)
  * - lock all
  *   + src_dentry and dentry by aufs_read_and_write_lock2() which calls,
