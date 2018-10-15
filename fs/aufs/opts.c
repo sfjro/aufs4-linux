@@ -852,7 +852,7 @@ au_opts_parse_mod(struct au_opt_mod *mod, substring_t args[])
 	mod->path = args[0].from;
 	p = strchr(mod->path, '=');
 	if (unlikely(!p)) {
-		pr_err("no permssion %s\n", args[0].from);
+		pr_err("no permission %s\n", args[0].from);
 		goto out;
 	}
 
