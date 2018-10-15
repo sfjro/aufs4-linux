@@ -659,7 +659,7 @@ out:
  * locking order
  * (VFS)
  * - src_dir and dir by lock_rename()
- * - inode if exitsts
+ * - inode if exists
  * (aufs)
  * - lock all
  *   + src_dentry and dentry by aufs_read_and_write_lock2() which calls,
@@ -977,6 +977,8 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 		goto out;
 
 	a->flags = _flags;
+	BUILD_BUG_ON(sizeof(a->exchange) == sizeof(u8)
+		     && RENAME_EXCHANGE > U8_MAX);
 	a->exchange = _flags & RENAME_EXCHANGE;
 	a->src_dir = _src_dir;
 	a->src_dentry = _src_dentry;
