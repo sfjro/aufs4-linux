@@ -500,7 +500,7 @@ static void xino_do_trunc(void *_args)
 }
 
 /*
- * returs the index in the xi_file array whose corresponding file is necessary
+ * returns the index in the xi_file array whose corresponding file is necessary
  * to truncate, or -1 which means no need to truncate.
  */
 static int xino_trunc_test(struct super_block *sb, struct au_branch *br)
@@ -671,7 +671,7 @@ static void au_xino_call_do_new_async(void *args)
 }
 
 /*
- * create a new xino file asynchoronously
+ * create a new xino file asynchronously
  */
 static int au_xino_new_async(struct super_block *sb, struct au_branch *br,
 			     struct au_xi_calc *calc, ino_t ino)
@@ -778,7 +778,7 @@ int au_xino_write(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 	xi = br->br_xino;
 	file = au_xino_file(xi, calc.idx);
 	if (!file) {
-		/* create and write a new xino file asynchoronously */
+		/* create and write a new xino file asynchronously */
 		err = au_xino_new_async(sb, br, &calc, ino);
 		if (!err)
 			return 0; /* success */
