@@ -386,7 +386,7 @@ void au_plink_append(struct inode *inode, aufs_bindex_t bindex,
 	hlist_bl_unlock(hbl);
 	if (!found) {
 		cnt = au_hbl_count(hbl);
-#define msg "unexpectedly unblanced or too many pseudo-links"
+#define msg "unexpectedly unbalanced or too many pseudo-links"
 		if (cnt > AUFS_PLINK_WARN)
 			AuWarn1(msg ", %d\n", cnt);
 #undef msg

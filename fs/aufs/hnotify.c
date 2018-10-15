@@ -26,9 +26,9 @@ int au_hn_alloc(struct au_hinode *hinode, struct inode *inode)
 			au_cache_free_hnotify(hn);
 			/*
 			 * The upper dir was removed by udba, but the same named
-			 * dir left. In this case, aufs assignes a new inode
+			 * dir left. In this case, aufs assigns a new inode
 			 * number and set the monitor again.
-			 * For the lower dir, the old monitnor is still left.
+			 * For the lower dir, the old monitor is still left.
 			 */
 			if (err == -EEXIST)
 				err = 0;

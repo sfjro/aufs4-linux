@@ -611,7 +611,7 @@ static int au_do_cpup_dir(struct au_cp_generic *cpg, struct dentry *dst_parent,
 
 	/*
 	 * strange behaviour from the users view,
-	 * particularry setattr case
+	 * particularly setattr case
 	 */
 	dir = d_inode(dst_parent);
 	if (au_ibtop(dir) == cpg->bdst)
@@ -772,7 +772,7 @@ out:
  * in link/rename cases, @dst_parent may be different from the real one.
  * basic->bsrc can be larger than basic->bdst.
  * aufs doesn't touch the credential so
- * security_inode_copy_up{,_xattr}() are unnecrssary.
+ * security_inode_copy_up{,_xattr}() are unnecessary.
  */
 static int au_cpup_single(struct au_cp_generic *cpg, struct dentry *dst_parent)
 {
@@ -783,7 +783,7 @@ static int au_cpup_single(struct au_cp_generic *cpg, struct dentry *dst_parent)
 	struct inode *dst_inode, *h_dir, *inode, *delegated, *src_inode;
 	struct super_block *sb;
 	struct au_branch *br;
-	/* to reuduce stack size */
+	/* to reduce stack size */
 	struct {
 		struct au_dtime dt;
 		struct path h_path;
