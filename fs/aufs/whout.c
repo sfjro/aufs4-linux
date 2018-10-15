@@ -347,7 +347,7 @@ static void au_wh_init_ro(struct inode *h_dir, struct au_wh_base base[],
 /*
  * returns tri-state,
  * minus: error, caller should print the message
- * zero: succuess
+ * zero: success
  * plus: error, caller should NOT print the message
  */
 static int au_wh_init_rw_nolink(struct dentry *h_root, struct au_wbr *wbr,
