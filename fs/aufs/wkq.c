@@ -5,7 +5,7 @@
 
 /*
  * workqueue for asynchronous/super-io operations
- * todo: try new dredential scheme
+ * todo: try new credential scheme
  */
 
 #include <linux/module.h>

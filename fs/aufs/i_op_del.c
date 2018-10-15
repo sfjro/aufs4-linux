@@ -136,7 +136,7 @@ out:
 
 /*
  * decide the branch where we operate for @dentry. the branch index will be set
- * @rbcpup. after diciding it, 'pin' it and store the timestamps of the parent
+ * @rbcpup. after deciding it, 'pin' it and store the timestamps of the parent
  * dir for reverting.
  * when a new whiteout is necessary, create it.
  */
@@ -292,7 +292,7 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 	aufs_bindex_t bwh, bindex, btop;
 	struct inode *inode, *h_dir, *delegated;
 	struct dentry *parent, *wh_dentry;
-	/* to reuduce stack size */
+	/* to reduce stack size */
 	struct {
 		struct au_dtime dt;
 		struct au_pin pin;
@@ -394,7 +394,7 @@ int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 	struct inode *inode;
 	struct dentry *parent, *wh_dentry, *h_dentry;
 	struct au_whtmp_rmdir *args;
-	/* to reuduce stack size */
+	/* to reduce stack size */
 	struct {
 		struct au_dtime dt;
 		struct au_pin pin;
