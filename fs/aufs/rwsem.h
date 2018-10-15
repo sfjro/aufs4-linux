@@ -14,7 +14,7 @@
 
 #include "debug.h"
 
-/* in the futre, the name 'au_rwsem' will be totally gone */
+/* in the future, the name 'au_rwsem' will be totally gone */
 #define au_rwsem	rw_semaphore
 
 /* to debug easier, do not make them inlined functions */

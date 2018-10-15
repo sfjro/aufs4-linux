@@ -4,7 +4,7 @@
  */
 
 /*
- * magic sysrq hanlder
+ * magic sysrq handler
  */
 
 /* #include <linux/sysrq.h> */
