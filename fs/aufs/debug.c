@@ -320,7 +320,7 @@ void au_dpri_sb(struct super_block *sb)
 	struct au_sbinfo *sbinfo;
 	aufs_bindex_t bindex;
 	int err;
-	/* to reuduce stack size */
+	/* to reduce stack size */
 	struct {
 		struct vfsmount mnt;
 		struct au_branch fake;

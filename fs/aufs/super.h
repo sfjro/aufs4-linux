@@ -87,7 +87,7 @@ struct au_sbinfo {
 	struct au_nowait_tasks	si_nowait;
 
 	/*
-	 * tried sb->s_umount, but failed due to the dependecy between i_mutex.
+	 * tried sb->s_umount, but failed due to the dependency between i_mutex.
 	 * rwsem for au_sbinfo is necessary.
 	 */
 	struct au_rwsem		si_rwsem;
@@ -153,7 +153,7 @@ struct au_sbinfo {
 	atomic_t		si_xigen_next;
 #endif
 
-	/* dirty trick to suppoer atomic_open */
+	/* dirty trick to support atomic_open */
 	struct hlist_bl_head	si_aopen;
 
 	/* vdir parameters */
@@ -184,7 +184,7 @@ struct au_sbinfo {
 	/*
 	 * sysfs and lifetime management.
 	 * this is not a small structure and it may be a waste of memory in case
-	 * of sysfs is disabled, particulary when many aufs-es are mounted.
+	 * of sysfs is disabled, particularly when many aufs-es are mounted.
 	 * but using sysfs is majority.
 	 */
 	struct kobject		si_kobj;
