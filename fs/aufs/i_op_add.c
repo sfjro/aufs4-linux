@@ -239,7 +239,7 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	struct inode *h_dir;
 	struct super_block *sb;
 	struct au_branch *br;
-	/* to reuduce stack size */
+	/* to reduce stack size */
 	struct {
 		struct au_dtime dt;
 		struct au_pin pin;
@@ -707,7 +707,7 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 
 	/*
 	 * aufs doesn't touch the credential so
-	 * security_dentry_create_files_as() is unnecrssary.
+	 * security_dentry_create_files_as() is unnecessary.
 	 */
 	if (au_opt_test(au_mntflags(sb), PLINK)) {
 		if (a->bdst < a->bsrc
