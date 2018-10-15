@@ -17,7 +17,7 @@
  */
 
 /*
- * special handling in renaming a directoy
+ * special handling in renaming a directory
  * in order to support looking-up the before-renamed name on the lower readonly
  * branches
  */
@@ -598,7 +598,7 @@ struct au_drinfo_store {
 	unsigned char no_sio,
 		allocated,		/* current size of *fdata */
 		infonamelen,		/* room size for p */
-		whnamelen,		/* length of the genarated name */
+		whnamelen,		/* length of the generated name */
 		renameback;		/* renamed back */
 };
 
