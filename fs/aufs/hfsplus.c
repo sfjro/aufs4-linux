@@ -4,11 +4,11 @@
  */
 
 /*
- * special support for filesystems which aqucires an inode mutex
+ * special support for filesystems which acquires an inode mutex
  * at final closing a file, eg, hfsplus.
  *
  * This trick is very simple and stupid, just to open the file before really
- * neceeary open to tell hfsplus that this is not the final closing.
+ * necessary open to tell hfsplus that this is not the final closing.
  * The caller should call au_h_open_pre() after acquiring the inode mutex,
  * and au_h_open_post() after releasing it.
  */

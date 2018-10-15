@@ -123,7 +123,7 @@ static int aufs_flush_nondir(struct file *file, fl_owner_t id)
 /*
  * read and write functions acquire [fdi]_rwsem once, but release before
  * mmap_sem. This is because to stop a race condition between mmap(2).
- * Releasing these aufs-rwsem should be safe, no branch-mamagement (by keeping
+ * Releasing these aufs-rwsem should be safe, no branch-management (by keeping
  * si_rwsem), no harmful copy-up should happen. Actually copy-up may happen in
  * read functions after [fdi]_rwsem are released, but it should be harmless.
  */
@@ -420,7 +420,7 @@ static ssize_t aufs_splice_read(struct file *file, loff_t *ppos,
 		goto out;
 
 	err = vfsub_splice_to(h_file, ppos, pipe, len, flags);
-	/* todo: necessasry? */
+	/* todo: necessary? */
 	/* file->f_ra = h_file->f_ra; */
 	au_read_post(inode, h_file);
 
@@ -510,7 +510,7 @@ static ssize_t aufs_copy_file_range(struct file *src, loff_t src_pos,
 	au_mtx_and_read_lock(a_dst.inode);
 	/*
 	 * in order to match the order in di_write_lock2_{child,parent}(),
-	 * use f_path.dentry for this comparision.
+	 * use f_path.dentry for this comparison.
 	 */
 	if (src->f_path.dentry < dst->f_path.dentry) {
 		a_src.h_file = au_read_pre(src, /*keep_fi*/1, AuLsc_FI_1);
@@ -576,9 +576,9 @@ out:
  *	(Note that [fdi]i_rwsem are released before mmap_sem).
  * - in mmap case
  *   mmap(2) -- mmap_sem -- aufs_mmap() -- si_rwsem for read -- [fdi]i_rwsem
- * This AB-BA order is definitly bad, but is not a problem since "si_rwsem for
- * read" allows muliple processes to acquire it and [fdi]i_rwsem are not held in
- * file I/O. Aufs needs to stop lockdep in aufs_mmap() though.
+ * This AB-BA order is definitely bad, but is not a problem since "si_rwsem for
+ * read" allows multiple processes to acquire it and [fdi]i_rwsem are not held
+ * in file I/O. Aufs needs to stop lockdep in aufs_mmap() though.
  * It means that when aufs acquires si_rwsem for write, the process should never
  * acquire mmap_sem.
  *
