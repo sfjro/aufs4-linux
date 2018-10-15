@@ -333,7 +333,7 @@ static void dbgaufs_br_do_add(struct super_block *sb, aufs_bindex_t bindex,
 						     sbinfo, &dbgaufs_xino_fop);
 		lockdep_on();
 		if (unlikely(!br->br_dbgaufs))
-			pr_warn("failed creaiting %pd/%s, ignored.\n",
+			pr_warn("failed creating %pd/%s, ignored.\n",
 				parent, name);
 	}
 }

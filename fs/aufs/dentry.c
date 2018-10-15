@@ -595,7 +595,7 @@ static int au_refresh_by_dinfo(struct dentry *dentry, struct au_dinfo *dinfo,
 	if (d_really_is_positive(dentry))
 		inode = d_inode(dentry);
 	if (!orig_h.inode) {
-		AuDbg("nagative originally\n");
+		AuDbg("negative originally\n");
 		if (inode) {
 			au_hide(dentry);
 			goto out;
