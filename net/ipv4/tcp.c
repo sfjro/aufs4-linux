@@ -1177,7 +1177,7 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 
 	flags = msg->msg_flags;
 
-	if (flags & MSG_ZEROCOPY && size) {
+	if (flags & MSG_ZEROCOPY && size && sock_flag(sk, SOCK_ZEROCOPY)) {
 		if (sk->sk_state != TCP_ESTABLISHED) {
 			err = -EINVAL;
 			goto out_err;
@@ -1837,7 +1837,7 @@ int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
 			 * shouldn't happen.
 			 */
 			if (WARN(before(*seq, TCP_SKB_CB(skb)->seq),
-				 "recvmsg bug: copied %X seq %X rcvnxt %X fl %X\n",
+				 "TCP recvmsg seq # bug: copied %X, seq %X, rcvnxt %X, fl %X\n",
 				 *seq, TCP_SKB_CB(skb)->seq, tp->rcv_nxt,
 				 flags))
 				break;
@@ -1852,7 +1852,7 @@ int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
 			if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN)
 				goto found_fin_ok;
 			WARN(!(flags & MSG_PEEK),
-			     "recvmsg bug 2: copied %X seq %X rcvnxt %X fl %X\n",
+			     "TCP recvmsg seq # bug 2: copied %X, seq %X, rcvnxt %X, fl %X\n",
 			     *seq, TCP_SKB_CB(skb)->seq, tp->rcv_nxt, flags);
 		}
 
@@ -3415,8 +3415,7 @@ int tcp_abort(struct sock *sk, int err)
 			struct request_sock *req = inet_reqsk(sk);
 
 			local_bh_disable();
-			inet_csk_reqsk_queue_drop_and_put(req->rsk_listener,
-							  req);
+			inet_csk_reqsk_queue_drop(req->rsk_listener, req);
 			local_bh_enable();
 			return 0;
 		}

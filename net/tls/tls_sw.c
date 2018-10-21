@@ -135,9 +135,10 @@ static int alloc_sg(struct sock *sk, int len, struct scatterlist *sg,
 		pfrag->offset += use;
 
 		sge = sg + num_elem - 1;
-		if (num_elem > first_coalesce && sg_page(sg) == pfrag->page &&
-		    sg->offset + sg->length == orig_offset) {
-			sg->length += use;
+
+		if (num_elem > first_coalesce && sg_page(sge) == pfrag->page &&
+		    sge->offset + sge->length == orig_offset) {
+			sge->length += use;
 		} else {
 			sge++;
 			sg_unmark_end(sge);
@@ -169,6 +170,9 @@ static int alloc_encrypted_sg(struct sock *sk, int len)
 	rc = alloc_sg(sk, len, ctx->sg_encrypted_data,
 		      &ctx->sg_encrypted_num_elem, &ctx->sg_encrypted_size, 0);
 
+	if (rc == -ENOSPC)
+		ctx->sg_encrypted_num_elem = ARRAY_SIZE(ctx->sg_encrypted_data);
+
 	return rc;
 }
 
@@ -181,6 +185,9 @@ static int alloc_plaintext_sg(struct sock *sk, int len)
 	rc = alloc_sg(sk, len, ctx->sg_plaintext_data,
 		      &ctx->sg_plaintext_num_elem, &ctx->sg_plaintext_size,
 		      tls_ctx->pending_open_record_frags);
+
+	if (rc == -ENOSPC)
+		ctx->sg_plaintext_num_elem = ARRAY_SIZE(ctx->sg_plaintext_data);
 
 	return rc;
 }
@@ -449,7 +456,7 @@ alloc_encrypted:
 			ret = tls_push_record(sk, msg->msg_flags, record_type);
 			if (!ret)
 				continue;
-			if (ret == -EAGAIN)
+			if (ret < 0)
 				goto send_end;
 
 			copied -= try_to_copy;
@@ -654,7 +661,6 @@ static void tls_sw_free_resources(struct sock *sk)
 
 int tls_set_sw_offload(struct sock *sk, struct tls_context *ctx)
 {
-	char keyval[TLS_CIPHER_AES_GCM_128_KEY_SIZE];
 	struct tls_crypto_info *crypto_info;
 	struct tls12_crypto_info_aes_gcm_128 *gcm_128_info;
 	struct tls_sw_context *sw_ctx;
@@ -681,7 +687,7 @@ int tls_set_sw_offload(struct sock *sk, struct tls_context *ctx)
 	ctx->priv_ctx = (struct tls_offload_context *)sw_ctx;
 	ctx->free_resources = tls_sw_free_resources;
 
-	crypto_info = &ctx->crypto_send;
+	crypto_info = &ctx->crypto_send.info;
 	switch (crypto_info->cipher_type) {
 	case TLS_CIPHER_AES_GCM_128: {
 		nonce_size = TLS_CIPHER_AES_GCM_128_IV_SIZE;
@@ -746,9 +752,7 @@ int tls_set_sw_offload(struct sock *sk, struct tls_context *ctx)
 
 	ctx->push_pending_record = tls_sw_push_pending_record;
 
-	memcpy(keyval, gcm_128_info->key, TLS_CIPHER_AES_GCM_128_KEY_SIZE);
-
-	rc = crypto_aead_setkey(sw_ctx->aead_send, keyval,
+	rc = crypto_aead_setkey(sw_ctx->aead_send, gcm_128_info->key,
 				TLS_CIPHER_AES_GCM_128_KEY_SIZE);
 	if (rc)
 		goto free_aead;
