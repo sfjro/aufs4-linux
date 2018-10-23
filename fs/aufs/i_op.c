@@ -290,7 +290,7 @@ static int au_do_aopen(struct inode *inode, struct file *file)
 }
 
 static int au_aopen_do_open(struct file *file, struct dentry *dentry,
-			    struct aopen_node *aopen_node, int *opened)
+			    struct aopen_node *aopen_node)
 {
 	int err;
 	struct hlist_bl_head *aopen;
@@ -298,12 +298,12 @@ static int au_aopen_do_open(struct file *file, struct dentry *dentry,
 	AuLabel(here);
 	aopen = &au_sbi(dentry->d_sb)->si_aopen;
 	au_hbl_add(&aopen_node->hblist, aopen);
-	err = finish_open(file, dentry, au_do_aopen, opened);
+	err = finish_open(file, dentry, au_do_aopen);
 	au_hbl_del(&aopen_node->hblist, aopen);
 	/* AuDbgFile(file); */
 	AuDbg("%pd%s%s\n", dentry,
-	      (*opened & FILE_CREATED) ? " created" : "",
-	      (*opened & FILE_OPENED) ? " opened" : "");
+	      (file->f_mode & FMODE_CREATED) ? " created" : "",
+	      (file->f_mode & FMODE_OPENED) ? " opened" : "");
 
 	AuTraceErr(err);
 	return err;
@@ -323,17 +323,16 @@ static int au_aopen_no_open(struct file *file, struct dentry *dentry)
 
 static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 			    struct file *file, unsigned int open_flag,
-			    umode_t create_mode, int *opened)
+			    umode_t create_mode)
 {
-	int err, did_open, h_opened = *opened;
+	int err, did_open;
 	unsigned int lkup_flags;
 	aufs_bindex_t bindex;
 	struct super_block *sb;
 	struct dentry *parent, *d;
 	struct vfsub_aopen_args args = {
 		.open_flag	= open_flag,
-		.create_mode	= create_mode,
-		.opened		= &h_opened
+		.create_mode	= create_mode
 	};
 	struct aopen_node aopen_node = {
 		.file	= file
@@ -390,20 +389,19 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 		goto out_parent; /* success */
 	}
 
-	args.file = get_empty_filp();
+	args.file = alloc_empty_file(file->f_flags, current_cred());
 	err = PTR_ERR(args.file);
 	if (IS_ERR(args.file))
 		goto out_parent;
-	args.file->f_flags = file->f_flags;
 
 	bindex = au_dbtop(dentry);
 	err = au_aopen_or_create(dir, dentry, &args);
 	AuTraceErr(err);
-	AuDbg("h_opened 0x%x\n", h_opened);
-	*opened |= h_opened & ~FILE_OPENED;
-	did_open = !!(h_opened & FILE_OPENED);
+	AuDbgFile(args.file);
+	file->f_mode = args.file->f_mode & ~FMODE_OPENED;
+	did_open = !!(args.file->f_mode & FMODE_OPENED);
 	if (!did_open) {
-		put_filp(args.file);
+		fput(args.file);
 		args.file = NULL;
 	}
 	di_write_unlock(parent);
@@ -414,12 +412,11 @@ static int aufs_atomic_open(struct inode *dir, struct dentry *dentry,
 		goto out_sb;
 	}
 
-	AuDbgFile(args.file);
 	if (!did_open)
 		err = au_aopen_no_open(file, dentry);
 	else {
 		aopen_node.h_file = args.file;
-		err = au_aopen_do_open(file, dentry, &aopen_node, opened);
+		err = au_aopen_do_open(file, dentry, &aopen_node);
 	}
 	if (unlikely(err < 0)) {
 		if (args.file)

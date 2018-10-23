@@ -287,13 +287,14 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 					   arg->u.c.want_excl);
 			created = !err;
 			if (!err && try_aopen)
-				*aopen->opened |= FILE_CREATED;
-			AuDbg("opened 0x%x\n", *aopen->opened);
+				aopen->file->f_mode |= FMODE_CREATED;
 		} else {
 			aopen->br = br;
 			err = vfsub_atomic_open(h_dir, a->h_path.dentry, aopen);
-			AuDbg("opened 0x%x\n", *aopen->opened);
-			created = err >= 0 && !!(*aopen->opened & FILE_CREATED);
+			AuDbg("err %d\n", err);
+			AuDbgFile(aopen->file);
+			created = err >= 0
+				&& !!(aopen->file->f_mode & FMODE_CREATED);
 		}
 		break;
 	case Symlink:
@@ -328,7 +329,7 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 		au_dtime_revert(&a->dt);
 	}
 	if (try_aopen && h_dir->i_op->atomic_open
-	    && (*aopen->opened & FILE_OPENED))
+	    && (aopen->file->f_mode & FMODE_OPENED))
 		/* aopen->file is still opened */
 		au_lcnt_dec(&aopen->br->br_nfiles);
 

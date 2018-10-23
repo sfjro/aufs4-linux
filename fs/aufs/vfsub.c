@@ -116,8 +116,9 @@ int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
 	au_lcnt_inc(&br->br_nfiles);
 	file->f_path.dentry = DENTRY_NOT_SET;
 	file->f_path.mnt = au_br_mnt(br);
+	AuDbg("%ps\n", dir->i_op->atomic_open);
 	err = dir->i_op->atomic_open(dir, dentry, file, args->open_flag,
-				     args->create_mode, args->opened);
+				     args->create_mode);
 	if (unlikely(err < 0)) {
 		au_lcnt_dec(&br->br_nfiles);
 		goto out;
@@ -127,16 +128,14 @@ int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
 	if (au_test_nfs(dir->i_sb))
 		nfs_mark_for_revalidate(dir);
 
-	/* some filesystems don't set FILE_CREATED while succeeded? */
-	if (*args->opened & FILE_CREATED)
+	if (file->f_mode & FMODE_CREATED)
 		fsnotify_create(dir, dentry);
-	if (!(*args->opened & FILE_OPENED)) {
+	if (!(file->f_mode & FMODE_OPENED)) {
 		au_lcnt_dec(&br->br_nfiles);
 		goto out;
 	}
 
 	/* todo: call VFS:may_open() here */
-	err = open_check_o_direct(file);
 	/* todo: ima_file_check() too? */
 	if (!err && (args->open_flag & __FMODE_EXEC))
 		err = deny_write_access(file);
