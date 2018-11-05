@@ -36,9 +36,7 @@ struct au_xino {
 	} xi_nondir;
 
 	struct mutex		xi_mtx;	/* protects xi_file array */
-	/* reserved for future use */
-	/* wait_queue_head_t	xi_wq; */
-	/* atomic_t		xi_pending; */
+	struct hlist_bl_head	xi_writing;
 
 	atomic_t		xi_truncating;
 
