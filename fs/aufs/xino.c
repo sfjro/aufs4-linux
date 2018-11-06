@@ -647,6 +647,11 @@ struct au_xino_do_new_async_args {
 	ino_t ino;
 };
 
+struct au_xi_writing {
+	struct hlist_bl_node node;
+	ino_t h_ino, ino;
+};
+
 static int au_xino_do_write(vfs_writef_t write, struct file *file,
 			    struct au_xi_calc *calc, ino_t ino);
 
@@ -658,6 +663,9 @@ static void au_xino_call_do_new_async(void *args)
 	struct au_sbinfo *sbi;
 	struct inode *root;
 	struct file *file;
+	struct au_xi_writing *del, *p;
+	struct hlist_bl_head *hbl;
+	struct hlist_bl_node *pos;
 	int err;
 
 	br = a->br;
@@ -667,15 +675,34 @@ static void au_xino_call_do_new_async(void *args)
 	root = d_inode(sb->s_root);
 	ii_read_lock_child(root);
 	err = au_xino_do_new_async(sb, br, &a->calc);
-	if (!err) {
-		file = au_xino_file(br->br_xino, a->calc.idx);
-		if (file)
-			err = au_xino_do_write(sbi->si_xwrite, file, &a->calc,
-					       a->ino);
-		if (unlikely(err))
-			AuIOErr("err %d\n", err);
-	} else
+	if (unlikely(err)) {
 		AuIOErr("err %d\n", err);
+		goto out;
+	}
+
+	file = au_xino_file(br->br_xino, a->calc.idx);
+	AuDebugOn(!file);
+	err = au_xino_do_write(sbi->si_xwrite, file, &a->calc, a->ino);
+	if (unlikely(err)) {
+		AuIOErr("err %d\n", err);
+		goto out;
+	}
+
+	del = NULL;
+	hbl = &br->br_xino->xi_writing;
+	hlist_bl_lock(hbl);
+	au_hbl_for_each(pos, hbl) {
+		p = container_of(pos, struct au_xi_writing, node);
+		if (p->ino == a->ino) {
+			del = p;
+			hlist_bl_del(&p->node);
+			break;
+		}
+	}
+	hlist_bl_unlock(hbl);
+	kfree(del);
+
+out:
 	au_lcnt_dec(&br->br_count);
 	ii_read_unlock(root);
 	si_read_unlock(sb);
@@ -725,6 +752,10 @@ int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 	struct au_xi_calc calc;
 	struct au_sbinfo *sbinfo;
 	struct file *file;
+	struct au_xino *xi;
+	struct hlist_bl_head *hbl;
+	struct hlist_bl_node *pos;
+	struct au_xi_writing *p;
 
 	*ino = 0;
 	if (!au_opt_test(au_mntflags(sb), XINO))
@@ -732,10 +763,24 @@ int au_xino_read(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 
 	err = 0;
 	au_xi_calc(sb, h_ino, &calc);
-	file = au_xino_file(au_sbr(sb, bindex)->br_xino, calc.idx);
-	if (!file
-	    || vfsub_f_size_read(file) < calc.pos + sizeof(*ino))
-		return 0; /* no ino */
+	xi = au_sbr(sb, bindex)->br_xino;
+	file = au_xino_file(xi, calc.idx);
+	if (!file) {
+		hbl = &xi->xi_writing;
+		hlist_bl_lock(hbl);
+		au_hbl_for_each(pos, hbl) {
+			p = container_of(pos, struct au_xi_writing, node);
+			if (p->h_ino == h_ino) {
+				AuDbg("hi%llu, i%llu, found\n",
+				      (u64)p->h_ino, (u64)p->ino);
+				*ino = p->ino;
+				break;
+			}
+		}
+		hlist_bl_unlock(hbl);
+		return 0;
+	} else if (vfsub_f_size_read(file) < calc.pos + sizeof(*ino))
+		return 0; /* no xino */
 
 	sbinfo = au_sbi(sb);
 	sz = xino_fread(sbinfo->si_xread, file, ino, sizeof(*ino), &calc.pos);
@@ -779,6 +824,7 @@ int au_xino_write(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 	struct file *file;
 	struct au_branch *br;
 	struct au_xino *xi;
+	struct au_xi_writing *p;
 
 	SiMustAnyLock(sb);
 
@@ -791,6 +837,12 @@ int au_xino_write(struct super_block *sb, aufs_bindex_t bindex, ino_t h_ino,
 	xi = br->br_xino;
 	file = au_xino_file(xi, calc.idx);
 	if (!file) {
+		/* store the inum pair into the list */
+		p = kmalloc(sizeof(*p), GFP_NOFS | __GFP_NOFAIL);
+		p->h_ino = h_ino;
+		p->ino = ino;
+		au_hbl_add(&p->node, &xi->xi_writing);
+
 		/* create and write a new xino file asynchronously */
 		err = au_xino_new_async(sb, br, &calc, ino);
 		if (!err)
@@ -1238,8 +1290,7 @@ struct au_xino *au_xino_alloc(unsigned int nfile)
 	spin_lock_init(&xi->xi_nondir.spin);
 	init_waitqueue_head(&xi->xi_nondir.wqh);
 	mutex_init(&xi->xi_mtx);
-	/* init_waitqueue_head(&xi->xi_wq); */
-	/* atomic_set(&xi->xi_pending, 0); */
+	INIT_HLIST_BL_HEAD(&xi->xi_writing);
 	atomic_set(&xi->xi_truncating, 0);
 	kref_init(&xi->xi_kref);
 	goto out; /* success */
@@ -1279,6 +1330,10 @@ static void au_xino_release(struct kref *kref)
 {
 	struct au_xino *xi;
 	int i;
+	unsigned long ul;
+	struct hlist_bl_head *hbl;
+	struct hlist_bl_node *pos, *n;
+	struct au_xi_writing *p;
 
 	xi = container_of(kref, struct au_xino, xi_kref);
 	for (i = 0; i < xi->xi_nfile; i++)
@@ -1287,6 +1342,17 @@ static void au_xino_release(struct kref *kref)
 	for (i = xi->xi_nondir.total - 1; i >= 0; i--)
 		AuDebugOn(xi->xi_nondir.array[i]);
 	mutex_destroy(&xi->xi_mtx);
+	hbl = &xi->xi_writing;
+	ul = au_hbl_count(hbl);
+	if (unlikely(ul)) {
+		pr_warn("xi_writing %lu\n", ul);
+		hlist_bl_lock(hbl);
+		hlist_bl_for_each_entry_safe (p, pos, n, hbl, node) {
+			hlist_bl_del(&p->node);
+			kfree(p);
+		}
+		hlist_bl_unlock(hbl);
+	}
 	kfree(xi->xi_file);
 	kfree(xi->xi_nondir.array);
 	kfree(xi);
