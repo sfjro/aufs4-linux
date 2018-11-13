@@ -259,13 +259,13 @@ int vfsub_fsync(struct file *file, struct path *path, int datasync);
  * re-use branch fs's ioctl(FICLONE) while aufs itself doesn't support such
  * ioctl.
  */
-static inline int vfsub_clone_file_range(struct file *src, struct file *dst,
-					 u64 len)
+static inline loff_t vfsub_clone_file_range(struct file *src, struct file *dst,
+					    loff_t len)
 {
-	int err;
+	loff_t err;
 
 	lockdep_off();
-	err = vfs_clone_file_range(src, 0, dst, 0, len);
+	err = vfs_clone_file_range(src, 0, dst, 0, len, /*remap_flags*/0);
 	lockdep_on();
 
 	return err;
