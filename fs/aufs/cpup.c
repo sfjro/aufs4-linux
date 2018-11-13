@@ -433,18 +433,15 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		struct dentry *dentry;
 		int force_wr;
 		struct file *file;
-		void *label;
 	} *f, file[] = {
 		{
 			.bindex = cpg->bsrc,
 			.flags = O_RDONLY | O_NOATIME | O_LARGEFILE,
-			.label = &&out
 		},
 		{
 			.bindex = cpg->bdst,
 			.flags = O_WRONLY | O_NOATIME | O_LARGEFILE,
 			.force_wr = !!au_ftest_cpup(cpg->flags, RWDST),
-			.label = &&out_src
 		}
 	};
 	struct au_branch *br;
@@ -459,9 +456,13 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		f->dentry = au_h_dptr(cpg->dentry, f->bindex);
 		f->file = au_h_open(cpg->dentry, f->bindex, f->flags,
 				    /*file*/NULL, f->force_wr);
-		err = PTR_ERR(f->file);
-		if (IS_ERR(f->file))
-			goto *f->label;
+		if (IS_ERR(f->file)) {
+			err = PTR_ERR(f->file);
+			if (i == SRC)
+				goto out;
+			else
+				goto out_src;
+		}
 	}
 
 	/* try stopping to update while we copyup */
