@@ -603,7 +603,7 @@ out:
 	au_lcnt_dec(&a->br->br_count);
 	si_write_unlock(a->sb);
 	au_nwt_done(&au_sbi(a->sb)->si_nowait);
-	kfree(arg);
+	au_kfree_rcu(a);
 	if (unlikely(err))
 		AuIOErr("err %d\n", err);
 }
@@ -631,7 +631,7 @@ static void kick_reinit_br_wh(struct super_block *sb, struct au_branch *br)
 		if (unlikely(wkq_err)) {
 			atomic_dec(&br->br_wbr->wbr_wh_running);
 			au_lcnt_dec(&br->br_count);
-			kfree(arg);
+			au_kfree_rcu(arg);
 		}
 		do_dec = 0;
 	}
@@ -908,7 +908,7 @@ struct au_whtmp_rmdir *au_whtmp_rmdir_alloc(struct super_block *sb, gfp_t gfp)
 		rdhash = AUFS_RDHASH_DEF;
 	err = au_nhash_alloc(&whtmp->whlist, rdhash, gfp);
 	if (unlikely(err)) {
-		kfree(whtmp);
+		au_kfree_rcu(whtmp);
 		whtmp = ERR_PTR(err);
 	}
 
@@ -923,7 +923,7 @@ void au_whtmp_rmdir_free(struct au_whtmp_rmdir *whtmp)
 	dput(whtmp->wh_dentry);
 	iput(whtmp->dir);
 	au_nhash_wh_free(&whtmp->whlist);
-	kfree(whtmp);
+	au_kfree_rcu(whtmp);
 }
 
 /*

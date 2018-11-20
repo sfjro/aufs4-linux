@@ -118,7 +118,7 @@ void au_dr_hino_free(struct au_dr_br *dr)
 		hbl = dr->dr_h_ino + i;
 		/* no spinlock since sbinfo must be write-locked */
 		hlist_bl_for_each_entry_safe(ent, pos, tmp, hbl, dr_hnode)
-			kfree(ent);
+			au_kfree_rcu(ent);
 		INIT_HLIST_BL_HEAD(hbl);
 	}
 }
@@ -560,7 +560,7 @@ static struct au_drinfo *au_drinfo_read_k(struct file *file, ino_t h_ino)
 	*ret = *drinfo;
 	ssz = vfsub_read_k(file, (void *)ret->oldname, len, &pos);
 	if (unlikely(ssz != len)) {
-		kfree(ret);
+		au_kfree_rcu(ret);
 		ret = ERR_PTR(-EIO);
 		AuIOErr("ssz %zd, %u, %pD2\n", ssz, len, file);
 		goto out;
@@ -756,7 +756,7 @@ out:
 
 static void au_drinfo_store_work_fin(struct au_drinfo_store *w)
 {
-	kfree(w->fdata);
+	au_kfree_rcu(w->fdata);
 }
 
 static void au_drinfo_store_rev(struct au_drinfo_rev *rev,
@@ -793,7 +793,7 @@ static void au_drinfo_store_rev(struct au_drinfo_rev *rev,
 			       elm->info_last->oldname,
 			       elm->info_last->oldnamelen);
 			err = au_drinfo_store_sio(w, /*elm*/NULL);
-			kfree(elm->info_last);
+			au_kfree_rcu(elm->info_last);
 		}
 		if (unlikely(err))
 			AuIOErr("%d, %s\n", err, w->whname);
@@ -925,7 +925,7 @@ int au_dr_rename(struct dentry *src, aufs_bindex_t bindex,
 	/* revert */
 	if (!already)
 		au_dr_hino_del(dr, ent);
-	kfree(ent);
+	au_kfree_rcu(ent);
 
 out:
 	AuTraceErr(err);
@@ -942,7 +942,7 @@ void au_dr_rename_fin(struct dentry *src, aufs_bindex_t btgt, void *_rev)
 	elm = rev->elm;
 	for (nelm = rev->nelm; nelm > 0; nelm--, elm++) {
 		dput(elm->info_dentry);
-		kfree(elm->info_last);
+		au_kfree_rcu(elm->info_last);
 	}
 	kfree(rev);
 }
@@ -976,7 +976,7 @@ void au_dr_rename_rev(struct dentry *src, aufs_bindex_t btgt, void *_rev)
 	ent = au_dr_hino_find(dr, h_inode->i_ino);
 	BUG_ON(!ent);
 	au_dr_hino_del(dr, ent);
-	kfree(ent);
+	au_kfree_rcu(ent);
 
 out:
 	kfree(rev);
@@ -1104,7 +1104,7 @@ static int au_drinfo_load(struct au_drinfo_load *w, aufs_bindex_t bindex,
 	oldname.name = drinfo->oldname;
 	if (au_qstreq(w->qname, &oldname)) {
 		/* the name is renamed back */
-		kfree(drinfo);
+		au_kfree_rcu(drinfo);
 		drinfo = NULL;
 
 		infopath.dentry = info_dentry;
@@ -1119,7 +1119,7 @@ static int au_drinfo_load(struct au_drinfo_load *w, aufs_bindex_t bindex,
 		if (unlikely(e == -EWOULDBLOCK))
 			iput(delegated);
 	}
-	kfree(w->drinfo[bindex]);
+	au_kfree_rcu(w->drinfo[bindex]);
 	w->drinfo[bindex] = drinfo;
 	dput(info_dentry);
 
@@ -1135,7 +1135,7 @@ static void au_dr_lkup_free(struct au_drinfo **drinfo, int n)
 	struct au_drinfo **p = drinfo;
 
 	while (n-- > 0)
-		kfree(*drinfo++);
+		au_kfree_rcu(*drinfo++);
 	kfree(p);
 }
 
@@ -1189,7 +1189,7 @@ int au_dr_lkup(struct au_do_lookup_args *lkup, struct dentry *dentry,
 		ent = au_dr_hino_find(&br->br_dirren, h_dir->i_ino);
 		AuDebugOn(!ent);
 		au_dr_hino_del(&br->br_dirren, ent);
-		kfree(ent);
+		au_kfree_rcu(ent);
 	}
 	goto out; /* success */
 

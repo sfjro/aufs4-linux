@@ -52,7 +52,7 @@ void au_si_free(struct kobject *kobj)
 
 	au_lcnt_wait_for_fin(&sbinfo->si_ninodes);
 	/* si_nfiles is waited too */
-	kfree(sbinfo);
+	au_kfree_rcu(sbinfo);
 }
 
 int au_si_alloc(struct super_block *sb)
@@ -130,7 +130,7 @@ int au_si_alloc(struct super_block *sb)
 out_br:
 	kfree(sbinfo->si_branch);
 out_sbinfo:
-	kfree(sbinfo);
+	au_kfree_rcu(sbinfo);
 out:
 	return err;
 }

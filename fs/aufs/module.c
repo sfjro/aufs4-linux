@@ -35,7 +35,7 @@ void *au_krealloc(void *p, unsigned int new_sz, gfp_t gfp, int may_shrink)
 	if (p) {
 #if 0 /* unused */
 		if (!new_sz) {
-			kfree(p);
+			au_kfree_rcu(p);
 			p = NULL;
 			goto out;
 		}

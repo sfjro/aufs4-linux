@@ -111,7 +111,7 @@ static void au_nhash_wh_do_free(struct hlist_head *head)
 	struct hlist_node *node;
 
 	hlist_for_each_entry_safe(pos, node, head, wh_hash)
-		kfree(pos);
+		au_kfree_rcu(pos);
 }
 
 static void au_nhash_de_do_free(struct hlist_head *head)

@@ -312,7 +312,7 @@ static int aufs_open_dir(struct inode *inode __maybe_unused,
 		};
 		err = au_do_open(file, &args);
 		if (unlikely(err))
-			kfree(fidir);
+			au_kfree_rcu(fidir);
 	}
 	si_read_unlock(sb);
 	return err;
@@ -348,7 +348,7 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 				if (hf->hf_file)
 					au_hfput(hf, /*execed*/0);
 		}
-		kfree(fidir);
+		au_kfree_rcu(fidir);
 		finfo->fi_hdir = NULL;
 	}
 	au_finfo_fin(file);
