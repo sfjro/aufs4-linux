@@ -163,7 +163,7 @@ struct dentry *au_whtmp_lkup(struct dentry *h_parent, struct au_branch *br,
 
 out_name:
 	if (name != defname)
-		kfree(name);
+		au_kfree_try_rcu(name);
 out:
 	AuTraceErrPtr(dentry);
 	return dentry;
@@ -790,7 +790,7 @@ struct dentry *au_wh_lkup(struct dentry *h_parent, struct qstr *base_name,
 	wh_dentry = ERR_PTR(err);
 	if (!err) {
 		wh_dentry = vfsub_lkup_one(&wh_name, h_parent);
-		kfree(wh_name.name);
+		au_kfree_try_rcu(wh_name.name);
 	}
 	return wh_dentry;
 }

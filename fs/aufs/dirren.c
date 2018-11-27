@@ -869,7 +869,7 @@ static int au_drinfo_store(struct dentry *dentry, aufs_bindex_t btgt,
 	if (unlikely(err)) {
 		/* revert all drinfo */
 		au_drinfo_store_rev(rev, &work);
-		kfree(rev);
+		au_kfree_try_rcu(rev);
 		*p = NULL;
 	}
 	au_hn_inode_unlock(hdir);
@@ -944,7 +944,7 @@ void au_dr_rename_fin(struct dentry *src, aufs_bindex_t btgt, void *_rev)
 		dput(elm->info_dentry);
 		au_kfree_rcu(elm->info_last);
 	}
-	kfree(rev);
+	au_kfree_try_rcu(rev);
 }
 
 void au_dr_rename_rev(struct dentry *src, aufs_bindex_t btgt, void *_rev)
@@ -979,7 +979,7 @@ void au_dr_rename_rev(struct dentry *src, aufs_bindex_t btgt, void *_rev)
 	au_kfree_rcu(ent);
 
 out:
-	kfree(rev);
+	au_kfree_try_rcu(rev);
 	if (unlikely(err))
 		pr_err("failed to remove dirren info\n");
 }
@@ -1136,7 +1136,7 @@ static void au_dr_lkup_free(struct au_drinfo **drinfo, int n)
 
 	while (n-- > 0)
 		au_kfree_rcu(*drinfo++);
-	kfree(p);
+	au_kfree_try_rcu(p);
 }
 
 int au_dr_lkup(struct au_do_lookup_args *lkup, struct dentry *dentry,
@@ -1220,7 +1220,7 @@ int au_dr_lkup_name(struct au_do_lookup_args *lkup, aufs_bindex_t btgt)
 	if (!drinfo)
 		goto out;
 
-	kfree(lkup->whname.name);
+	au_kfree_try_rcu(lkup->whname.name);
 	lkup->whname.name = NULL;
 	lkup->dirren.dr_name.len = drinfo->oldnamelen;
 	lkup->dirren.dr_name.name = drinfo->oldname;

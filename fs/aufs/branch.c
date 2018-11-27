@@ -53,7 +53,7 @@ static void au_br_do_free(struct au_branch *br)
 
 	if (br->br_fhsm) {
 		au_br_fhsm_fin(br->br_fhsm);
-		kfree(br->br_fhsm);
+		au_kfree_try_rcu(br->br_fhsm);
 	}
 
 	key = br->br_dykey;
@@ -1385,7 +1385,7 @@ int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
 		if (!au_br_fhsm(mod->perm)) {
 			/* fhsm --> non-fhsm */
 			au_br_fhsm_fin(br->br_fhsm);
-			kfree(br->br_fhsm);
+			au_kfree_rcu(br->br_fhsm);
 			br->br_fhsm = NULL;
 		}
 	} else if (au_br_fhsm(mod->perm))
@@ -1397,7 +1397,7 @@ int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
 	goto out; /* success */
 
 out_bf:
-	kfree(bf);
+	au_kfree_try_rcu(bf);
 out:
 	AuTraceErr(err);
 	return err;

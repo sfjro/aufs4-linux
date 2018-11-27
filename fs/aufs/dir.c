@@ -157,7 +157,7 @@ out_unlock:
 out:
 	dput(a->dentry);
 	au_nwt_done(&au_sbi(sb)->si_nowait);
-	kfree(arg);
+	au_kfree_try_rcu(arg);
 }
 
 void au_dir_ts(struct inode *dir, aufs_bindex_t bindex)
@@ -193,7 +193,7 @@ void au_dir_ts(struct inode *dir, aufs_bindex_t bindex)
 	if (unlikely(wkq_err)) {
 		pr_err("wkq %d\n", wkq_err);
 		dput(dentry);
-		kfree(arg);
+		au_kfree_try_rcu(arg);
 	}
 
 out:

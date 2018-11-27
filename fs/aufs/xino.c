@@ -1296,7 +1296,7 @@ struct au_xino *au_xino_alloc(unsigned int nfile)
 	goto out; /* success */
 
 out_file:
-	kfree(xi->xi_file);
+	au_kfree_try_rcu(xi->xi_file);
 out_free:
 	au_kfree_rcu(xi);
 	xi = NULL;
@@ -1353,8 +1353,8 @@ static void au_xino_release(struct kref *kref)
 		}
 		hlist_bl_unlock(hbl);
 	}
-	kfree(xi->xi_file);
-	kfree(xi->xi_nondir.array);
+	au_kfree_try_rcu(xi->xi_file);
+	au_kfree_try_rcu(xi->xi_nondir.array);
 	au_kfree_rcu(xi);
 }
 

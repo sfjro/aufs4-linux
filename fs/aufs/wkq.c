@@ -172,7 +172,7 @@ out:
 
 static void au_wkq_lockdep_free(struct au_wkinfo *wkinfo)
 {
-	kfree(wkinfo->hlock);
+	au_kfree_try_rcu(wkinfo->hlock);
 }
 
 static void au_wkq_lockdep_pre(struct au_wkinfo *wkinfo)

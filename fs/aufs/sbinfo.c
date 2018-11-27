@@ -46,7 +46,7 @@ void au_si_free(struct kobject *kobj)
 	au_br_free(sbinfo);
 	au_rw_write_unlock(&sbinfo->si_rwsem);
 
-	kfree(sbinfo->si_branch);
+	au_kfree_try_rcu(sbinfo->si_branch);
 	mutex_destroy(&sbinfo->si_xib_mtx);
 	AuRwDestroy(&sbinfo->si_rwsem);
 
@@ -128,7 +128,7 @@ int au_si_alloc(struct super_block *sb)
 	return 0; /* success */
 
 out_br:
-	kfree(sbinfo->si_branch);
+	au_kfree_try_rcu(sbinfo->si_branch);
 out_sbinfo:
 	au_kfree_rcu(sbinfo);
 out:
