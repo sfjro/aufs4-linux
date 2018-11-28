@@ -40,7 +40,7 @@ static void au_br_do_free(struct au_branch *br)
 
 	if (br->br_fhsm) {
 		au_br_fhsm_fin(br->br_fhsm);
-		kfree(br->br_fhsm);
+		au_kfree_try_rcu(br->br_fhsm);
 	}
 
 	key = br->br_dykey;
@@ -55,12 +55,12 @@ static void au_br_do_free(struct au_branch *br)
 	lockdep_off();
 	path_put(&br->br_path);
 	lockdep_on();
-	kfree(wbr);
+	au_kfree_rcu(wbr);
 	au_lcnt_wait_for_fin(&br->br_nfiles);
 	au_lcnt_wait_for_fin(&br->br_count);
 	/* I don't know why, but percpu_refcount requires this */
 	/* synchronize_rcu(); */
-	kfree(br);
+	au_kfree_rcu(br);
 }
 
 /*
@@ -161,13 +161,13 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 		return add_branch; /* success */
 
 out_wbr:
-	kfree(add_branch->br_wbr);
+	au_kfree_rcu(add_branch->br_wbr);
 out_hnotify:
 	au_hnotify_fin_br(add_branch);
 out_xino:
 	au_xino_put(add_branch);
 out_br:
-	kfree(add_branch);
+	au_kfree_rcu(add_branch);
 out:
 	return ERR_PTR(err);
 }
@@ -333,7 +333,7 @@ static int au_br_init_wh(struct super_block *sb, struct au_branch *br,
 	br->br_perm = old_perm;
 
 	if (!err && wbr && !au_br_writable(new_perm)) {
-		kfree(wbr);
+		au_kfree_rcu(wbr);
 		br->br_wbr = NULL;
 	}
 
@@ -1360,7 +1360,7 @@ int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
 		if (br->br_wbr) {
 			err = au_wbr_init(br, sb, mod->perm);
 			if (unlikely(err)) {
-				kfree(br->br_wbr);
+				au_kfree_rcu(br->br_wbr);
 				br->br_wbr = NULL;
 			}
 		}
@@ -1372,7 +1372,7 @@ int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
 		if (!au_br_fhsm(mod->perm)) {
 			/* fhsm --> non-fhsm */
 			au_br_fhsm_fin(br->br_fhsm);
-			kfree(br->br_fhsm);
+			au_kfree_rcu(br->br_fhsm);
 			br->br_fhsm = NULL;
 		}
 	} else if (au_br_fhsm(mod->perm))
@@ -1384,7 +1384,7 @@ int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
 	goto out; /* success */
 
 out_bf:
-	kfree(bf);
+	au_kfree_try_rcu(bf);
 out:
 	AuTraceErr(err);
 	return err;
