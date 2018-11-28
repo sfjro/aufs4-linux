@@ -66,6 +66,7 @@ struct au_finfo {
 
 	struct hlist_bl_node	fi_hlist;
 	struct file		*fi_file;	/* very ugly */
+	struct rcu_head		rcu;
 } ____cacheline_aligned_in_smp;
 
 /* ---------------------------------------------------------------------- */
