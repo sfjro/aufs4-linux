@@ -29,7 +29,14 @@ struct dbgaufs_arg {
 static int dbgaufs_xi_release(struct inode *inode __maybe_unused,
 			      struct file *file)
 {
-	kfree(file->private_data);
+	void *p;
+
+	p = file->private_data;
+	if (p) {
+		/* this is struct dbgaufs_arg */
+		AuDebugOn(!au_kfree_sz_test(p));
+		au_kfree_do_rcu(p);
+	}
 	return 0;
 }
 
