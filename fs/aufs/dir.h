@@ -44,6 +44,7 @@ struct au_vdir_destr {
 struct au_vdir_dehstr {
 	struct hlist_node	hash;
 	struct au_vdir_destr	*str;
+	struct rcu_head		rcu;
 } ____cacheline_aligned_in_smp;
 
 struct au_vdir_de {
@@ -81,7 +82,8 @@ struct au_vdir {
 
 	u64		vd_version;
 	unsigned int	vd_deblk_sz;
-	unsigned long		vd_jiffy;
+	unsigned long	vd_jiffy;
+	struct rcu_head	rcu;
 } ____cacheline_aligned_in_smp;
 
 /* ---------------------------------------------------------------------- */

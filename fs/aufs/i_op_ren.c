@@ -1242,7 +1242,7 @@ out_free:
 	iput(a->dst_inode);
 	if (a->thargs)
 		au_whtmp_rmdir_free(a->thargs);
-	kfree(a);
+	au_kfree_rcu(a);
 out:
 	AuTraceErr(err);
 	return err;
