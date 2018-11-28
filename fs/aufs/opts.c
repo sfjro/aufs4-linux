@@ -1247,7 +1247,7 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 		}
 	}
 
-	kfree(a);
+	au_kfree_rcu(a);
 	dump_opts(opts);
 	if (unlikely(err))
 		au_opts_free(opts);
@@ -1677,7 +1677,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		au_hn_inode_unlock(hdir);
 
 		if (!err && do_free) {
-			kfree(wbr);
+			au_kfree_rcu(wbr);
 			br->br_wbr = NULL;
 		}
 	}
