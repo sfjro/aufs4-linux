@@ -111,7 +111,7 @@ static void au_nhash_wh_do_free(struct hlist_head *head)
 	struct hlist_node *node;
 
 	hlist_for_each_entry_safe(pos, node, head, wh_hash)
-		kfree(pos);
+		au_kfree_rcu(pos);
 }
 
 static void au_nhash_de_do_free(struct hlist_head *head)
@@ -138,7 +138,7 @@ static void au_nhash_do_free(struct au_nhash *nhash,
 		nhash_count(head);
 		free(head++);
 	}
-	kfree(nhash->nh_head);
+	au_kfree_try_rcu(nhash->nh_head);
 }
 
 void au_nhash_wh_free(struct au_nhash *whlist)
@@ -357,8 +357,8 @@ void au_vdir_free(struct au_vdir *vdir)
 
 	deblk = vdir->vd_deblk;
 	while (vdir->vd_nblk--)
-		kfree(*deblk++);
-	kfree(vdir->vd_deblk);
+		au_kfree_try_rcu(*deblk++);
+	au_kfree_try_rcu(vdir->vd_deblk);
 	au_cache_free_vdir(vdir);
 }
 
@@ -393,7 +393,7 @@ static struct au_vdir *alloc_vdir(struct file *file)
 	if (!err)
 		return vdir; /* success */
 
-	kfree(vdir->vd_deblk);
+	au_kfree_try_rcu(vdir->vd_deblk);
 
 out_free:
 	au_cache_free_vdir(vdir);
@@ -408,7 +408,7 @@ static int reinit_vdir(struct au_vdir *vdir)
 	union au_vdir_deblk_p p, deblk_end;
 
 	while (vdir->vd_nblk > 1) {
-		kfree(vdir->vd_deblk[vdir->vd_nblk - 1]);
+		au_kfree_try_rcu(vdir->vd_deblk[vdir->vd_nblk - 1]);
 		/* vdir->vd_deblk[vdir->vd_nblk - 1] = NULL; */
 		vdir->vd_nblk--;
 	}
