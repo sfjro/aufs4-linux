@@ -234,7 +234,7 @@ int au_lkup_dentry(struct dentry *dentry, aufs_bindex_t btop,
 
 out_parent:
 	dput(parent);
-	kfree(args.whname.name);
+	au_kfree_try_rcu(args.whname.name);
 	if (dirren)
 		au_dr_lkup_fin(&args);
 out:

@@ -53,7 +53,7 @@ int au_dpages_init(struct au_dcsub_pages *dpages, gfp_t gfp)
 	return 0; /* success */
 
 out_dpages:
-	kfree(dpages->dpages);
+	au_kfree_try_rcu(dpages->dpages);
 out:
 	return err;
 }
@@ -66,7 +66,7 @@ void au_dpages_free(struct au_dcsub_pages *dpages)
 	p = dpages->dpages;
 	for (i = 0; i < dpages->ndpage; i++)
 		au_dpage_free(p++);
-	kfree(dpages->dpages);
+	au_kfree_try_rcu(dpages->dpages);
 }
 
 static int au_dpages_append(struct au_dcsub_pages *dpages,

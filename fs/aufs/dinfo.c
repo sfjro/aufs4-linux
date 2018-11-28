@@ -74,7 +74,7 @@ void au_di_free(struct au_dinfo *dinfo)
 		while (bindex++ <= bbot)
 			au_hdput(p++);
 	}
-	kfree(dinfo->di_hdentry);
+	au_kfree_try_rcu(dinfo->di_hdentry);
 	au_cache_free_dinfo(dinfo);
 }
 

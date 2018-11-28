@@ -157,7 +157,7 @@ out_unlock:
 out:
 	dput(a->dentry);
 	au_nwt_done(&au_sbi(sb)->si_nowait);
-	kfree(arg);
+	au_kfree_try_rcu(arg);
 }
 
 void au_dir_ts(struct inode *dir, aufs_bindex_t bindex)
@@ -193,7 +193,7 @@ void au_dir_ts(struct inode *dir, aufs_bindex_t bindex)
 	if (unlikely(wkq_err)) {
 		pr_err("wkq %d\n", wkq_err);
 		dput(dentry);
-		kfree(arg);
+		au_kfree_try_rcu(arg);
 	}
 
 out:
@@ -312,7 +312,7 @@ static int aufs_open_dir(struct inode *inode __maybe_unused,
 		};
 		err = au_do_open(file, &args);
 		if (unlikely(err))
-			kfree(fidir);
+			au_kfree_rcu(fidir);
 	}
 	si_read_unlock(sb);
 	return err;
@@ -348,7 +348,7 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 				if (hf->hf_file)
 					au_hfput(hf, /*execed*/0);
 		}
-		kfree(fidir);
+		au_kfree_rcu(fidir);
 		finfo->fi_hdir = NULL;
 	}
 	au_finfo_fin(file);
