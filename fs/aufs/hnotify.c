@@ -528,7 +528,7 @@ out:
 	iput(a->dir);
 	si_write_unlock(sb);
 	au_nwt_done(&sbinfo->si_nowait);
-	kfree(a);
+	au_kfree_rcu(a);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -634,7 +634,7 @@ int au_hnotify(struct inode *h_dir, struct au_hnotify *hnotify, u32 mask,
 		iput(args->h_child_inode);
 		iput(args->h_dir);
 		iput(args->dir);
-		kfree(args);
+		au_kfree_rcu(args);
 	}
 
 out:
