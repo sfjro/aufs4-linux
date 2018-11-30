@@ -337,9 +337,11 @@ int au_copy_file(struct file *dst, struct file *src, loff_t len)
 	unsigned long blksize;
 	unsigned char do_kfree;
 	char *buf;
+	struct super_block *h_sb;
 
 	err = -ENOMEM;
-	blksize = dst->f_path.dentry->d_sb->s_blocksize;
+	h_sb = file_inode(dst)->i_sb;
+	blksize = h_sb->s_blocksize;
 	if (!blksize || PAGE_SIZE < blksize)
 		blksize = PAGE_SIZE;
 	AuDbg("blksize %lu\n", blksize);
@@ -357,9 +359,10 @@ int au_copy_file(struct file *dst, struct file *src, loff_t len)
 	src->f_pos = 0;
 	dst->f_pos = 0;
 	err = au_do_copy_file(dst, src, len, buf, blksize);
-	if (do_kfree)
-		kfree(buf);
-	else
+	if (do_kfree) {
+		AuDebugOn(!au_kfree_do_sz_test(blksize));
+		au_kfree_do_rcu(buf);
+	} else
 		free_page((unsigned long)buf);
 
 out:
@@ -962,7 +965,7 @@ out_rev:
 	}
 out_parent:
 	dput(dst_parent);
-	kfree(a);
+	au_kfree_rcu(a);
 out:
 	return err;
 }

@@ -172,7 +172,7 @@ out:
 
 static void au_wkq_lockdep_free(struct au_wkinfo *wkinfo)
 {
-	kfree(wkinfo->hlock);
+	au_kfree_try_rcu(wkinfo->hlock);
 }
 
 static void au_wkq_lockdep_pre(struct au_wkinfo *wkinfo)
@@ -224,7 +224,7 @@ static void wkq_func(struct work_struct *wk)
 	else {
 		kobject_put(wkinfo->kobj);
 		module_put(THIS_MODULE); /* todo: ?? */
-		kfree(wkinfo);
+		au_kfree_rcu(wkinfo);
 	}
 }
 
@@ -247,7 +247,7 @@ static int au_wkq_comp_alloc(struct au_wkinfo *wkinfo, struct completion **comp)
 
 static void au_wkq_comp_free(struct completion *comp)
 {
-	kfree(comp);
+	au_kfree_rcu(comp);
 }
 
 #else

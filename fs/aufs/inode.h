@@ -37,6 +37,7 @@ struct au_hnotify {
 	struct fsnotify_mark		hn_mark;
 #endif
 	struct inode		*hn_aufs_inode;	/* no get/put */
+	struct rcu_head		rcu;
 #endif
 } ____cacheline_aligned_in_smp;
 
@@ -77,9 +78,10 @@ struct au_iinfo {
 };
 
 struct au_icntnr {
-	struct au_iinfo iinfo;
-	struct inode vfs_inode;
-	struct hlist_bl_node plink;
+	struct au_iinfo		iinfo;
+	struct inode		vfs_inode;
+	struct hlist_bl_node	plink;
+	struct rcu_head		rcu;
 } ____cacheline_aligned_in_smp;
 
 /* au_pin flags */
