@@ -459,7 +459,7 @@ int au_xino_trunc(struct super_block *sb, aufs_bindex_t bindex, int idx_begin)
 		au_sbi(sb)->si_xino_jiffy = jiffy;
 
 out_st:
-	kfree(st);
+	au_kfree_rcu(st);
 out:
 	return err;
 }
@@ -496,7 +496,7 @@ static void xino_do_trunc(void *_args)
 	au_lcnt_dec(&br->br_count);
 	si_write_unlock(sb);
 	au_nwt_done(&au_sbi(sb)->si_nowait);
-	kfree(args);
+	au_kfree_rcu(args);
 }
 
 /*
@@ -568,7 +568,7 @@ static void xino_try_trunc(struct super_block *sb, struct au_branch *br)
 
 	pr_err("wkq %d\n", wkq_err);
 	au_lcnt_dec(&br->br_count);
-	kfree(args);
+	au_kfree_rcu(args);
 
 out:
 	atomic_dec(&br->br_xino->xi_truncating);
@@ -687,14 +687,14 @@ static void au_xino_call_do_new_async(void *args)
 		}
 	}
 	hlist_bl_unlock(hbl);
-	kfree(del);
+	au_kfree_rcu(del);
 
 out:
 	au_lcnt_dec(&br->br_count);
 	ii_read_unlock(root);
 	si_read_unlock(sb);
 	au_nwt_done(&sbi->si_nowait);
-	kfree(args);
+	au_kfree_rcu(a);
 }
 
 /*
@@ -720,7 +720,7 @@ static int au_xino_new_async(struct super_block *sb, struct au_branch *br,
 	if (unlikely(err)) {
 		pr_err("wkq %d\n", err);
 		au_lcnt_dec(&br->br_count);
-		kfree(arg);
+		au_kfree_rcu(arg);
 	}
 
 out:
@@ -1283,9 +1283,9 @@ struct au_xino *au_xino_alloc(unsigned int nfile)
 	goto out; /* success */
 
 out_file:
-	kfree(xi->xi_file);
+	au_kfree_try_rcu(xi->xi_file);
 out_free:
-	kfree(xi);
+	au_kfree_rcu(xi);
 	xi = NULL;
 out:
 	return xi;
@@ -1336,13 +1336,13 @@ static void au_xino_release(struct kref *kref)
 		hlist_bl_lock(hbl);
 		hlist_bl_for_each_entry_safe (p, pos, n, hbl, node) {
 			hlist_bl_del(&p->node);
-			kfree(p);
+			au_kfree_rcu(p);
 		}
 		hlist_bl_unlock(hbl);
 	}
-	kfree(xi->xi_file);
-	kfree(xi->xi_nondir.array);
-	kfree(xi);
+	au_kfree_try_rcu(xi->xi_file);
+	au_kfree_try_rcu(xi->xi_nondir.array);
+	au_kfree_rcu(xi);
 }
 
 int au_xino_put(struct au_branch *br)

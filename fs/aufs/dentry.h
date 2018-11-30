@@ -28,6 +28,7 @@ struct au_dinfo {
 	aufs_bindex_t		di_btop, di_bbot, di_bwh, di_bdiropq;
 	unsigned char		di_tmpfile; /* to allow the different name */
 	struct au_hdentry	*di_hdentry;
+	struct rcu_head		rcu;
 } ____cacheline_aligned_in_smp;
 
 /* ---------------------------------------------------------------------- */
