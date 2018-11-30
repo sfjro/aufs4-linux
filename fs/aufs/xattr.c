@@ -179,10 +179,10 @@ int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
 		AuTraceErr(err);
 	}
 
-	kfree(value);
+	au_kfree_try_rcu(value);
 
 out_free:
-	kfree(o);
+	au_kfree_try_rcu(o);
 out:
 	if (!unlocked)
 		inode_unlock_shared(h_isrc);
