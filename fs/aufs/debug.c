@@ -336,7 +336,7 @@ void au_dpri_sb(struct super_block *sb)
 	a->mnt.mnt_sb = sb;
 	a->fake.br_path.mnt = &a->mnt;
 	err = do_pri_br(-1, &a->fake);
-	kfree(a);
+	au_kfree_rcu(a);
 	dpri("dev 0x%x\n", sb->s_dev);
 	if (err || !au_test_aufs(sb))
 		return;
