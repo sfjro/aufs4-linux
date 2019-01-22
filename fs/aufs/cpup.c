@@ -380,26 +380,36 @@ static int au_do_copy(struct file *dst, struct file *src, loff_t len)
 static int au_clone_or_copy(struct file *dst, struct file *src, loff_t len)
 {
 	int err;
+	loff_t lo;
 	struct super_block *h_src_sb;
 	struct inode *h_src_inode;
 
 	h_src_inode = file_inode(src);
 	h_src_sb = h_src_inode->i_sb;
 	if (h_src_sb != file_inode(dst)->i_sb
-	    || !dst->f_op->clone_file_range) {
+	    || !dst->f_op->remap_file_range) {
 		err = au_do_copy(dst, src, len);
 		goto out;
 	}
 
 	if (!au_test_nfs(h_src_sb)) {
 		inode_unlock_shared(h_src_inode);
-		err = vfsub_clone_file_range(src, dst, len);
+		lo = vfsub_clone_file_range(src, dst, len);
 		inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
 	} else
-		err = vfsub_clone_file_range(src, dst, len);
-	/* older XFS has a condition in cloning */
-	if (unlikely(err != -EOPNOTSUPP))
+		lo = vfsub_clone_file_range(src, dst, len);
+	if (lo == len) {
+		err = 0;
+		goto out; /* success */
+	} else if (lo >= 0)
+		/* todo: possible? */
+		/* paritially succeeded */
+		AuDbg("lo %lld, len %lld. Retrying.\n", lo, len);
+	else if (lo != -EOPNOTSUPP) {
+		/* older XFS has a condition in cloning */
+		err = lo;
 		goto out;
+	}
 
 	/* the backend fs on NFS may not support cloning */
 	err = au_do_copy(dst, src, len);
