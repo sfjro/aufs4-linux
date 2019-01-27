@@ -121,7 +121,8 @@ static int au_rdu(struct file *file, struct aufs_rdu *rdu)
 	struct file *h_file;
 	struct au_rdu_cookie *cookie = &rdu->cookie;
 
-	err = !access_ok(VERIFY_WRITE, rdu->ent.e, rdu->sz);
+	/* VERIFY_WRITE */
+	err = !access_ok(rdu->ent.e, rdu->sz);
 	if (unlikely(err)) {
 		err = -EFAULT;
 		AuTraceErr(err);
@@ -227,7 +228,8 @@ static int au_rdu_ino(struct file *file, struct aufs_rdu *rdu)
 		/* unnecessary to support mmap_sem since this is a dir */
 		err = copy_from_user(&ent, u->e, sizeof(ent));
 		if (!err)
-			err = !access_ok(VERIFY_WRITE, &u->e->ino, sizeof(ino));
+			/* VERIFY_WRITE */
+			err = !access_ok(&u->e->ino, sizeof(ino));
 		if (unlikely(err)) {
 			err = -EFAULT;
 			AuTraceErr(err);

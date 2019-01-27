@@ -211,7 +211,8 @@ static int au_brinfo(struct super_block *sb, union aufs_brinfo __user *arg)
 
 	sz = sizeof(*arg) - offsetof(union aufs_brinfo, path);
 	for (bindex = 0; bindex <= bbot; bindex++, arg++) {
-		err = !access_ok(VERIFY_WRITE, arg, sizeof(*arg));
+		/* VERIFY_WRITE */
+		err = !access_ok(arg, sizeof(*arg));
 		if (unlikely(err))
 			break;
 

@@ -630,7 +630,8 @@ int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *uarg)
 
 	err = copy_from_user(&args->mvdown, uarg, sizeof(args->mvdown));
 	if (!err)
-		err = !access_ok(VERIFY_WRITE, uarg, sizeof(*uarg));
+		/* VERIFY_WRITE */
+		err = !access_ok(uarg, sizeof(*uarg));
 	if (unlikely(err)) {
 		err = -EFAULT;
 		AuTraceErr(err);
