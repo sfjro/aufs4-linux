@@ -1114,7 +1114,8 @@ static int au_ibusy(struct super_block *sb, struct aufs_ibusy __user *arg)
 
 	err = copy_from_user(&ibusy, arg, sizeof(ibusy));
 	if (!err)
-		err = !access_ok(VERIFY_WRITE, &arg->h_ino, sizeof(arg->h_ino));
+		/* VERIFY_WRITE */
+		err = !access_ok(&arg->h_ino, sizeof(arg->h_ino));
 	if (unlikely(err)) {
 		err = -EFAULT;
 		AuTraceErr(err);
