@@ -1364,7 +1364,7 @@ error:
 		vmr_fput(region);
 	kmem_cache_free(vm_region_jar, region);
 	if (vma->vm_file)
-		fput(vma->vm_file);
+		vma_fput(vma);
 	vm_area_free(vma);
 	return ret;
 
