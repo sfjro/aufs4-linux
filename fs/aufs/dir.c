@@ -21,6 +21,7 @@
  */
 
 #include <linux/fs_stack.h>
+#include <linux/iversion.h>
 #include "aufs.h"
 
 void au_add_nlink(struct inode *dir, struct inode *h_dir)
