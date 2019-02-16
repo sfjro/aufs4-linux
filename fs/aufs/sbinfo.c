@@ -7,6 +7,7 @@
  * superblock private data
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 /*
