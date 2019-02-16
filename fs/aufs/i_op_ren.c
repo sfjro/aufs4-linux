@@ -21,6 +21,7 @@
  * todo: this is crazy monster
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 enum { AuSRC, AuDST, AuSrcDst };

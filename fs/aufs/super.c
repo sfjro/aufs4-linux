@@ -20,6 +20,7 @@
  * mount and super_block operations
  */
 
+#include <linux/iversion.h>
 #include <linux/mm.h>
 #include <linux/seq_file.h>
 #include <linux/statfs.h>

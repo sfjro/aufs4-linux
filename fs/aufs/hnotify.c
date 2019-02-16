@@ -20,6 +20,7 @@
  * abstraction to notify the direct changes on lower directories
  */
 
+/* #include <linux/iversion.h> */
 #include "aufs.h"
 
 int au_hn_alloc(struct au_hinode *hinode, struct inode *inode)
