@@ -7,6 +7,7 @@
  * inode operations (add entry)
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 /*
