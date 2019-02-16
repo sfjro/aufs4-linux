@@ -20,6 +20,7 @@
  * inode functions
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 struct inode *au_igrab(struct inode *inode)
