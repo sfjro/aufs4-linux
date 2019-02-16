@@ -7,6 +7,7 @@
  * debug print functions
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 /* Returns 0, or -errno.  arg is in kp->arg. */
