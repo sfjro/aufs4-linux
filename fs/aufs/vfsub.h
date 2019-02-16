@@ -13,7 +13,6 @@
 #ifdef __KERNEL__
 
 #include <linux/fs.h>
-#include <linux/iversion.h>
 #include <linux/mount.h>
 #include <linux/posix_acl.h>
 #include <linux/xattr.h>
