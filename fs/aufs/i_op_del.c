@@ -20,6 +20,7 @@
  * inode operations (del entry)
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 /*
