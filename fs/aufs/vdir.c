@@ -7,6 +7,7 @@
  * virtual or vertical directory
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 static unsigned int calc_size(int nlen)
