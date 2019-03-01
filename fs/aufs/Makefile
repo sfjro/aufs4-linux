@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 
 include ${srctree}/${src}/magic.mk
+-include ${srctree}/${src}/priv_def.mk
 
 # cf. include/linux/kernel.h
 # enable pr_debug
