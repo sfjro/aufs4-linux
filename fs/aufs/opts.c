@@ -918,7 +918,7 @@ static int au_opts_parse_xino(struct super_block *sb, struct au_opt_xino *xino,
 	int err;
 	struct file *file;
 
-	file = au_xino_create(sb, args[0].from, /*silent*/0);
+	file = au_xino_create(sb, args[0].from, /*silent*/0, /*wbrtop*/0);
 	err = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out;
