@@ -114,7 +114,7 @@ static void dy_free_rcu(struct rcu_head *rcu)
 
 	key = container_of(rcu, struct au_dykey, dk_rcu);
 	DyPrSym(key);
-	au_kfree_rcu(key);
+	kfree(key);
 }
 
 static void dy_free(struct kref *kref)
