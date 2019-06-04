@@ -61,8 +61,8 @@ static int au_procfs_plm_write_si(struct file *file, unsigned long id)
 	hlist_bl_lock(&au_sbilist);
 	hlist_bl_for_each_entry(sbinfo, pos, &au_sbilist, si_list)
 		if (id == sysaufs_si_id(sbinfo)) {
-			kobject_get(&sbinfo->si_kobj);
-			sb = sbinfo->si_sb;
+			if (kobject_get_unless_zero(&sbinfo->si_kobj))
+				sb = sbinfo->si_sb;
 			break;
 		}
 	hlist_bl_unlock(&au_sbilist);
