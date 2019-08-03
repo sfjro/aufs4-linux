@@ -241,7 +241,11 @@ enum {
 
 /* borrowed from linux/include/linux/kernel.h */
 #ifndef ALIGN
+#ifdef _GNU_SOURCE
 #define ALIGN(x, a)		__ALIGN_MASK(x, (typeof(x))(a)-1)
+#else
+#define ALIGN(x, a)		(((x) + (a) - 1) & ~((a) - 1))
+#endif
 #define __ALIGN_MASK(x, mask)	(((x)+(mask))&~(mask))
 #endif
 
