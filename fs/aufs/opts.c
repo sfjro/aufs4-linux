@@ -1386,6 +1386,7 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 	case Opt_wsum:
 		au_opt_clr(sbinfo->si_mntflags, SUM);
 		au_opt_set(sbinfo->si_mntflags, SUM_W);
+		break;
 	case Opt_nosum:
 		au_opt_clr(sbinfo->si_mntflags, SUM);
 		au_opt_clr(sbinfo->si_mntflags, SUM_W);
