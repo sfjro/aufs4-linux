@@ -2877,7 +2877,7 @@ int drm_fb_helper_fbdev_setup(struct drm_device *dev,
 	return 0;
 
 err_drm_fb_helper_fini:
-	drm_fb_helper_fini(fb_helper);
+	drm_fb_helper_fbdev_teardown(dev);
 
 	return ret;
 }
@@ -2957,7 +2957,8 @@ static int drm_fbdev_fb_open(struct fb_info *info, int user)
 {
 	struct drm_fb_helper *fb_helper = info->par;
 
-	if (!try_module_get(fb_helper->dev->driver->fops->owner))
+	/* No need to take a ref for fbcon because it unbinds on unregister */
+	if (user && !try_module_get(fb_helper->dev->driver->fops->owner))
 		return -ENODEV;
 
 	return 0;
@@ -2967,7 +2968,8 @@ static int drm_fbdev_fb_release(struct fb_info *info, int user)
 {
 	struct drm_fb_helper *fb_helper = info->par;
 
-	module_put(fb_helper->dev->driver->fops->owner);
+	if (user)
+		module_put(fb_helper->dev->driver->fops->owner);
 
 	return 0;
 }
@@ -3156,9 +3158,7 @@ static void drm_fbdev_client_unregister(struct drm_client_dev *client)
 
 static int drm_fbdev_client_restore(struct drm_client_dev *client)
 {
-	struct drm_fb_helper *fb_helper = drm_fb_helper_from_client(client);
-
-	drm_fb_helper_restore_fbdev_mode_unlocked(fb_helper);
+	drm_fb_helper_lastclose(client->dev);
 
 	return 0;
 }

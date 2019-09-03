@@ -2816,7 +2816,18 @@ static void wmi_event_handle(struct wil6210_priv *wil,
 		/* check if someone waits for this event */
 		if (wil->reply_id && wil->reply_id == id &&
 		    wil->reply_mid == mid) {
-			WARN_ON(wil->reply_buf);
+			if (wil->reply_buf) {
+				/* event received while wmi_call is waiting
+				 * with a buffer. Such event should be handled
+				 * in wmi_recv_cmd function. Handling the event
+				 * here means a previous wmi_call was timeout.
+				 * Drop the event and do not handle it.
+				 */
+				wil_err(wil,
+					"Old event (%d, %s) while wmi_call is waiting. Drop it and Continue waiting\n",
+					id, eventid2name(id));
+				return;
+			}
 
 			wmi_evt_call_handler(vif, id, evt_data,
 					     len - sizeof(*wmi));
@@ -3107,8 +3118,9 @@ int wmi_mgmt_tx(struct wil6210_vif *vif, const u8 *buf, size_t len)
 	rc = wmi_call(wil, WMI_SW_TX_REQ_CMDID, vif->mid, cmd, total,
 		      WMI_SW_TX_COMPLETE_EVENTID, &evt, sizeof(evt), 2000);
 	if (!rc && evt.evt.status != WMI_FW_STATUS_SUCCESS) {
-		wil_err(wil, "mgmt_tx failed with status %d\n", evt.evt.status);
-		rc = -EINVAL;
+		wil_dbg_wmi(wil, "mgmt_tx failed with status %d\n",
+			    evt.evt.status);
+		rc = -EAGAIN;
 	}
 
 	kfree(cmd);
@@ -3160,9 +3172,9 @@ int wmi_mgmt_tx_ext(struct wil6210_vif *vif, const u8 *buf, size_t len,
 	rc = wmi_call(wil, WMI_SW_TX_REQ_EXT_CMDID, vif->mid, cmd, total,
 		      WMI_SW_TX_COMPLETE_EVENTID, &evt, sizeof(evt), 2000);
 	if (!rc && evt.evt.status != WMI_FW_STATUS_SUCCESS) {
-		wil_err(wil, "mgmt_tx_ext failed with status %d\n",
-			evt.evt.status);
-		rc = -EINVAL;
+		wil_dbg_wmi(wil, "mgmt_tx_ext failed with status %d\n",
+			    evt.evt.status);
+		rc = -EAGAIN;
 	}
 
 	kfree(cmd);
