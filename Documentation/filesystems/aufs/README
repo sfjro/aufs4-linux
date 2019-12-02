@@ -275,7 +275,8 @@ optional. When you meet some problems, they will help you.
   the internal locks for LOCKDEP is necessary. LOCKDEP is a debugging
   feature of linux kernel. If you enable CONFIG_LOCKDEP, then you will
   need to apply this debug patch to expand several constant values.
-  If don't know what LOCKDEP, then you don't have apply this patch.
+  If you don't know what LOCKDEP is, then you don't have apply this
+  patch.
 
 
 4. Usage
