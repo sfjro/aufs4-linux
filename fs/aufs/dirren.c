@@ -1202,8 +1202,8 @@ int au_dr_lkup_name(struct au_do_lookup_args *lkup, aufs_bindex_t btgt)
 	err = 0;
 	if (!lkup->dirren.drinfo)
 		goto out;
-	AuDebugOn(lkup->dirren.ninfo < btgt + 1);
-	drinfo = lkup->dirren.drinfo[btgt + 1];
+	AuDebugOn(lkup->dirren.ninfo <= btgt);
+	drinfo = lkup->dirren.drinfo[btgt];
 	if (!drinfo)
 		goto out;
 
@@ -1232,8 +1232,8 @@ int au_dr_lkup_h_ino(struct au_do_lookup_args *lkup, aufs_bindex_t bindex,
 	match = 1;
 	if (!lkup->dirren.drinfo)
 		goto out;
-	AuDebugOn(lkup->dirren.ninfo < bindex + 1);
-	drinfo = lkup->dirren.drinfo[bindex + 1];
+	AuDebugOn(lkup->dirren.ninfo <= bindex);
+	drinfo = lkup->dirren.drinfo[bindex];
 	if (!drinfo)
 		goto out;
 
