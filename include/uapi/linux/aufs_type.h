@@ -34,6 +34,7 @@
 
 /* ---------------------------------------------------------------------- */
 
+#ifdef __KERNEL__
 #ifdef CONFIG_AUFS_BRANCH_MAX_127
 typedef int8_t aufs_bindex_t;
 #define AUFS_BRANCH_MAX 127
@@ -48,7 +49,6 @@ typedef int16_t aufs_bindex_t;
 #endif
 #endif
 
-#ifdef __KERNEL__
 #ifndef AUFS_BRANCH_MAX
 #error unknown CONFIG_AUFS_BRANCH_MAX value
 #endif
