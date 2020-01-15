@@ -497,7 +497,7 @@ vfs_readf_t vfs_readf(struct file *file)
 		return fop->read;
 	if (fop->read_iter)
 		return new_sync_read;
-	return ERR_PTR(-ENOSYS);
+	return ERR_PTR(-ENOSYS); /* doesn't have ->read(|_iter)() op */
 }
 
 vfs_writef_t vfs_writef(struct file *file)
@@ -508,7 +508,7 @@ vfs_writef_t vfs_writef(struct file *file)
 		return fop->write;
 	if (fop->write_iter)
 		return new_sync_write;
-	return ERR_PTR(-ENOSYS);
+	return ERR_PTR(-ENOSYS); /* doesn't have ->write(|_iter)() op */
 }
 
 ssize_t __kernel_write(struct file *file, const void *buf, size_t count, loff_t *pos)
