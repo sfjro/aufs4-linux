@@ -1627,7 +1627,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		if ((br->br_perm & AuBrAttr_ICEX)
 		    && !h_dir->i_op->listxattr)
 			br->br_perm &= ~AuBrAttr_ICEX;
-#if 0
+#if 0 /* untested */
 		if ((br->br_perm & AuBrAttr_ICEX_SEC)
 		    && (au_br_sb(br)->s_flags & SB_NOSEC))
 			br->br_perm &= ~AuBrAttr_ICEX_SEC;
