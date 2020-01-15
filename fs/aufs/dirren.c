@@ -81,7 +81,7 @@ int au_dr_hino_test_add(struct au_dr_br *dr, ino_t ino,
 	found = 0;
 	idx = au_dr_ihash(ino);
 	hbl = dr->dr_h_ino + idx;
-#if 0
+#if 0 /* debug print */
 	{
 		struct hlist_bl_node *tmp;
 

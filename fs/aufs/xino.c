@@ -1355,7 +1355,7 @@ static void au_xino_release(struct kref *kref)
 	if (unlikely(ul)) {
 		pr_warn("xi_writing %lu\n", ul);
 		hlist_bl_lock(hbl);
-		hlist_bl_for_each_entry_safe (p, pos, n, hbl, node) {
+		hlist_bl_for_each_entry_safe(p, pos, n, hbl, node) {
 			hlist_bl_del(&p->node);
 			au_kfree_rcu(p);
 		}

@@ -212,7 +212,7 @@ static int set_inode(struct inode *inode, struct dentry *dentry)
 	struct dentry *h_dentry;
 	struct inode *h_inode;
 	struct au_iinfo *iinfo;
-	struct inode_operations *iop;
+	const struct inode_operations *iop;
 
 	IiMustWriteLock(inode);
 

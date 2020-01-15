@@ -72,19 +72,6 @@ static int h_permission(struct inode *h_inode, int mask,
 	if (!err)
 		err = security_inode_permission(h_inode, mask);
 
-#if 0
-	if (!err) {
-		/* todo: do we need to call ima_path_check()? */
-		struct path h_path = {
-			.dentry	=
-			.mnt	= h_mnt
-		};
-		err = ima_path_check(&h_path,
-				     mask & (MAY_READ | MAY_WRITE | MAY_EXEC),
-				     IMA_COUNT_LEAVE);
-	}
-#endif
-
 out:
 	return err;
 }
@@ -106,7 +93,13 @@ static int aufs_permission(struct inode *inode, int mask)
 	sb = inode->i_sb;
 	si_read_lock(sb, AuLock_FLUSH);
 	ii_read_lock_child(inode);
-#if 0
+#if 0 /* reserved for future use */
+	/*
+	 * This test may be rather 'too much' since the test is essentially done
+	 * in the aufs_lookup().  Theoretically it is possible that the inode
+	 * generation doesn't match to the superblock's here.  But it isn't a
+	 * big deal I suppose.
+	 */
 	err = au_iigen_test(inode, au_sigen(sb));
 	if (unlikely(err))
 		goto out;
@@ -224,7 +217,7 @@ static struct dentry *aufs_lookup(struct inode *dir, struct dentry *dentry,
 	if (inode)
 		atomic_inc(&inode->i_count);
 	ret = d_splice_alias(inode, dentry);
-#if 0
+#if 0 /* reserved for future use */
 	if (unlikely(d_need_lookup(dentry))) {
 		spin_lock(&dentry->d_lock);
 		dentry->d_flags &= ~DCACHE_NEED_LOOKUP;
@@ -640,7 +633,8 @@ out:
 
 static void au_pin_hdir_set_owner(struct au_pin *p, struct task_struct *task)
 {
-#if !defined(CONFIG_RWSEM_GENERIC_SPINLOCK) && defined(CONFIG_RWSEM_SPIN_ON_OWNER)
+#if !defined(CONFIG_RWSEM_GENERIC_SPINLOCK) \
+	&& defined(CONFIG_RWSEM_SPIN_ON_OWNER)
 	p->hdir->hi_inode->i_rwsem.owner = task;
 #endif
 }
