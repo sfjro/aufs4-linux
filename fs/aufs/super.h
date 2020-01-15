@@ -179,7 +179,7 @@ struct au_sbinfo {
 	struct hlist_bl_head	si_files;
 
 	/* with/without getattr, brother of sb->s_d_op */
-	struct inode_operations *si_iop_array;
+	const struct inode_operations *si_iop_array;
 
 	/*
 	 * sysfs and lifetime management.
