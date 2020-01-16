@@ -182,12 +182,6 @@ static int hn_gen_tree(struct dentry *dentry)
 
 out_dpages:
 	au_dpages_free(&dpages);
-
-#if 0
-	/* discard children */
-	dentry_unhash(dentry);
-	dput(dentry);
-#endif
 out:
 	return err;
 }

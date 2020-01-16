@@ -95,7 +95,7 @@ int au_nhash_alloc(struct au_nhash *nhash, unsigned int num_hash, gfp_t gfp)
 
 static void nhash_count(struct hlist_head *head)
 {
-#if 0
+#if 0 /* debugging */
 	unsigned long n;
 	struct hlist_node *pos;
 
