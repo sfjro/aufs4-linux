@@ -33,12 +33,12 @@
 #define pr_fmt(fmt) \
 		AUFS_NAME " %s:%d:%.*s[%d]: " fmt, __func__, __LINE__, \
 		(int)sizeof(current->comm), current->comm, current->pid
+#include <linux/limits.h>
 #else
 #include <stdint.h>
 #include <sys/types.h>
+#include <limits.h>
 #endif /* __KERNEL__ */
-
-#include <linux/limits.h>
 
 #define AUFS_VERSION	"4.x-rcN"
 
