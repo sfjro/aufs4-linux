@@ -1,5 +1,5 @@
 
-# Copyright (C) 2014-2019 Junjiro R. Okajima
+# Copyright (C) 2014-2020 Junjiro R. Okajima
 
 Listing XATTR/EA and getting the value
 ----------------------------------------------------------------------
