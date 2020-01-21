@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2017-2019 Junjiro R. Okajima
+ * Copyright (C) 2017-2020 Junjiro R. Okajima
  */
 
 /*
