@@ -1357,7 +1357,8 @@ static void au_xino_release(struct kref *kref)
 		hlist_bl_lock(hbl);
 		hlist_bl_for_each_entry_safe(p, pos, n, hbl, node) {
 			hlist_bl_del(&p->node);
-			au_kfree_rcu(p);
+			/* kmemleak reported au_kfree_rcu() doesn't free it */
+			kfree(p);
 		}
 		hlist_bl_unlock(hbl);
 	}
