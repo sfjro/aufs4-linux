@@ -38,7 +38,7 @@ struct au_nhash {
 
 struct au_vdir_destr {
 	unsigned char	len;
-	unsigned char	name[0];
+	unsigned char	name[];
 } __packed;
 
 struct au_vdir_dehstr {
