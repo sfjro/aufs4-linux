@@ -287,7 +287,7 @@ struct au_rdu_ent {
 	uint8_t		type;
 	uint8_t		nlen;
 	uint8_t		wh;
-	char		name[0];
+	char		name[];
 } __aligned(8);
 
 static inline int au_rdu_len(int nlen)
@@ -338,7 +338,7 @@ struct au_drinfo {
 		uint8_t oldnamelen;
 		uint64_t _padding;
 	};
-	uint8_t oldname[0];
+	uint8_t oldname[];
 } __aligned(8);
 
 struct au_drinfo_fdata {
@@ -432,7 +432,7 @@ union aufs_brinfo {
 	struct {
 		int16_t	id;
 		int	perm;
-		char	path[0];
+		char	path[];
 	};
 } __aligned(8);
 
