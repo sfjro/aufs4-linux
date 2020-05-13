@@ -194,7 +194,7 @@ out:
 
 static int au_smack_reentering(struct super_block *sb)
 {
-#if IS_ENABLED(CONFIG_SECURITY_SMACK)
+#if IS_ENABLED(CONFIG_SECURITY_SMACK) || IS_ENABLED(CONFIG_SECURITY_SELINUX)
 	/*
 	 * as a part of lookup, smack_d_instantiate() is called, and it calls
 	 * i_op->getxattr(). ouch.
@@ -225,7 +225,8 @@ struct au_lgxattr {
 	} u;
 };
 
-static ssize_t au_lgxattr(struct dentry *dentry, struct au_lgxattr *arg)
+static ssize_t au_lgxattr(struct dentry *dentry, struct inode *inode,
+			  struct au_lgxattr *arg)
 {
 	ssize_t err;
 	int reenter;
@@ -239,7 +240,7 @@ static ssize_t au_lgxattr(struct dentry *dentry, struct au_lgxattr *arg)
 		if (unlikely(err))
 			goto out;
 	}
-	err = au_h_path_getattr(dentry, /*force*/1, &h_path, reenter);
+	err = au_h_path_getattr(dentry, inode, /*force*/1, &h_path, reenter);
 	if (unlikely(err))
 		goto out_si;
 	if (unlikely(!h_path.dentry))
@@ -281,11 +282,10 @@ ssize_t aufs_listxattr(struct dentry *dentry, char *list, size_t size)
 		},
 	};
 
-	return au_lgxattr(dentry, &arg);
+	return au_lgxattr(dentry, /*inode*/NULL, &arg);
 }
 
-static ssize_t au_getxattr(struct dentry *dentry,
-			   struct inode *inode __maybe_unused,
+static ssize_t au_getxattr(struct dentry *dentry, struct inode *inode,
 			   const char *name, void *value, size_t size)
 {
 	struct au_lgxattr arg = {
@@ -297,7 +297,7 @@ static ssize_t au_getxattr(struct dentry *dentry,
 		},
 	};
 
-	return au_lgxattr(dentry, &arg);
+	return au_lgxattr(dentry, inode, &arg);
 }
 
 static int au_setxattr(struct dentry *dentry, struct inode *inode,
